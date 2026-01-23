@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expo Free Agent Controller</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: white;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #111;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .section {
+      background: white;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #111;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px;
+      background: #f9f9f9;
+      font-weight: 600;
+      font-size: 14px;
+      color: #666;
+    }
+
+    td {
+      padding: 12px;
+      font-size: 14px;
+      color: #111;
+    }
+
+    tr:not(:last-child) {
+      border-bottom: 1px solid #eee;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #e5e5e5;
+      color: #666;
+    }
+
+    .badge.pending { background: #fef3c7; color: #92400e; }
+    .badge.assigned { background: #dbeafe; color: #1e40af; }
+    .badge.building { background: #dbeafe; color: #1e40af; }
+    .badge.completed { background: #d1fae5; color: #065f46; }
+    .badge.failed { background: #fee2e2; color: #991b1b; }
+
+    .badge.idle { background: #d1fae5; color: #065f46; }
+    .badge.offline { background: #e5e5e5; color: #666; }
+
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-size: 14px;
+    }
+
+    a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Expo Free Agent Controller</h1>
+    </header>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.totalBuilds %></div>
+        <div class="stat-label">Total Builds</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.pendingBuilds %></div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.activeBuilds %></div>
+        <div class="stat-label">Active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.totalWorkers %></div>
+        <div class="stat-label">Workers</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Recent Builds</h2>
+      <% if (builds.length === 0) { %>
+        <div class="empty">No builds yet</div>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Platform</th>
+              <th>Status</th>
+              <th>Worker</th>
+              <th>Submitted</th>
+              <th>Duration</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% builds.forEach(build => { %>
+              <tr>
+                <td><code><%= build.id.substring(0, 8) %></code></td>
+                <td><%= build.platform %></td>
+                <td><span class="badge <%= build.status %>"><%= build.status %></span></td>
+                <td>
+                  <% if (build.worker_name) { %>
+                    <%= build.worker_name %>
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td><%= new Date(build.submitted_at).toLocaleString() %></td>
+                <td>
+                  <% if (build.completed_at) { %>
+                    <%= Math.round((build.completed_at - build.submitted_at) / 1000) %>s
+                  <% } else if (build.started_at) { %>
+                    <%= Math.round((Date.now() - build.started_at) / 1000) %>s
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td>
+                  <a href="/api/builds/<%= build.id %>/status">Status</a>
+                  <% if (build.status === 'completed') { %>
+                    | <a href="/api/builds/<%= build.id %>/download">Download</a>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+
+    <div class="section">
+      <h2>Workers</h2>
+      <% if (workers.length === 0) { %>
+        <div class="empty">No workers registered</div>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Capabilities</th>
+              <th>Completed</th>
+              <th>Failed</th>
+              <th>Last Seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% workers.forEach(worker => { %>
+              <tr>
+                <td><%= worker.name %></td>
+                <td><span class="badge <%= worker.status %>"><%= worker.status %></span></td>
+                <td>
+                  <%
+                    const caps = JSON.parse(worker.capabilities);
+                    const platforms = caps.platforms || [];
+                  %>
+                  <%= platforms.join(', ') %>
+                </td>
+                <td><%= worker.builds_completed %></td>
+                <td><%= worker.builds_failed %></td>
+                <td><%= new Date(worker.last_seen_at).toLocaleString() %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

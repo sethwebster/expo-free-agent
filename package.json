@@ -1,0 +1,20 @@
+{
+  "name": "expo-free-agent",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "controller": "bun --cwd packages/controller start",
+    "controller:dev": "bun --cwd packages/controller dev",
+    "test": "bun test",
+    "test:controller": "bun test packages/controller/src/__tests__",
+    "test:cli": "bun test cli/src/__tests__",
+    "test:e2e": "./test-e2e.sh",
+    "test:all": "bun test && ./test-e2e.sh"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1"
+  }
+}

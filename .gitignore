@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.o
+*.swiftmodule
+*.swiftdoc
+*.swiftsourceinfo
+*.abi.json
+
+# Test artifacts
+.test-*/
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# Environment
+.DS_Store
+.env
+.env.local
+
+# Data
+data/
+storage/
+
+# Swift build
+free-agent/.build/
+
+# IDE
+.vscode/
+.idea/
+.claude/settings.local.json
+
+# OS
+Thumbs.db

@@ -1,0 +1,158 @@
+import { mkdirSync, existsSync, createWriteStream, createReadStream, unlinkSync } from 'fs';
+import { join, resolve } from 'path';
+import type { Readable } from 'stream';
+
+/**
+ * Local filesystem storage service
+ * Stores build artifacts, source zips, and certs
+ */
+export class FileStorage {
+  private storagePath: string;
+
+  constructor(storagePath: string) {
+    this.storagePath = storagePath;
+    this.ensureDirectories();
+  }
+
+  private ensureDirectories() {
+    const dirs = [
+      this.storagePath,
+      join(this.storagePath, 'builds'),
+      join(this.storagePath, 'certs'),
+      join(this.storagePath, 'results'),
+    ];
+
+    for (const dir of dirs) {
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+    }
+  }
+
+  /**
+   * Save build source zip
+   */
+  saveBuildSource(buildId: string, stream: Readable): Promise<string> {
+    const filePath = join(this.storagePath, 'builds', `${buildId}.zip`);
+    return this.saveStream(stream, filePath);
+  }
+
+  /**
+   * Save build certs/credentials
+   */
+  saveBuildCerts(buildId: string, stream: Readable): Promise<string> {
+    const filePath = join(this.storagePath, 'certs', `${buildId}.zip`);
+    return this.saveStream(stream, filePath);
+  }
+
+  /**
+   * Save build result (IPA/APK)
+   */
+  saveBuildResult(buildId: string, stream: Readable, extension: string): Promise<string> {
+    const filePath = join(this.storagePath, 'results', `${buildId}.${extension}`);
+    return this.saveStream(stream, filePath);
+  }
+
+  /**
+   * Get build source path
+   */
+  getBuildSourcePath(buildId: string): string {
+    return join(this.storagePath, 'builds', `${buildId}.zip`);
+  }
+
+  /**
+   * Get build certs path
+   */
+  getBuildCertsPath(buildId: string): string {
+    return join(this.storagePath, 'certs', `${buildId}.zip`);
+  }
+
+  /**
+   * Get build result path
+   */
+  getBuildResultPath(buildId: string, extension: string): string {
+    return join(this.storagePath, 'results', `${buildId}.${extension}`);
+  }
+
+  /**
+   * Check if build source exists
+   */
+  buildSourceExists(buildId: string): boolean {
+    return existsSync(this.getBuildSourcePath(buildId));
+  }
+
+  /**
+   * Check if build result exists
+   */
+  buildResultExists(buildId: string, extension: string): boolean {
+    return existsSync(this.getBuildResultPath(buildId, extension));
+  }
+
+  /**
+   * Create read stream for file
+   * SECURITY: Validates path is inside storage directory to prevent path traversal
+   */
+  createReadStream(filePath: string): Readable {
+    const normalized = resolve(filePath);
+    const storageRoot = resolve(this.storagePath);
+
+    // Prevent path traversal - ensure file is inside storage directory
+    if (!normalized.startsWith(storageRoot)) {
+      throw new Error('Path traversal attempt blocked: file must be inside storage directory');
+    }
+
+    if (!existsSync(normalized)) {
+      throw new Error('File not found');
+    }
+
+    return createReadStream(normalized);
+  }
+
+  /**
+   * Delete build artifacts
+   */
+  deleteBuildArtifacts(buildId: string) {
+    const files = [
+      join(this.storagePath, 'builds', `${buildId}.zip`),
+      join(this.storagePath, 'certs', `${buildId}.zip`),
+      join(this.storagePath, 'results', `${buildId}.ipa`),
+      join(this.storagePath, 'results', `${buildId}.apk`),
+    ];
+
+    for (const file of files) {
+      try {
+        if (existsSync(file)) {
+          unlinkSync(file);
+        }
+      } catch (err) {
+        console.error(`Failed to delete ${file}:`, err);
+      }
+    }
+  }
+
+  /**
+   * Save stream to file
+   */
+  private saveStream(stream: Readable, filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const writeStream = createWriteStream(filePath);
+
+      stream.pipe(writeStream);
+
+      writeStream.on('finish', () => resolve(filePath));
+      writeStream.on('error', reject);
+      stream.on('error', reject);
+    });
+  }
+
+  /**
+   * Get storage stats
+   */
+  getStats() {
+    // Could be enhanced with actual disk usage calculations
+    return {
+      path: this.storagePath,
+      exists: existsSync(this.storagePath),
+    };
+  }
+}
