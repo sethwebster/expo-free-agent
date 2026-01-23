@@ -197,7 +197,7 @@ public actor WorkerService {
     private func performBuild(_ job: BuildJob) async throws {
         var buildPackagePath: URL?
         var certsPath: URL?
-        var vmManager: VMManager?
+        var vmManager: TartVMManager?
 
         do {
             // Download build package
@@ -220,8 +220,8 @@ public actor WorkerService {
                 buildTimeoutMinutes: configuration.buildTimeoutMinutes
             )
 
-            vmManager = try VMManager(configuration: vmConfig)
-            print("✓ VM Manager created")
+            vmManager = TartVMManager(configuration: vmConfig)
+            print("✓ Tart VM Manager created")
 
             let buildResult = try await vmManager!.executeBuild(
                 sourceCodePath: buildPackagePath!,
