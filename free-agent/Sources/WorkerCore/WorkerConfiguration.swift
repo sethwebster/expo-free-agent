@@ -3,6 +3,7 @@ import Foundation
 public struct WorkerConfiguration: Codable, Sendable {
     // Controller settings
     public var controllerURL: String
+    public var apiKey: String
     public var pollIntervalSeconds: Int
 
     // Resource limits
@@ -26,6 +27,7 @@ public struct WorkerConfiguration: Codable, Sendable {
 
     public static let `default` = WorkerConfiguration(
         controllerURL: "http://localhost:3000",
+        apiKey: "dev-insecure-key-change-in-production",
         pollIntervalSeconds: 30,
         maxCPUPercent: 70,
         maxMemoryGB: 8,

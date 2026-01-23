@@ -29,6 +29,13 @@ struct SettingsView: View {
                     }
 
                     HStack {
+                        Text("API Key:")
+                            .frame(width: 120, alignment: .trailing)
+                        SecureField("Enter API key", text: $configuration.apiKey)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    HStack {
                         Text("Poll Interval:")
                             .frame(width: 120, alignment: .trailing)
                         TextField("30", value: $configuration.pollIntervalSeconds, format: .number)

@@ -16,7 +16,7 @@ public class VMManager: NSObject {
 
     public func executeBuild(
         sourceCodePath: URL,
-        signingCertsPath: URL,
+        signingCertsPath: URL?,
         buildTimeout: TimeInterval
     ) async throws -> BuildResult {
         // Create and start VM
@@ -48,10 +48,14 @@ public class VMManager: NSObject {
                 throw vmError ?? VMError.buildFailed
             }
 
-            // Install signing certificates
-            logs += "Installing certificates...\n"
-            try await installSigningCertificates(signingCertsPath)
-            logs += "✓ Certificates installed\n\n"
+            // Install signing certificates (if provided)
+            if let certsPath = signingCertsPath {
+                logs += "Installing certificates...\n"
+                try await installSigningCertificates(certsPath)
+                logs += "✓ Certificates installed\n\n"
+            } else {
+                logs += "No certificates provided, skipping certificate installation\n\n"
+            }
 
             // Check for crash
             if vmCrashed {

@@ -3,7 +3,7 @@ import BuildVM
 
 @available(macOS 14.0, *)
 public actor WorkerService {
-    private let configuration: WorkerConfiguration
+    private var configuration: WorkerConfiguration
     private var isActive = false
     private var pollingTask: Task<Void, Never>?
     private var activeBuilds: [String: Task<Void, Never>] = [:]
@@ -83,26 +83,37 @@ public actor WorkerService {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
 
+            // Controller expects: { name, capabilities }
             let payload: [String: Any] = [
-                "workerID": configuration.workerID ?? UUID().uuidString,
-                "deviceName": configuration.deviceName ?? Host.current().localizedName ?? "Unknown",
+                "name": configuration.deviceName ?? Host.current().localizedName ?? "Unknown",
                 "capabilities": [
+                    "platforms": ["ios"],
                     "maxConcurrentBuilds": configuration.maxConcurrentBuilds,
                     "maxMemoryGB": configuration.maxMemoryGB,
-                    "maxCPUPercent": configuration.maxCPUPercent
-                ],
-                "platform": "macOS",
-                "version": "1.0.0"
+                    "maxCPUPercent": configuration.maxCPUPercent,
+                    "xcode_version": "15.0"
+                ]
             ]
 
             request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
 
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 200 {
-                    print("✓ Registered with controller")
+                    // Controller returns { id, status } - save the assigned worker ID
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let assignedId = json["id"] as? String {
+                        // Store the controller-assigned worker ID for future requests
+                        // CRITICAL: Update in-memory config so pollForJob() uses the correct ID
+                        configuration.workerID = assignedId
+                        configuration.save()
+                        print("✓ Registered with controller (ID: \(assignedId))")
+                    } else {
+                        print("✓ Registered with controller")
+                    }
                 } else {
                     print("Registration failed: \(httpResponse.statusCode)")
                 }
@@ -116,9 +127,12 @@ public actor WorkerService {
         guard let workerID = configuration.workerID else { return }
 
         do {
+            // Note: Controller doesn't have an unregister endpoint currently
+            // This is a no-op but keeping structure for future implementation
             let url = URL(string: "\(configuration.controllerURL)/api/workers/\(workerID)/unregister")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
+            request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
 
             let (_, response) = try await URLSession.shared.data(for: request)
 
@@ -135,18 +149,24 @@ public actor WorkerService {
     private func pollForJob() async throws -> BuildJob? {
         guard let workerID = configuration.workerID else { return nil }
 
-        let url = URL(string: "\(configuration.controllerURL)/api/workers/\(workerID)/poll")!
+        // Controller expects query param: /api/workers/poll?worker_id={id}
+        let url = URL(string: "\(configuration.controllerURL)/api/workers/poll?worker_id=\(workerID)")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else { return nil }
 
         if httpResponse.statusCode == 200 {
-            let job = try JSONDecoder().decode(BuildJob.self, from: data)
-            print("Received job: \(job.id)")
-            return job
+            // Controller returns { job: BuildJob | null }
+            let pollResponse = try JSONDecoder().decode(PollResponse.self, from: data)
+            if let job = pollResponse.job {
+                print("Received job: \(job.id)")
+                return job
+            }
+            return nil
         } else if httpResponse.statusCode == 204 {
             // No jobs available
             return nil
@@ -184,9 +204,11 @@ public actor WorkerService {
             buildPackagePath = try await downloadBuildPackage(job)
             print("✓ Downloaded build package")
 
-            // Download signing certificates
+            // Download signing certificates (optional - may be nil)
             certsPath = try await downloadSigningCertificates(job)
-            print("✓ Downloaded certificates")
+            if certsPath != nil {
+                print("✓ Downloaded certificates")
+            }
 
             // Create VM and execute build
             let vmConfig = VMConfiguration(
@@ -203,7 +225,7 @@ public actor WorkerService {
 
             let buildResult = try await vmManager!.executeBuild(
                 sourceCodePath: buildPackagePath!,
-                signingCertsPath: certsPath!,
+                signingCertsPath: certsPath,
                 buildTimeout: TimeInterval(configuration.buildTimeoutMinutes * 60)
             )
             print("✓ Build execution completed")
@@ -257,8 +279,25 @@ public actor WorkerService {
         let tempDir = FileManager.default.temporaryDirectory
         let packagePath = tempDir.appendingPathComponent("build-\(job.id).zip")
 
-        let url = URL(string: "\(configuration.controllerURL)/api/builds/\(job.id)/package")!
-        let (localURL, _) = try await URLSession.shared.download(from: url)
+        // Use source_url from job (relative URL like /api/builds/{id}/source)
+        let url = URL(string: "\(configuration.controllerURL)\(job.source_url)")!
+        var request = URLRequest(url: url)
+        request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
+        // Controller requires X-Worker-Id header for source/certs downloads
+        if let workerID = configuration.workerID {
+            request.setValue(workerID, forHTTPHeaderField: "X-Worker-Id")
+        }
+
+        let (localURL, response) = try await URLSession.shared.download(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw WorkerError.downloadFailed
+        }
+
+        // Remove existing file if present
+        if FileManager.default.fileExists(atPath: packagePath.path) {
+            try FileManager.default.removeItem(at: packagePath)
+        }
 
         try FileManager.default.moveItem(at: localURL, to: packagePath)
         print("Downloaded build package to \(packagePath.path)")
@@ -266,14 +305,32 @@ public actor WorkerService {
         return packagePath
     }
 
-    private func downloadSigningCertificates(_ job: BuildJob) async throws -> URL {
+    private func downloadSigningCertificates(_ job: BuildJob) async throws -> URL? {
+        // certs_url is optional - may be nil if no certs provided
+        guard let certsUrl = job.certs_url else {
+            print("No certificates to download for this build")
+            return nil
+        }
+
         let tempDir = FileManager.default.temporaryDirectory
         let certsPath = tempDir.appendingPathComponent("certs-\(job.id)")
 
         try FileManager.default.createDirectory(at: certsPath, withIntermediateDirectories: true)
 
-        let url = URL(string: "\(configuration.controllerURL)/api/builds/\(job.id)/certs")!
-        let (localURL, _) = try await URLSession.shared.download(from: url)
+        // Use certs_url from job (relative URL like /api/builds/{id}/certs)
+        let url = URL(string: "\(configuration.controllerURL)\(certsUrl)")!
+        var request = URLRequest(url: url)
+        request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
+        // Controller requires X-Worker-Id header for source/certs downloads
+        if let workerID = configuration.workerID {
+            request.setValue(workerID, forHTTPHeaderField: "X-Worker-Id")
+        }
+
+        let (localURL, response) = try await URLSession.shared.download(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw WorkerError.downloadFailed
+        }
 
         let certFile = certsPath.appendingPathComponent("cert.p12")
         try FileManager.default.moveItem(at: localURL, to: certFile)
@@ -286,32 +343,40 @@ public actor WorkerService {
         let url = URL(string: "\(configuration.controllerURL)/api/workers/upload")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
 
         let boundary = UUID().uuidString
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
 
-        // Add job ID
+        // Add build_id (controller expects snake_case)
         body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"jobID\"\r\n\r\n")
+        body.append("Content-Disposition: form-data; name=\"build_id\"\r\n\r\n")
         body.append("\(jobID)\r\n")
 
-        // Add success status
+        // Add worker_id
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"worker_id\"\r\n\r\n")
+        body.append("\(configuration.workerID ?? "")\r\n")
+
+        // Add success status (controller expects string "true" or "false")
         body.append("--\(boundary)\r\n")
         body.append("Content-Disposition: form-data; name=\"success\"\r\n\r\n")
-        body.append("\(result.success)\r\n")
+        body.append("\(result.success ? "true" : "false")\r\n")
 
-        // Add logs
-        body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"logs\"\r\n\r\n")
-        body.append("\(result.logs)\r\n")
+        // Add error_message if failed
+        if !result.success {
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"error_message\"\r\n\r\n")
+            body.append("Build failed. See logs for details.\r\n")
+        }
 
-        // Add artifact if exists
+        // Add result file if exists (controller expects field name "result")
         if let artifactPath = result.artifactPath,
            let artifactData = try? Data(contentsOf: artifactPath) {
             body.append("--\(boundary)\r\n")
-            body.append("Content-Disposition: form-data; name=\"artifact\"; filename=\"\(artifactPath.lastPathComponent)\"\r\n")
+            body.append("Content-Disposition: form-data; name=\"result\"; filename=\"\(artifactPath.lastPathComponent)\"\r\n")
             body.append("Content-Type: application/octet-stream\r\n\r\n")
             body.append(artifactData)
             body.append("\r\n")
@@ -333,18 +398,41 @@ public actor WorkerService {
     }
 
     private func reportJobFailure(_ jobID: String, error: Error) async {
+        // Report failure via the upload endpoint with success=false
         do {
-            let url = URL(string: "\(configuration.controllerURL)/api/workers/failure")!
+            let url = URL(string: "\(configuration.controllerURL)/api/workers/upload")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
 
-            let payload: [String: Any] = [
-                "jobID": jobID,
-                "error": error.localizedDescription
-            ]
+            let boundary = UUID().uuidString
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            var body = Data()
+
+            // Add build_id
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"build_id\"\r\n\r\n")
+            body.append("\(jobID)\r\n")
+
+            // Add worker_id
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"worker_id\"\r\n\r\n")
+            body.append("\(configuration.workerID ?? "")\r\n")
+
+            // Add success=false
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"success\"\r\n\r\n")
+            body.append("false\r\n")
+
+            // Add error_message
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"error_message\"\r\n\r\n")
+            body.append("\(error.localizedDescription)\r\n")
+
+            body.append("--\(boundary)--\r\n")
+
+            request.httpBody = body
 
             let (_, response) = try await URLSession.shared.data(for: request)
 
@@ -359,10 +447,24 @@ public actor WorkerService {
 
 // MARK: - Models
 
+/// Job response from controller's /api/workers/poll endpoint
+public struct PollResponse: Codable, Sendable {
+    public let job: BuildJob?
+}
+
+/// Build job details returned by controller
 public struct BuildJob: Codable, Sendable {
     public let id: String
     public let platform: String
-    public let estimatedDuration: Int?
+    public let source_url: String
+    public let certs_url: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case platform
+        case source_url
+        case certs_url
+    }
 }
 
 enum WorkerError: Error {

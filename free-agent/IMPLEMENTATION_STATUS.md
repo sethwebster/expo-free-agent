@@ -51,7 +51,8 @@ Features:
 Implemented:
 - Actor-based service for thread-safe state management
 - Registration with controller (POST `/api/workers/register`)
-- Polling loop (GET `/api/workers/{id}/poll` every 30s)
+- Polling loop (GET `/api/workers/poll?worker_id={id}` every 30s)
+- API key authentication (X-API-Key header on all requests)
 - Job execution coordination:
   - Download build package
   - Download signing certs
