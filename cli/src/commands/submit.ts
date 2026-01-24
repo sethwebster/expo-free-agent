@@ -50,7 +50,9 @@ export function createSubmitCommand(): Command {
         const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'expo-controller-'));
         const zipPath = path.join(tempDir, 'project.zip');
 
-        await zipDirectory(resolvedPath, zipPath);
+        await zipDirectory(resolvedPath, zipPath, (fileCount) => {
+          spinner.text = `Zipping project files (${fileCount} files)`;
+        });
 
         const zipSize = (await fs.promises.stat(zipPath)).size;
         spinner.succeed(chalk.green(`Project zipped (${formatBytes(zipSize)})`));
@@ -128,13 +130,27 @@ export function createSubmitCommand(): Command {
   return command;
 }
 
-async function zipDirectory(sourceDir: string, outPath: string): Promise<void> {
+async function zipDirectory(
+  sourceDir: string,
+  outPath: string,
+  onProgress?: (fileCount: number) => void
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outPath);
     const archive = archiver('zip', { zlib: { level: 9 } });
 
+    let fileCount = 0;
+
     output.on('close', () => resolve());
     archive.on('error', (err) => reject(err));
+
+    // Track progress as files are added
+    archive.on('entry', () => {
+      fileCount++;
+      if (onProgress && fileCount % 10 === 0) {
+        onProgress(fileCount);
+      }
+    });
 
     archive.pipe(output);
 
