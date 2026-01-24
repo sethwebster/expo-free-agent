@@ -25,8 +25,29 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 IN_DIR=""
 OUT_DIR=""
 
+show_usage() {
+    echo "Usage: $0 --in <input-dir> --out <output-dir>"
+    echo ""
+    echo "Free Agent VM Build Runner"
+    echo ""
+    echo "Arguments:"
+    echo "  --in <dir>   Input directory containing:"
+    echo "               - source.tar.gz (required)"
+    echo "               - signing.zip (optional)"
+    echo "  --out <dir>  Output directory for:"
+    echo "               - artifact.ipa (produced on success)"
+    echo "               - xcodebuild.log (always produced)"
+    echo ""
+    echo "Example:"
+    echo "  $0 --in ~/free-agent/in --out ~/free-agent/out"
+}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --help|-h)
+            show_usage
+            exit 0
+            ;;
         --in)
             IN_DIR="$2"
             shift 2
@@ -37,13 +58,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             log_error "Unknown argument: $1"
+            show_usage
             exit 1
             ;;
     esac
 done
 
 if [ -z "$IN_DIR" ] || [ -z "$OUT_DIR" ]; then
-    log_error "Usage: $0 --in <input-dir> --out <output-dir>"
+    log_error "Missing required arguments"
+    show_usage
     exit 1
 fi
 
