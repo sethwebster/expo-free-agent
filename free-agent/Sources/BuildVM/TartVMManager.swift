@@ -7,6 +7,7 @@ public class TartVMManager {
     private let templateImage: String
     private let vmUser: String
     private let sshOptions: [String]
+    private let tartPath: String
 
     private var vmName: String?
     private var vmIP: String?
@@ -15,10 +16,11 @@ public class TartVMManager {
     private let ipTimeout: TimeInterval = 120
     private let sshTimeout: TimeInterval = 180
 
-    public init(configuration: VMConfiguration, templateImage: String = "expo-free-agent-tahoe-26.2-xcode-expo-54", vmUser: String = "admin") {
+    public init(configuration: VMConfiguration, templateImage: String = "expo-free-agent-tahoe-26.2-xcode-expo-54", vmUser: String = "admin", tartPath: String = "/opt/homebrew/bin/tart") {
         self.configuration = configuration
         self.templateImage = templateImage
         self.vmUser = vmUser
+        self.tartPath = tartPath
 
         // SSH options from runbook to handle ephemeral VMs
         self.sshOptions = [
@@ -50,13 +52,13 @@ public class TartVMManager {
             logs += "VM: \(vmName!)\n\n"
 
             logs += "Cloning template...\n"
-            try await executeCommand("tart", ["clone", templateImage, vmName!])
+            try await executeCommand(tartPath, ["clone", templateImage, vmName!])
             created = true
             logs += "✓ VM cloned\n\n"
 
             // 2) Run headless, detached (using screen)
             logs += "Starting VM headless...\n"
-            try await executeCommand("screen", ["-d", "-m", "tart", "run", vmName!, "--no-graphics"])
+            try await executeCommand("screen", ["-d", "-m", tartPath, "run", vmName!, "--no-graphics"])
             logs += "✓ VM started\n\n"
 
             // 3) Wait for IP
@@ -179,9 +181,14 @@ public class TartVMManager {
             logs += "✓ Shutdown requested\n"
         }
 
-        // Hard guarantee: delete VM
+        // Hard guarantee: stop and delete VM
         do {
-            try await executeCommand("tart", ["delete", "-f", vm])
+            // Stop VM first (tart delete requires VM to be stopped)
+            _ = try? await executeCommand(tartPath, ["stop", vm])
+            try await Task.sleep(for: .seconds(2))
+
+            // Delete VM (no -f flag exists)
+            try await executeCommand(tartPath, ["delete", vm])
             logs += "✓ VM deleted\n"
         } catch {
             logs += "⚠ Failed to delete VM: \(error)\n"
@@ -201,7 +208,7 @@ public class TartVMManager {
         let deadline = Date().addingTimeInterval(timeout)
 
         while Date() < deadline {
-            let (code, output) = try await executeCommandWithResult("tart", ["ip", vmName])
+            let (code, output) = try await executeCommandWithResult(tartPath, ["ip", vmName])
             let ip = output.trimmingCharacters(in: .whitespacesAndNewlines)
 
             if code == 0 && !ip.isEmpty {
