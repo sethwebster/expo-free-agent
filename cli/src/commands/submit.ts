@@ -139,17 +139,26 @@ async function zipDirectory(sourceDir: string, outPath: string): Promise<void> {
     archive.pipe(output);
 
     // Add files, excluding common directories
+    // Only send: source code, config files, assets, lock files
+    // VM will regenerate: node_modules, ios/, android/ via expo prebuild
     archive.glob('**/*', {
       cwd: sourceDir,
       ignore: [
-        'node_modules/**',
-        '.expo/**',
-        '.git/**',
-        'ios/Pods/**',
-        'android/.gradle/**',
-        'android/build/**',
-        'dist/**',
-        '.DS_Store',
+        'node_modules/**',       // Reinstalled via npm ci
+        'ios/**',                // Regenerated via expo prebuild
+        'android/**',            // Not needed for iOS builds
+        '.expo/**',              // Build cache
+        '.expo-shared/**',       // Shared cache
+        '.git/**',               // Version control
+        '.next/**',              // Next.js cache
+        '.turbo/**',             // Turborepo cache
+        'dist/**',               // Build output
+        'build/**',              // Build output
+        'coverage/**',           // Test coverage
+        '.nyc_output/**',        // Test coverage
+        '*.log',                 // Log files
+        '.DS_Store',             // macOS junk
+        'Thumbs.db',             // Windows junk
       ],
     });
 
