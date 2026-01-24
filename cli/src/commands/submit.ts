@@ -30,18 +30,22 @@ export function createSubmitCommand(): Command {
           process.exit(1);
         }
 
-        // Check for app.json or app.config.js
+        // Check for app.json, app.config.js, or app.config.ts
         const hasAppJson = await fs.promises
           .access(path.join(resolvedPath, 'app.json'))
           .then(() => true)
           .catch(() => false);
-        const hasAppConfig = await fs.promises
+        const hasAppConfigJs = await fs.promises
           .access(path.join(resolvedPath, 'app.config.js'))
           .then(() => true)
           .catch(() => false);
+        const hasAppConfigTs = await fs.promises
+          .access(path.join(resolvedPath, 'app.config.ts'))
+          .then(() => true)
+          .catch(() => false);
 
-        if (!hasAppJson && !hasAppConfig) {
-          spinner.fail(chalk.red('Not a valid Expo project (missing app.json or app.config.js)'));
+        if (!hasAppJson && !hasAppConfigJs && !hasAppConfigTs) {
+          spinner.fail(chalk.red('Not a valid Expo project (missing app.json, app.config.js, or app.config.ts)'));
           process.exit(1);
         }
 
