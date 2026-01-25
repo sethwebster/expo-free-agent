@@ -18,6 +18,7 @@ export class ControllerServer {
   private storage: FileStorage;
   private config: ControllerConfig;
   private server?: http.Server;
+  private timeoutChecker?: NodeJS.Timeout;
 
   constructor(config: ControllerConfig) {
     this.config = config;
@@ -119,6 +120,57 @@ export class ControllerServer {
     });
   }
 
+  /**
+   * Check for stuck builds (no heartbeat for 2 minutes)
+   * Runs every 60 seconds
+   */
+  private checkStuckBuilds() {
+    const HEARTBEAT_TIMEOUT = 120000; // 2 minutes
+    const now = Date.now();
+
+    const activeBuilds = this.db.getAllBuilds().filter(b =>
+      b.status === 'assigned' || b.status === 'building'
+    );
+
+    for (const build of activeBuilds) {
+      // Check if heartbeat is missing or stale
+      const lastHeartbeat = (build as any).last_heartbeat_at;
+      const timeSinceStart = build.started_at ? now - build.started_at : 0;
+
+      // Only check builds that have been running for at least 30 seconds
+      // and haven't sent a heartbeat in 2 minutes
+      if (timeSinceStart > 30000) {
+        const timeSinceHeartbeat = lastHeartbeat ? now - lastHeartbeat : timeSinceStart;
+
+        if (timeSinceHeartbeat > HEARTBEAT_TIMEOUT) {
+          console.warn(`Build ${build.id} stuck - no heartbeat for ${Math.round(timeSinceHeartbeat / 1000)}s`);
+
+          // Mark as failed
+          this.db.updateBuildStatus(build.id, 'failed', {
+            error_message: `Build timeout - no heartbeat from worker for ${Math.round(timeSinceHeartbeat / 1000)}s`,
+            completed_at: now,
+          });
+
+          // Mark worker as idle
+          if (build.worker_id) {
+            this.db.updateWorkerStatus(build.worker_id, 'idle', now);
+          }
+
+          // Remove from queue
+          this.queue.fail(build.id, false);
+
+          // Log
+          this.db.addBuildLog({
+            build_id: build.id,
+            timestamp: now,
+            level: 'error',
+            message: `Build timeout - worker stopped responding`,
+          });
+        }
+      }
+    }
+  }
+
   start(): Promise<void> {
     return new Promise((resolve) => {
       this.server = this.app.listen(this.config.port, () => {
@@ -132,6 +184,12 @@ export class ControllerServer {
         console.log(`📦 Storage:  ${this.config.storagePath}`);
         console.log(`🔐 API Key:  ${this.config.apiKey.substring(0, 8)}...`);
         console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+        // Start timeout checker (every 60 seconds)
+        this.timeoutChecker = setInterval(() => {
+          this.checkStuckBuilds();
+        }, 60000);
+
         resolve();
       });
     });
@@ -139,6 +197,12 @@ export class ControllerServer {
 
   async stop() {
     console.log('\nShutting down...');
+
+    // Stop timeout checker
+    if (this.timeoutChecker) {
+      clearInterval(this.timeoutChecker);
+      console.log('Timeout checker stopped');
+    }
 
     // Close HTTP server gracefully
     if (this.server) {

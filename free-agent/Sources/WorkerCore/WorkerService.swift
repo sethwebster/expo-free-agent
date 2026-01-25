@@ -226,7 +226,11 @@ public actor WorkerService {
             let buildResult = try await vmManager!.executeBuild(
                 sourceCodePath: buildPackagePath!,
                 signingCertsPath: certsPath,
-                buildTimeout: TimeInterval(configuration.buildTimeoutMinutes * 60)
+                buildTimeout: TimeInterval(configuration.buildTimeoutMinutes * 60),
+                buildId: job.id,
+                workerId: configuration.workerID,
+                controllerURL: configuration.controllerURL,
+                apiKey: configuration.apiKey
             )
             print("✓ Build execution completed")
 

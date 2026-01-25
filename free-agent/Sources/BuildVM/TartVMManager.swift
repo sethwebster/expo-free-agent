@@ -37,10 +37,15 @@ public class TartVMManager {
     public func executeBuild(
         sourceCodePath: URL,
         signingCertsPath: URL?,
-        buildTimeout: TimeInterval
+        buildTimeout: TimeInterval,
+        buildId: String? = nil,
+        workerId: String? = nil,
+        controllerURL: String? = nil,
+        apiKey: String? = nil
     ) async throws -> BuildResult {
         var logs = ""
         var created = false
+        var monitorPID: Int32?
 
         do {
             // 1) Clone template into ephemeral job VM
@@ -96,12 +101,25 @@ public class TartVMManager {
             logs += "Expo: \(expoVersion)\n"
             logs += "✓ Toolchain ready\n\n"
 
-            // 7) Prepare directories
+            // 7) Start build monitor (sends heartbeats to controller)
+            if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
+                logs += "Starting build monitor...\n"
+                let monitorCommand = "/usr/local/bin/vm-monitor.sh '\(controllerURL)' '\(buildId)' '\(workerId)' '\(apiKey)' 30 > /dev/null 2>&1 & echo $!"
+                let pidOutput = try await sshCommand(ip: vmIP!, command: monitorCommand)
+                if let pid = Int32(pidOutput.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    monitorPID = pid
+                    logs += "✓ Monitor started (PID: \(pid))\n\n"
+                } else {
+                    logs += "⚠️  Could not start monitor\n\n"
+                }
+            }
+
+            // 8) Prepare directories
             logs += "Preparing build directories...\n"
             _ = try await sshCommand(ip: vmIP!, command: "mkdir -p ~/free-agent/in ~/free-agent/out ~/free-agent/work")
             logs += "✓ Directories created\n\n"
 
-            // 8) Upload source
+            // 9) Upload source
             logs += "Uploading source code...\n"
             try await scpUpload(localPath: sourceCodePath.path, remotePath: "~/free-agent/in/source.tar.gz", ip: vmIP!)
             logs += "✓ Source uploaded\n\n"
@@ -115,7 +133,7 @@ public class TartVMManager {
                 logs += "No signing bundle provided\n\n"
             }
 
-            // 9) Run build
+            // 10) Run build
             logs += "=== Starting build ===\n"
             let buildLogs = try await sshCommand(
                 ip: vmIP!,
@@ -125,7 +143,14 @@ public class TartVMManager {
             logs += buildLogs + "\n"
             logs += "=== Build complete ===\n\n"
 
-            // 10) Download artifacts
+            // 11) Stop build monitor
+            if let pid = monitorPID {
+                logs += "Stopping build monitor...\n"
+                _ = try? await sshCommand(ip: vmIP!, command: "kill \(pid) 2>/dev/null || true")
+                logs += "✓ Monitor stopped\n\n"
+            }
+
+            // 12) Download artifacts
             logs += "Downloading artifacts...\n"
 
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("fa-\(jobID)")

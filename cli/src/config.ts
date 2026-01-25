@@ -4,6 +4,7 @@ import os from 'os';
 
 interface Config {
   controllerUrl: string;
+  apiKey?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.expo-controller');
@@ -45,4 +46,16 @@ export async function saveConfig(config: Partial<Config>): Promise<void> {
 export async function getControllerUrl(): Promise<string> {
   const config = await loadConfig();
   return config.controllerUrl;
+}
+
+export async function getApiKey(): Promise<string | undefined> {
+  // Prefer environment variable
+  const envKey = process.env.EXPO_CONTROLLER_API_KEY;
+  if (envKey) {
+    return envKey;
+  }
+
+  // Fall back to config file
+  const config = await loadConfig();
+  return config.apiKey;
 }

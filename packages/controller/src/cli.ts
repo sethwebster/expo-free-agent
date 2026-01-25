@@ -78,7 +78,7 @@ async function main() {
     port,
     dbPath,
     storagePath,
-    apiKey: args.apiKey,
+    ...(args.apiKey && { apiKey: args.apiKey }),
   });
 
   // Start server
