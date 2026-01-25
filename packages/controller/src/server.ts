@@ -1,28 +1,35 @@
-import express, { Request, Response } from 'express';
+import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import fastifyView from '@fastify/view';
+import ejs from 'ejs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import http from 'http';
 import { DatabaseService } from './db/Database.js';
 import { JobQueue } from './services/JobQueue.js';
 import { FileStorage } from './services/FileStorage.js';
-import { createApiRoutes } from './api/routes.js';
+import { registerApiRoutes } from './api/index.js';
 import type { ControllerConfig } from './domain/Config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export class ControllerServer {
-  private app: express.Application;
+  private app: FastifyInstance;
   private db: DatabaseService;
   private queue: JobQueue;
   private storage: FileStorage;
   private config: ControllerConfig;
-  private server?: http.Server;
   private timeoutChecker?: NodeJS.Timeout;
 
   constructor(config: ControllerConfig) {
     this.config = config;
-    this.app = express();
+    this.app = Fastify({
+      logger: false,
+      bodyLimit: Math.max(
+        config.maxSourceFileSize,
+        config.maxCertsFileSize,
+        config.maxResultFileSize
+      ),
+    });
     this.db = new DatabaseService(config.dbPath);
     this.queue = new JobQueue();
     this.storage = new FileStorage(config.storagePath);
@@ -46,26 +53,32 @@ export class ControllerServer {
   }
 
   private setupMiddleware() {
-    this.app.use(express.json());
-    this.app.use(express.urlencoded({ extended: true }));
-
     // Request logging
-    this.app.use((req, res, next) => {
-      console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-      next();
+    this.app.addHook('onRequest', async (request, reply) => {
+      console.log(`[${new Date().toISOString()}] ${request.method} ${request.url}`);
     });
   }
 
   private setupRoutes() {
     // Set up EJS templates
-    this.app.set('view engine', 'ejs');
-    this.app.set('views', join(__dirname, 'views'));
+    this.app.register(fastifyView, {
+      engine: {
+        ejs,
+      },
+      root: join(__dirname, 'views'),
+    });
 
     // API routes
-    this.app.use('/api', createApiRoutes(this.db, this.queue, this.storage, this.config));
+    this.app.register(registerApiRoutes, {
+      prefix: '/api',
+      db: this.db,
+      queue: this.queue,
+      storage: this.storage,
+      config: this.config,
+    });
 
     // Web UI
-    this.app.get('/', (req: Request, res: Response) => {
+    this.app.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
       const builds = this.db.getAllBuilds();
       const workers = this.db.getAllWorkers();
       const queueStats = this.queue.getStats();
@@ -79,7 +92,7 @@ export class ControllerServer {
         };
       });
 
-      res.render('index', {
+      return reply.view('index', {
         builds: enrichedBuilds,
         workers,
         stats: {
@@ -92,17 +105,17 @@ export class ControllerServer {
     });
 
     // Health check
-    this.app.get('/health', (req: Request, res: Response) => {
-      res.json({
+    this.app.get('/health', async (request: FastifyRequest, reply: FastifyReply) => {
+      return reply.send({
         status: 'ok',
         queue: this.queue.getStats(),
         storage: this.storage.getStats(),
       });
     });
 
-    // 404
-    this.app.use((req: Request, res: Response) => {
-      res.status(404).json({ error: 'Not found' });
+    // 404 handler
+    this.app.setNotFoundHandler(async (request, reply) => {
+      return reply.status(404).send({ error: 'Not found' });
     });
   }
 
@@ -171,28 +184,27 @@ export class ControllerServer {
     }
   }
 
-  start(): Promise<void> {
-    return new Promise((resolve) => {
-      this.server = this.app.listen(this.config.port, () => {
-        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🚀 Expo Free Agent Controller');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log(`\n📍 Server:   http://localhost:${this.config.port}`);
-        console.log(`📊 Web UI:   http://localhost:${this.config.port}`);
-        console.log(`🔌 API:      http://localhost:${this.config.port}/api`);
-        console.log(`\n💾 Database: ${this.config.dbPath}`);
-        console.log(`📦 Storage:  ${this.config.storagePath}`);
-        console.log(`🔐 API Key:  ${this.config.apiKey.substring(0, 8)}...`);
-        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-        // Start timeout checker (every 60 seconds)
-        this.timeoutChecker = setInterval(() => {
-          this.checkStuckBuilds();
-        }, 60000);
-
-        resolve();
-      });
+  async start(): Promise<void> {
+    await this.app.listen({
+      port: this.config.port,
+      host: '0.0.0.0',
     });
+
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🚀 Expo Free Agent Controller');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`\n📍 Server:   http://localhost:${this.config.port}`);
+    console.log(`📊 Web UI:   http://localhost:${this.config.port}`);
+    console.log(`🔌 API:      http://localhost:${this.config.port}/api`);
+    console.log(`\n💾 Database: ${this.config.dbPath}`);
+    console.log(`📦 Storage:  ${this.config.storagePath}`);
+    console.log(`🔐 API Key:  ${this.config.apiKey.substring(0, 8)}...`);
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    // Start timeout checker (every 60 seconds)
+    this.timeoutChecker = setInterval(() => {
+      this.checkStuckBuilds();
+    }, 60000);
   }
 
   async stop() {
@@ -205,14 +217,8 @@ export class ControllerServer {
     }
 
     // Close HTTP server gracefully
-    if (this.server) {
-      await new Promise<void>((resolve) => {
-        this.server!.close(() => {
-          console.log('HTTP server closed');
-          resolve();
-        });
-      });
-    }
+    await this.app.close();
+    console.log('HTTP server closed');
 
     // Queue state is already persisted in DB via transactions
     // No need to save separately

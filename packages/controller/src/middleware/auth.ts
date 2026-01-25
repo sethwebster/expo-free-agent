@@ -1,8 +1,9 @@
-import { Request, Response, NextFunction } from 'express';
+import { FastifyRequest, FastifyReply } from 'fastify';
 import type { ControllerConfig } from '../domain/Config.js';
+import type { DatabaseService } from '../db/Database.js';
 
 /**
- * Authentication middleware for API endpoints
+ * Authentication hook for API endpoints
  *
  * Security model:
  * - Shared API key (passed in X-API-Key header)
@@ -10,49 +11,47 @@ import type { ControllerConfig } from '../domain/Config.js';
  * - NOT production-ready (needs per-worker keys, rate limiting, HTTPS, etc.)
  *
  * Usage:
- *   router.use(requireApiKey(config));
+ *   fastify.addHook('onRequest', requireApiKey(config));
  */
 export function requireApiKey(config: ControllerConfig) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const providedKey = req.headers['x-api-key'];
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const providedKey = request.headers['x-api-key'];
 
     if (!providedKey) {
-      return res.status(401).json({
+      return reply.status(401).send({
         error: 'Missing X-API-Key header',
       });
     }
 
     if (providedKey !== config.apiKey) {
-      return res.status(403).json({
+      return reply.status(403).send({
         error: 'Invalid API key',
       });
     }
-
-    next();
   };
 }
 
 /**
- * Worker verification middleware
+ * Worker verification hook
  * Validates that worker_id in request matches assigned worker for build
  *
  * Usage:
- *   router.get('/builds/:id/source', requireWorkerAccess(db), (req, res) => {...})
+ *   fastify.addHook('preHandler', requireWorkerAccess(db));
  */
-export function requireWorkerAccess(db: any) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const workerId = req.headers['x-worker-id'] as string;
-    const buildId = req.params.id;
+export function requireWorkerAccess(db: DatabaseService) {
+  return async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const workerId = request.headers['x-worker-id'] as string;
+    const buildId = request.params.id;
 
     if (!workerId) {
-      return res.status(401).json({
+      return reply.status(401).send({
         error: 'Missing X-Worker-Id header',
       });
     }
 
     const build = db.getBuild(buildId);
     if (!build) {
-      return res.status(404).json({
+      return reply.status(404).send({
         error: 'Build not found',
       });
     }
@@ -61,13 +60,12 @@ export function requireWorkerAccess(db: any) {
     // 1. Worker is assigned to this build, OR
     // 2. Build is pending (worker is about to be assigned)
     if (build.worker_id && build.worker_id !== workerId) {
-      return res.status(403).json({
+      return reply.status(403).send({
         error: 'Worker not authorized for this build',
       });
     }
 
     // Attach build to request for convenience
-    (req as any).build = build;
-    next();
+    (request as any).build = build;
   };
 }
