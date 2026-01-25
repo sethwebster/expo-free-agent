@@ -8,6 +8,7 @@ import { JobQueue } from './services/JobQueue.js';
 import { FileStorage } from './services/FileStorage.js';
 import { registerApiRoutes } from './api/index.js';
 import type { ControllerConfig } from './domain/Config.js';
+import { generateDemoData } from './demo/generateDemoData.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -78,7 +79,19 @@ export class ControllerServer {
     });
 
     // Web UI
-    this.app.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+    this.app.get('/', async (request: FastifyRequest<{ Querystring: { demo?: string } }>, reply: FastifyReply) => {
+      const isDemo = request.query.demo === 'true';
+
+      if (isDemo) {
+        // Demo mode - show beautiful charts with realistic data
+        const demoData = generateDemoData();
+        return reply.view('index', {
+          ...demoData,
+          isDemo: true,
+        });
+      }
+
+      // Real mode - show actual data
       const builds = this.db.getAllBuilds();
       const workers = this.db.getAllWorkers();
       const queueStats = this.queue.getStats();
@@ -101,6 +114,8 @@ export class ControllerServer {
           activeBuilds: queueStats.active,
           totalWorkers: workers.length,
         },
+        isDemo: false,
+        chartData: null,
       });
     });
 
