@@ -12,8 +12,9 @@ COPY src ./src
 # Build
 RUN bun run build
 
-# Copy SQL schema to dist
+# Copy SQL schema and views to dist
 RUN cp /app/src/db/schema.sql /app/dist/schema.sql
+RUN mkdir -p /app/dist/views && cp -r /app/src/views/* /app/dist/views/
 
 # Production stage
 FROM oven/bun:1.1-alpine AS production
