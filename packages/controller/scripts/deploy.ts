@@ -71,7 +71,7 @@ async function cleanupTarFile(tarFile: string) {
   }
 }
 
-async function deploy(appName?: string) {
+async function deploy(appName?: string, extraArgs: string[] = []) {
   console.log('🚀 Deploying to CapRover...\n');
 
   // Check if caprover CLI is installed
@@ -94,6 +94,9 @@ async function deploy(appName?: string) {
     if (appName) {
       args.push('-a', appName);
     }
+
+    // Add any extra args passed to script
+    args.push(...extraArgs);
 
     console.log(`Running: caprover ${args.join(' ')}\n`);
 
@@ -150,8 +153,18 @@ if (args.includes('-h') || args.includes('--help')) {
 const appNameIndex = args.indexOf('-a') !== -1 ? args.indexOf('-a') : args.indexOf('--app');
 const appName = appNameIndex !== -1 ? args[appNameIndex + 1] : undefined;
 
+// Collect extra args to pass through to caprover
+const extraArgs = args.filter((arg, i) => {
+  // Skip -a/--app and its value
+  if (arg === '-a' || arg === '--app') return false;
+  if (appNameIndex !== -1 && i === appNameIndex + 1) return false;
+  // Skip -h/--help
+  if (arg === '-h' || arg === '--help') return false;
+  return true;
+});
+
 // Run deployment
-deploy(appName).catch((error) => {
+deploy(appName, extraArgs).catch((error) => {
   console.error('❌ Deployment error:', error);
   process.exit(1);
 });
