@@ -1,5 +1,18 @@
 # Expo Free Agent Controller - CapRover Deployment
 
+## Quick Start
+
+```bash
+# Install CapRover CLI (one-time)
+npm install -g caprover
+
+# Login to CapRover (one-time)
+caprover login
+
+# Deploy (from packages/controller directory)
+bun run deploy
+```
+
 ## Prerequisites
 
 - CapRover instance running and accessible
@@ -49,6 +62,18 @@ Add persistent directories in CapRover app settings:
 ### 5. Deploy
 
 From this directory:
+
+**Option 1: Using bun script (recommended)**
+
+```bash
+# Interactive deployment (prompts for app selection)
+bun run deploy
+
+# Deploy to specific app
+bun run deploy:app expo-controller
+```
+
+**Option 2: Using caprover CLI directly**
 
 ```bash
 caprover deploy
