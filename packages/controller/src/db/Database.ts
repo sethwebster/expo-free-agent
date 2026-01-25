@@ -39,6 +39,16 @@ export interface BuildLog {
   message: string;
 }
 
+export interface DiagnosticReport {
+  id: string;
+  worker_id: string;
+  status: 'healthy' | 'warning' | 'critical';
+  run_at: number;
+  duration_ms: number;
+  auto_fixed: number; // SQLite boolean (0 or 1)
+  checks: string; // JSON array
+}
+
 export class DatabaseService {
   private db: BunDatabase;
 
@@ -253,6 +263,45 @@ export class DatabaseService {
       ORDER BY timestamp ASC
     `);
     return stmt.all(buildId) as BuildLog[];
+  }
+
+  // Diagnostics
+  saveDiagnosticReport(report: Omit<DiagnosticReport, 'id'>): string {
+    const id = crypto.randomUUID();
+    const stmt = this.db.prepare(`
+      INSERT INTO diagnostics (id, worker_id, status, run_at, duration_ms, auto_fixed, checks)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      id,
+      report.worker_id,
+      report.status,
+      report.run_at,
+      report.duration_ms,
+      report.auto_fixed,
+      report.checks
+    );
+    return id;
+  }
+
+  getDiagnosticReports(workerId: string, limit: number = 10): DiagnosticReport[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM diagnostics
+      WHERE worker_id = ?
+      ORDER BY run_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(workerId, limit) as DiagnosticReport[];
+  }
+
+  getLatestDiagnostic(workerId: string): DiagnosticReport | undefined {
+    const stmt = this.db.prepare(`
+      SELECT * FROM diagnostics
+      WHERE worker_id = ?
+      ORDER BY run_at DESC
+      LIMIT 1
+    `);
+    return stmt.get(workerId) as DiagnosticReport | undefined;
   }
 
   close() {

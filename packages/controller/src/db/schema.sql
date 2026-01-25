@@ -35,6 +35,19 @@ CREATE TABLE IF NOT EXISTS build_logs (
   FOREIGN KEY (build_id) REFERENCES builds(id)
 );
 
+CREATE TABLE IF NOT EXISTS diagnostics (
+  id TEXT PRIMARY KEY,
+  worker_id TEXT NOT NULL,
+  status TEXT NOT NULL, -- healthy, warning, critical
+  run_at INTEGER NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  auto_fixed INTEGER DEFAULT 0, -- SQLite boolean (0 or 1)
+  checks TEXT NOT NULL, -- JSON array of check results
+  FOREIGN KEY (worker_id) REFERENCES workers(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_builds_status ON builds(status);
 CREATE INDEX IF NOT EXISTS idx_builds_worker ON builds(worker_id);
 CREATE INDEX IF NOT EXISTS idx_logs_build ON build_logs(build_id);
+CREATE INDEX IF NOT EXISTS idx_diagnostics_worker ON diagnostics(worker_id);
+CREATE INDEX IF NOT EXISTS idx_diagnostics_run_at ON diagnostics(run_at);

@@ -16,8 +16,9 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "FreeAgent",
-            dependencies: ["BuildVM", "WorkerCore"],
-            path: "Sources/FreeAgent"
+            dependencies: ["BuildVM", "WorkerCore", "DiagnosticsCore"],
+            path: "Sources/FreeAgent",
+            resources: [.process("Resources")]
         ),
         .target(
             name: "BuildVM",
@@ -28,6 +29,11 @@ let package = Package(
             name: "WorkerCore",
             dependencies: ["BuildVM"],
             path: "Sources/WorkerCore"
+        ),
+        .target(
+            name: "DiagnosticsCore",
+            dependencies: [],
+            path: "Sources/DiagnosticsCore"
         ),
         .testTarget(
             name: "FreeAgentTests",

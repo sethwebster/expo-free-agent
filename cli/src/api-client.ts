@@ -1,22 +1,29 @@
-import FormData from 'form-data';
 import fs from 'fs';
-import { createReadStream, createWriteStream } from 'fs';
-import { pipeline } from 'stream/promises';
-import { getControllerUrl } from './config.js';
+import { createWriteStream } from 'fs';
+import { getControllerUrl, getApiKey } from './config.js';
 import { z } from 'zod';
 
 // Validation schemas
 const BuildSubmissionResponseSchema = z.object({
-  buildId: z.string(),
-});
+  id: z.string(),
+}).transform((data) => ({ buildId: data.id }));
 
 const BuildStatusSchema = z.object({
   id: z.string(),
-  status: z.enum(['pending', 'building', 'completed', 'failed']),
-  createdAt: z.string(),
-  completedAt: z.string().optional(),
-  error: z.string().optional(),
-});
+  status: z.enum(['pending', 'assigned', 'building', 'completed', 'failed']),
+  platform: z.string().nullable().optional(),
+  worker_id: z.string().nullable().optional(),
+  submitted_at: z.number().nullable().optional(),
+  started_at: z.number().nullable().optional(),
+  completed_at: z.number().nullable().optional(),
+  error_message: z.string().nullable().optional(),
+}).transform((data) => ({
+  id: data.id,
+  status: data.status,
+  createdAt: data.submitted_at ? new Date(data.submitted_at).toISOString() : undefined,
+  completedAt: data.completed_at ? new Date(data.completed_at).toISOString() : undefined,
+  error: data.error_message || undefined,
+}));
 
 const BuildSchema = z.object({
   id: z.string(),
@@ -46,14 +53,19 @@ const MAX_UPLOAD_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 
 export class APIClient {
   private baseUrl: string;
+  private apiKey?: string;
 
-  constructor(baseUrl?: string) {
+  constructor(baseUrl?: string, apiKey?: string) {
     this.baseUrl = baseUrl || '';
+    this.apiKey = apiKey;
   }
 
   async init(): Promise<void> {
     if (!this.baseUrl) {
       this.baseUrl = await getControllerUrl();
+    }
+    if (!this.apiKey) {
+      this.apiKey = await getApiKey();
     }
   }
 
@@ -65,9 +77,29 @@ export class APIClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
+    // Add API key header if available
+    // Handle both plain objects (from form.getHeaders()) and Headers instances
+    let headers: HeadersInit;
+    if (this.apiKey) {
+      if (options.headers && typeof options.headers === 'object' && !(options.headers instanceof Headers)) {
+        // Plain object (e.g., from form.getHeaders())
+        headers = {
+          ...options.headers as Record<string, string>,
+          'X-API-Key': this.apiKey,
+        };
+      } else {
+        // Headers instance or undefined
+        headers = new Headers(options.headers);
+        (headers as Headers).set('X-API-Key', this.apiKey);
+      }
+    } else {
+      headers = options.headers || {};
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
+        headers,
         signal: controller.signal,
       });
 
@@ -120,16 +152,25 @@ export class APIClient {
       }
     }
 
+    // Read files into buffers and create native FormData with Blobs
+    const projectBuffer = await fs.promises.readFile(submission.projectPath);
+    const projectBlob = new Blob([projectBuffer], { type: 'application/gzip' });
+
+    // Use native FormData (works with fetch)
     const form = new FormData();
-    form.append('source', createReadStream(submission.projectPath));
+    form.append('source', projectBlob, 'project.tar.gz');
     form.append('platform', 'ios'); // TODO: detect from project or pass as param
 
     if (submission.certPath) {
-      form.append('certs', createReadStream(submission.certPath));
+      const certBuffer = await fs.promises.readFile(submission.certPath);
+      const certBlob = new Blob([certBuffer], { type: 'application/zip' });
+      form.append('certs', certBlob, 'certs.zip');
     }
 
     if (submission.profilePath) {
-      form.append('profile', createReadStream(submission.profilePath));
+      const profileBuffer = await fs.promises.readFile(submission.profilePath);
+      const profileBlob = new Blob([profileBuffer], { type: 'application/octet-stream' });
+      form.append('profile', profileBlob, 'profile.mobileprovision');
     }
 
     if (submission.appleId) {
@@ -145,7 +186,6 @@ export class APIClient {
     const response = await this.fetchWithTimeout(`${this.baseUrl}/api/builds/submit`, {
       method: 'POST',
       body: form as any,
-      headers: form.getHeaders(),
     });
 
     if (!response.ok) {
@@ -242,6 +282,68 @@ export class APIClient {
 
     const json = await response.json();
     return BuildsArraySchema.parse(json);
+  }
+
+  async cancelBuild(buildId: string): Promise<void> {
+    await this.init();
+
+    if (!buildId || buildId.trim() === '') {
+      throw new Error('Build ID is required');
+    }
+
+    const response = await this.fetchWithTimeout(`${this.baseUrl}/api/builds/${buildId}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to cancel build: ${error}`);
+    }
+  }
+
+  async getDiagnostics(workerId: string, limit?: number): Promise<any> {
+    await this.init();
+
+    if (!workerId || workerId.trim() === '') {
+      throw new Error('Worker ID is required');
+    }
+
+    const url = limit
+      ? `${this.baseUrl}/api/diagnostics/${workerId}?limit=${limit}`
+      : `${this.baseUrl}/api/diagnostics/${workerId}`;
+
+    const response = await this.fetchWithTimeout(url);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Worker not found or no diagnostics available');
+      }
+      throw new Error(`Failed to get diagnostics: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getLatestDiagnostic(workerId: string): Promise<any> {
+    await this.init();
+
+    if (!workerId || workerId.trim() === '') {
+      throw new Error('Worker ID is required');
+    }
+
+    const response = await this.fetchWithTimeout(`${this.baseUrl}/api/diagnostics/${workerId}/latest`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Worker not found or no diagnostics available');
+      }
+      throw new Error(`Failed to get latest diagnostic: ${response.statusText}`);
+    }
+
+    return response.json();
   }
 }
 

@@ -5,6 +5,8 @@ import { createStatusCommand } from './commands/status.js';
 import { createDownloadCommand } from './commands/download.js';
 import { createListCommand } from './commands/list.js';
 import { createConfigCommand } from './commands/config.js';
+import { createCancelCommand } from './commands/cancel.js';
+import { createDoctorCommand } from './commands/doctor.js';
 
 const program = new Command();
 
@@ -17,6 +19,8 @@ program.addCommand(createSubmitCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createDownloadCommand());
 program.addCommand(createListCommand());
+program.addCommand(createCancelCommand());
 program.addCommand(createConfigCommand());
+program.addCommand(createDoctorCommand());
 
 program.parse();

@@ -7,6 +7,7 @@ import type { JobQueue } from '../services/JobQueue.js';
 import type { FileStorage } from '../services/FileStorage.js';
 import type { ControllerConfig } from '../domain/Config.js';
 import { requireApiKey, requireWorkerAccess } from '../middleware/auth.js';
+import { createDiagnosticsRoutes } from './diagnostics.js';
 
 /**
  * Helper to convert buffer to stream
@@ -164,6 +165,45 @@ export function createApiRoutes(
       completed_at: build.completed_at,
       error_message: build.error_message,
     });
+  });
+
+  /**
+   * GET /api/builds
+   * List all builds
+   */
+  router.get('/builds', (req: Request, res: Response) => {
+    const allBuilds = db.getAllBuilds();
+
+    // Return builds in CLI-expected format
+    const builds = allBuilds.map(b => ({
+      id: b.id,
+      status: b.status,
+      createdAt: new Date(b.submitted_at).toISOString(),
+      completedAt: b.completed_at ? new Date(b.completed_at).toISOString() : undefined,
+    }));
+
+    res.json(builds);
+  });
+
+  /**
+   * GET /api/builds/active
+   * List currently running builds
+   */
+  router.get('/builds/active', (req: Request, res: Response) => {
+    const activeBuilds = db.getAllBuilds().filter(b =>
+      b.status === 'assigned' || b.status === 'building'
+    );
+
+    // Return minimal info (no sensitive data)
+    const builds = activeBuilds.map(b => ({
+      id: b.id,
+      status: b.status,
+      platform: b.platform,
+      worker_id: b.worker_id,
+      started_at: b.started_at,
+    }));
+
+    res.json({ builds });
   });
 
   /**
@@ -466,6 +506,153 @@ export function createApiRoutes(
       }
     }
   );
+
+  /**
+   * POST /api/builds/:id/heartbeat
+   * Worker sends heartbeat during build to prove it's alive
+   * SECURITY: Requires X-Worker-Id header matching assigned worker
+   */
+  router.post('/builds/:id/heartbeat', express.json(), (req: Request, res: Response) => {
+    try {
+      const { worker_id } = req.query;
+      const { progress } = req.body;
+
+      if (!worker_id || typeof worker_id !== 'string') {
+        return res.status(400).json({ error: 'worker_id required' });
+      }
+
+      const build = db.getBuild(req.params.id);
+      if (!build) {
+        return res.status(404).json({ error: 'Build not found' });
+      }
+
+      // Verify worker owns this build
+      if (build.worker_id !== worker_id) {
+        return res.status(403).json({ error: 'Build not assigned to this worker' });
+      }
+
+      // Update heartbeat timestamp
+      const timestamp = Date.now();
+      db.run(
+        'UPDATE builds SET last_heartbeat_at = ? WHERE id = ?',
+        [timestamp, req.params.id]
+      );
+
+      // Optionally log progress
+      if (progress !== undefined) {
+        db.addBuildLog({
+          build_id: req.params.id,
+          timestamp,
+          level: 'info',
+          message: `Build progress: ${progress}%`,
+        });
+      }
+
+      res.json({ status: 'ok', timestamp });
+    } catch (err) {
+      console.error('Heartbeat error:', err);
+      res.status(500).json({ error: 'Heartbeat failed' });
+    }
+  });
+
+  /**
+   * POST /api/builds/:id/cancel
+   * Cancel a stuck or running build
+   */
+  router.post('/builds/:id/cancel', express.json(), (req: Request, res: Response) => {
+    try {
+      const build = db.getBuild(req.params.id);
+
+      if (!build) {
+        return res.status(404).json({ error: 'Build not found' });
+      }
+
+      if (build.status === 'completed' || build.status === 'failed') {
+        return res.status(400).json({ error: 'Build already finished' });
+      }
+
+      const timestamp = Date.now();
+
+      // Update build status
+      db.updateBuildStatus(req.params.id, 'failed', {
+        error_message: 'Build cancelled by user',
+        completed_at: timestamp,
+      });
+
+      // If assigned to worker, mark worker as idle
+      if (build.worker_id) {
+        const worker = db.getWorker(build.worker_id);
+        if (worker) {
+          db.updateWorkerStatus(build.worker_id, 'idle', timestamp);
+        }
+      }
+
+      // Remove from queue
+      queue.fail(req.params.id, false);
+
+      // Log
+      db.addBuildLog({
+        build_id: req.params.id,
+        timestamp,
+        level: 'info',
+        message: 'Build cancelled',
+      });
+
+      res.json({ status: 'cancelled' });
+    } catch (err) {
+      console.error('Cancel error:', err);
+      res.status(500).json({ error: 'Cancel failed' });
+    }
+  });
+
+  /**
+   * GET /api/workers/:id/stats
+   * Get worker statistics
+   */
+  router.get('/workers/:id/stats', (req: Request, res: Response) => {
+    try {
+      const worker = db.getWorker(req.params.id);
+
+      if (!worker) {
+        return res.status(404).json({ error: 'Worker not found' });
+      }
+
+      const totalBuilds = worker.builds_completed + worker.builds_failed;
+      const uptime = Date.now() - worker.registered_at;
+
+      // Format uptime as human-readable string
+      const uptimeSeconds = Math.floor(uptime / 1000);
+      const uptimeMinutes = Math.floor(uptimeSeconds / 60);
+      const uptimeHours = Math.floor(uptimeMinutes / 60);
+      const uptimeDays = Math.floor(uptimeHours / 24);
+
+      let uptimeStr: string;
+      if (uptimeDays > 0) {
+        uptimeStr = `${uptimeDays}d ${uptimeHours % 24}h`;
+      } else if (uptimeHours > 0) {
+        uptimeStr = `${uptimeHours}h ${uptimeMinutes % 60}m`;
+      } else if (uptimeMinutes > 0) {
+        uptimeStr = `${uptimeMinutes}m ${uptimeSeconds % 60}s`;
+      } else {
+        uptimeStr = `${uptimeSeconds}s`;
+      }
+
+      res.json({
+        totalBuilds,
+        successfulBuilds: worker.builds_completed,
+        failedBuilds: worker.builds_failed,
+        workerName: worker.name,
+        status: worker.status,
+        uptime: uptimeStr,
+      });
+    } catch (err) {
+      console.error('Stats error:', err);
+      res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
+  // Mount diagnostics routes
+  router.use('/diagnostics', createDiagnosticsRoutes(db, config));
 
   return router;
 }
