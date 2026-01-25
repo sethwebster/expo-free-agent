@@ -28,6 +28,10 @@ build/
 data/
 storage/
 
+# Deployment
+*.tar
+deploy.tar
+
 # Swift build
 free-agent/.build/
 

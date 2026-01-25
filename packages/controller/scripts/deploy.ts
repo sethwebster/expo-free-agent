@@ -40,6 +40,37 @@ async function checkCaproverInstalled(): Promise<boolean> {
   }
 }
 
+async function createTarFile(): Promise<string> {
+  const tarFile = './deploy.tar';
+
+  console.log('📦 Creating deployment archive...');
+
+  // Create tar file excluding node_modules, .git, etc.
+  try {
+    await execAsync(
+      `tar -czf ${tarFile} \
+        --exclude=node_modules \
+        --exclude=.git \
+        --exclude=dist \
+        --exclude=*.tar \
+        --exclude=*.tar.gz \
+        .`
+    );
+    console.log('✓ Archive created\n');
+    return tarFile;
+  } catch (error) {
+    throw new Error(`Failed to create tar file: ${error}`);
+  }
+}
+
+async function cleanupTarFile(tarFile: string) {
+  try {
+    await execAsync(`rm -f ${tarFile}`);
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
 async function deploy(appName?: string) {
   console.log('🚀 Deploying to CapRover...\n');
 
@@ -51,38 +82,60 @@ async function deploy(appName?: string) {
     process.exit(1);
   }
 
-  // Build args for caprover deploy
-  const args = ['deploy'];
+  let tarFile: string | null = null;
 
-  if (appName) {
-    args.push('-a', appName);
-  }
+  try {
+    // Create tar file for deployment
+    tarFile = await createTarFile();
 
-  console.log(`Running: caprover ${args.join(' ')}\n`);
+    // Build args for caprover deploy
+    const args = ['deploy', '-t', tarFile];
 
-  // Run caprover deploy
-  const deployProcess = spawn('caprover', args, {
-    stdio: 'inherit',
-    shell: true,
-  });
-
-  deployProcess.on('close', (code) => {
-    if (code === 0) {
-      console.log('\n✅ Deployment successful!');
-      console.log('\nNext steps:');
-      console.log('1. Verify deployment in CapRover dashboard');
-      console.log('2. Check app logs: caprover logs -a <app-name>');
-      console.log('3. Test API endpoint');
-    } else {
-      console.error(`\n❌ Deployment failed with code ${code}`);
-      process.exit(code || 1);
+    if (appName) {
+      args.push('-a', appName);
     }
-  });
 
-  deployProcess.on('error', (error) => {
-    console.error('❌ Failed to start deployment:', error.message);
-    process.exit(1);
-  });
+    console.log(`Running: caprover ${args.join(' ')}\n`);
+
+    // Run caprover deploy
+    const deployProcess = spawn('caprover', args, {
+      stdio: 'inherit',
+      shell: true,
+    });
+
+    deployProcess.on('close', async (code) => {
+      // Cleanup tar file
+      if (tarFile) {
+        await cleanupTarFile(tarFile);
+      }
+
+      if (code === 0) {
+        console.log('\n✅ Deployment successful!');
+        console.log('\nNext steps:');
+        console.log('1. Verify deployment in CapRover dashboard');
+        console.log('2. Check app logs: caprover logs -a <app-name>');
+        console.log('3. Test API endpoint');
+      } else {
+        console.error(`\n❌ Deployment failed with code ${code}`);
+        process.exit(code || 1);
+      }
+    });
+
+    deployProcess.on('error', async (error) => {
+      // Cleanup tar file
+      if (tarFile) {
+        await cleanupTarFile(tarFile);
+      }
+      console.error('❌ Failed to start deployment:', error.message);
+      process.exit(1);
+    });
+  } catch (error) {
+    // Cleanup tar file on error
+    if (tarFile) {
+      await cleanupTarFile(tarFile);
+    }
+    throw error;
+  }
 }
 
 // Parse command line args
