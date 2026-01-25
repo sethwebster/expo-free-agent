@@ -26,8 +26,8 @@ public struct WorkerConfiguration: Codable, Sendable {
     public var deviceName: String?
 
     public static let `default` = WorkerConfiguration(
-        controllerURL: "http://localhost:3000",
-        apiKey: "dev-insecure-key-change-in-production",
+        controllerURL: "https://expo-free-agent-controller.projects.sethwebster.com",
+        apiKey: "",
         pollIntervalSeconds: 30,
         maxCPUPercent: 70,
         maxMemoryGB: 8,

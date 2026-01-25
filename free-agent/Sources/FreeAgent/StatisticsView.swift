@@ -15,6 +15,11 @@ struct StatisticsView: View {
     @State private var stats: WorkerStats?
     @State private var isLoading = true
     @State private var error: String?
+    @State private var lastUpdated: Date?
+    @State private var currentTime = Date()
+
+    let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,6 +39,17 @@ struct StatisticsView: View {
                 Text("Build Worker Statistics")
                     .font(.headline)
                     .foregroundColor(.secondary)
+
+                if let lastUpdated = lastUpdated {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("Live • Updated \(timeAgo(from: lastUpdated))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             .padding(.top, 32)
             .padding(.bottom, 24)
@@ -110,6 +126,14 @@ struct StatisticsView: View {
                 await loadStatistics()
             }
         }
+        .onReceive(timer) { _ in
+            Task {
+                await refreshStatistics()
+            }
+        }
+        .onReceive(clockTimer) { time in
+            currentTime = time
+        }
     }
 
     private func loadStatistics() async {
@@ -149,10 +173,53 @@ struct StatisticsView: View {
                 throw NSError(domain: "", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"])
             }
 
+            lastUpdated = Date()
             isLoading = false
         } catch {
             self.error = error.localizedDescription
             isLoading = false
+        }
+    }
+
+    private func refreshStatistics() async {
+        // Silently refresh without showing loading state
+        do {
+            guard let workerId = configuration.workerID else {
+                return
+            }
+
+            let url = URL(string: "\(configuration.controllerURL)/api/workers/\(workerId)/stats")!
+            var request = URLRequest(url: url)
+            request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
+            request.timeoutInterval = 10.0
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                return
+            }
+
+            stats = try JSONDecoder().decode(WorkerStats.self, from: data)
+            lastUpdated = Date()
+            error = nil
+        } catch {
+            // Silently fail - keep showing last known good stats
+        }
+    }
+
+    private func timeAgo(from date: Date) -> String {
+        let seconds = Int(currentTime.timeIntervalSince(date))
+        if seconds < 5 {
+            return "just now"
+        } else if seconds < 60 {
+            return "\(seconds)s ago"
+        } else if seconds < 3600 {
+            let minutes = seconds / 60
+            return "\(minutes)m ago"
+        } else {
+            let hours = seconds / 3600
+            return "\(hours)h ago"
         }
     }
 }

@@ -24,7 +24,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Controller URL:")
                             .frame(width: 120, alignment: .trailing)
-                        TextField("http://localhost:3000", text: $configuration.controllerURL)
+                        TextField("https://expo-free-agent-controller.projects.sethwebster.com", text: $configuration.controllerURL)
                             .textFieldStyle(.roundedBorder)
                     }
 
