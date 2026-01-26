@@ -62,10 +62,14 @@ function Nav() {
         }`}
     >
       <div className="max-w-[1000px] mx-auto h-full px-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-zinc-900 dark:bg-white animate-pulse" />
+        <a href="#" className="flex items-center gap-3 group">
+          <img
+            src="/logo-scratch.svg"
+            alt="Free Agent Logo"
+            className="h-8 w-auto dark:invert transition-all duration-300 group-hover:scale-105"
+          />
           <span className="font-semibold tracking-tight text-sm text-zinc-900 dark:text-white">Free Agent</span>
-        </div>
+        </a>
         <div className="flex items-center gap-6 text-xs font-medium text-zinc-600 dark:text-zinc-400">
           <a href="#features" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Overview</a>
           <a href="#how-it-works" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Process</a>
@@ -310,7 +314,12 @@ function BentoCard({ colSpan, title, subtitle, image, dark, align = "left", dela
     <div
       ref={ref}
       style={{ transitionDelay: `${delay}ms` }}
-      className={`relative group overflow-hidden rounded-[2rem] border border-zinc-200 dark:border-zinc-800 ${colSpan} ${dark ? 'bg-black text-white' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white'} transition-all duration-1000 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'} hover:shadow-2xl`}
+      onClick={() => {
+        if (!image && !maximized) {
+          setMaximized(true);
+        }
+      }}
+      className={`relative group overflow-hidden rounded-[2rem] border border-zinc-200 dark:border-zinc-800 ${colSpan} ${dark ? 'bg-black text-white' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white'} transition-all duration-1000 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'} hover:shadow-2xl ${!image && !maximized ? 'cursor-pointer' : ''}`}
     >
       <CardContent />
     </div>
