@@ -199,48 +199,46 @@ function BentoGrid() {
   const { ref: headerRef, isVisible: headerVisible } = useScrollReveal();
 
   return (
-    <>
-      <section id="features" className="pt-32 pb-10 bg-white dark:bg-black relative z-10">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div ref={headerRef} className={`transition-all duration-1000 ease-out transform ${headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-            <h2 className="text-4xl md:text-6xl font-semibold tracking-tighter mb-4 text-center">
-              Power in numbers.
-            </h2>
-            <p className="text-xl text-zinc-500 text-center max-w-2xl mx-auto mb-16">
-              A decentralized architecture designed for privacy, speed, and fairness.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[400px]">
-            {/* Card 1: CPU (Large) */}
-            <BentoCard
-              colSpan="md:col-span-2"
-              title="Idle Compute."
-              subtitle="Your Mac sleeps while you grab coffee. Put that M-series chip to work."
-              image="/assets/feature-cpu.png"
-              dark
-              delay={100}
-            />
-
-            {/* Card 2: Security (Tall) */}
-            <BentoCard
-              colSpan="md:col-span-1"
-              title="VM Isolated."
-              subtitle="Hypervisor safety."
-              image="/assets/feature-security.png"
-              delay={200}
-            />
-          </div>
+    <section id="features" className="pt-32 pb-32 bg-white dark:bg-black relative z-10">
+      <div className="max-w-[1200px] mx-auto px-6">
+        <div ref={headerRef} className={`transition-all duration-1000 ease-out transform ${headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <h2 className="text-4xl md:text-6xl font-semibold tracking-tighter mb-4 text-center">
+            Power in numbers.
+          </h2>
+          <p className="text-xl text-zinc-500 text-center max-w-2xl mx-auto mb-16">
+            A decentralized architecture designed for privacy, speed, and fairness.
+          </p>
         </div>
-      </section>
 
-      {/* Scroll-Expanding Globe Section */}
-      <GlobeScrollSection />
-    </>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[400px]">
+          {/* Card 1: CPU (Large) */}
+          <BentoCard
+            colSpan="md:col-span-2"
+            title="Idle Compute."
+            subtitle="Your Mac sleeps while you grab coffee. Put that M-series chip to work."
+            image="/assets/feature-cpu.png"
+            dark
+            delay={100}
+          />
+
+          {/* Card 2: Security (Tall) */}
+          <BentoCard
+            colSpan="md:col-span-1"
+            title="VM Isolated."
+            subtitle="Hypervisor safety."
+            image="/assets/feature-security.png"
+            delay={200}
+          />
+
+          {/* Card 3: Scroll-driven Globe (Full Width) */}
+          <ScrollGlobeItem />
+        </div>
+      </div>
+    </section>
   );
 }
 
-function GlobeScrollSection() {
+function ScrollGlobeItem() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
 
@@ -250,89 +248,56 @@ function GlobeScrollSection() {
       const rect = containerRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
 
-      // We want the expansion to happen as the element hits the "center" or top.
-      // Let's use a 300vh track.
-      // 0-100vh: Element is scrolling into view (sticking or acting relative?)
-      // Actually, for "Sticky" effect, we need the container to be tall.
-
-      const start = rect.top; // Distance from top
+      // Calculate progress relative to the container's scroll life
+      const start = rect.top;
       const totalDist = rect.height - viewportHeight;
-      const scrolled = -start; // How far into the section we are
+      const scrolled = -start;
 
-      // Normalize 0 to 1
       let p = scrolled / totalDist;
       setProgress(Math.max(0, Math.min(1, p)));
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll(); // Init
+    handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Animation Logic
-  // Phase 1 (0.0 - 0.15): Scroll into view normally (handled by browser flow if we aren't sticky yet? No, sticky grabs immediately).
-  // Actually, we want it to look like it's in the grid (with margins) then expand.
-
-  // Let's map progress to Width/BorderRadius
-  // 0% -> Width: 1200px (approx), Radius: 2rem
-  // 50% -> Width: 100%, Radius: 0
-  // 100% -> Width: 100%, Radius: 0
-
-  // Ease the transition
-  // We want the expansion to finish around 30% of the scroll section so user can enjoy it
-
-  // Exit logic: Shrink back at the end?
-  // User said: "as scroll continues, returns to original size"
-  // So:
-  // 0.0 - 0.2: Grid Size -> to -> Full Screen
-  // 0.2 - 0.8: Full Screen (Interact)
-  // 0.8 - 1.0: Full Screen -> to -> Grid Size? Or opacity fade? 
-  // "returns to original size" implies shrinking back.
-
-  // Refined Logic:
-  let animState = 0; // 0=Grid, 1=Full
+  let animState = 0;
   if (progress < 0.2) {
-    animState = progress / 0.2; // Expanding
+    animState = progress / 0.2;
   } else if (progress > 0.8) {
-    animState = 1 - ((progress - 0.8) / 0.2); // Shrinking
+    animState = 1 - ((progress - 0.8) / 0.2);
   } else {
-    animState = 1; // Full
+    animState = 1;
   }
 
-  // 1200px is generic max-width. On mobile it's 100% anyway.
-  // We need to calculate consistent "Grid State" width.
-  // Let's use CSS calc or percentage. 
-  // Max width of grid is 1200px.
-  // Full width is 100vw.
-  // Gap is 24px (scrolled away).
-
-  // Interpolate:
-  // Width: 90% -> 100% (Mobile)
-  // Width: 1200px -> 100vw (Desktop)
-
-  // Simplify: Use a generic scale transform for visual punch?
-  // "Card scales its borders". Scale transform scales content too.
-  // We want width/height/borderRadius transition.
-
-  const currentRadius = 32 * (1 - animState); // 32px -> 0
+  const currentRadius = 32 * (1 - animState);
 
   return (
-    <section ref={containerRef} className="h-[350vh] relative z-20">
-      <div className="sticky top-0 h-screen w-full flex items-center justify-center overflow-hidden">
+    <div ref={containerRef} className="col-span-1 md:col-span-3 h-[350vh] relative pointer-events-none">
+      <div className="sticky top-0 h-screen w-full flex flex-col items-center">
         <div
           className="relative bg-black transition-all duration-75 ease-linear overflow-hidden shadow-2xl border border-zinc-800"
           style={{
-            width: `${90 + (10 * animState)}%`, // 90% -> 100% width
-            height: `${50 + (50 * animState)}%`, // 50% -> 100% height
-            maxWidth: animState === 1 ? '100%' : '1150px', // Constraint
+            // Width Logic: Grid (100% of parent) -> Fullscreen (100vw)
+            width: `calc(100% + ((100vw - 100%) * ${animState}))`,
+
+            // Height Logic: Grid (400px) -> Fullscreen (100vh)
+            height: `calc(400px + ((100vh - 400px) * ${animState}))`,
+
+            // Margin Logic: Center the expansion
+            marginLeft: `calc((50% - 50vw) * ${animState})`,
+            marginRight: `calc((50% - 50vw) * ${animState})`,
+            marginTop: 0, // Always start at top of sticky container
+
             borderRadius: `${currentRadius}px`,
+            zIndex: 50,
+            pointerEvents: animState > 0.9 ? 'auto' : 'none'
           }}
         >
-          {/* Globe Content (Absolute to fill container) */}
-          <div className={`absolute inset-0 w-full h-full ${animState > 0.9 ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+          {/* Globe Content */}
+          <div className="absolute inset-0 w-full h-full">
             <NetworkGlobe />
-
-            {/* Gradient Overlays */}
             <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
           </div>
 
@@ -341,8 +306,9 @@ function GlobeScrollSection() {
             <h3
               className="font-semibold tracking-tighter text-white drop-shadow-xl transition-all duration-500"
               style={{
-                fontSize: `${3 + (2 * animState)}rem`, // Text grows
-                marginBottom: '1rem'
+                fontSize: `${3 + (2 * animState)}rem`,
+                marginBottom: '1rem',
+                opacity: 1
               }}
             >
               Community Mesh.
@@ -353,7 +319,7 @@ function GlobeScrollSection() {
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
