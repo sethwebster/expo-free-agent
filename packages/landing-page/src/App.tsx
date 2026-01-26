@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState } from "react";
 import { ThemeToggle } from "./components/ThemeToggle";
 
+import { NetworkHUD } from "./components/NetworkHUD";
+
 // Hook for scroll animations with optional delay
 function useScrollReveal(delay = 0) {
   const ref = useRef<HTMLDivElement>(null);
@@ -153,13 +155,17 @@ function Hero() {
             Build your Expo apps for free.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
-            <a href="#get-started" className="px-10 py-5 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black text-xl font-bold tracking-tight hover:scale-105 transition-transform duration-300 shadow-xl hover:shadow-2xl">
-              Start Earning
-            </a>
-            <a href="#how-it-works" className="px-10 py-5 rounded-full bg-white/50 dark:bg-black/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white text-xl font-bold tracking-tight hover:bg-white/80 dark:hover:bg-black/80 transition-all duration-300">
-              How it works
-            </a>
+          <div className="flex flex-col items-center gap-10">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
+              <a href="#get-started" className="px-10 py-5 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black text-xl font-bold tracking-tight hover:scale-105 transition-transform duration-300 shadow-xl hover:shadow-2xl">
+                Start Earning
+              </a>
+              <a href="#how-it-works" className="px-10 py-5 rounded-full bg-white/50 dark:bg-black/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-white text-xl font-bold tracking-tight hover:bg-white/80 dark:hover:bg-black/80 transition-all duration-300">
+                How it works
+              </a>
+            </div>
+
+            <NetworkHUD />
           </div>
         </div>
       </div>
