@@ -147,7 +147,7 @@ function Hero() {
                   }}
                 >
                   <span
-                    className="inline-block animate-letter-rise bg-clip-text text-transparent pb-4 bg-[linear-gradient(8deg,#18181b_0%,#6366f1_50%,#18181b_100%)] dark:bg-[linear-gradient(8deg,#ffffff_0%,#818cf8_50%,#ffffff_100%)]"
+                    className="inline-block animate-letter-rise bg-clip-text text-transparent pb-4 bg-[linear-gradient(8deg,#4f46e5_0%,#818cf8_50%,#4f46e5_100%)]"
                     style={{
                       animationDelay: `${500 + i * 75}ms`
                     }}
