@@ -402,6 +402,50 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
   });
 
   /**
+   * POST /builds/:id/telemetry
+   * Receive detailed telemetry from VM monitor (CPU, memory, build stage, etc.)
+   */
+  fastify.post<{
+    Params: BuildParams;
+    Body: {
+      type: string;
+      timestamp: string;
+      data: any;
+    };
+  }>(
+    '/:id/telemetry',
+    { preHandler: requireWorkerAccess(db, true) },
+    async (request, reply) => {
+      try {
+        const { type, timestamp, data } = request.body;
+        const buildId = request.params.id;
+
+        // Log telemetry event
+        const logLevel = type === 'monitor_started' ? 'info' : 'debug';
+        const message = formatTelemetryMessage(type, data);
+
+        db.addBuildLog({
+          build_id: buildId,
+          timestamp: Date.now(),
+          level: logLevel,
+          message,
+        });
+
+        // Update last heartbeat
+        db.run('UPDATE builds SET last_heartbeat_at = ? WHERE id = ?', [
+          Date.now(),
+          buildId,
+        ]);
+
+        return reply.send({ status: 'ok' });
+      } catch (err) {
+        fastify.log.error('Telemetry error:', err);
+        return reply.status(500).send({ error: 'Telemetry failed' });
+      }
+    }
+  );
+
+  /**
    * POST /builds/:id/cancel
    * Cancel a stuck or running build
    */
@@ -451,3 +495,24 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
     }
   });
 };
+
+/**
+ * Format telemetry data into human-readable log message
+ */
+function formatTelemetryMessage(type: string, data: any): string {
+  switch (type) {
+    case 'monitor_started':
+      return '[VM] Monitor started';
+
+    case 'heartbeat':
+      const { stage, metrics, heartbeat_count } = data;
+      const cpu = metrics?.cpu_percent || 0;
+      const mem = metrics?.memory_mb || 0;
+      const disk = metrics?.disk_percent || 0;
+
+      return `[VM] Stage: ${stage} | CPU: ${cpu.toFixed(1)}% | Mem: ${mem}MB | Disk: ${disk}% | Beat: ${heartbeat_count}`;
+
+    default:
+      return `[VM] ${type}: ${JSON.stringify(data)}`;
+  }
+}

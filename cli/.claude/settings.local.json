@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tart delete:*)",
+      "Bash(tart delete fa-94196862)"
+    ]
+  }
+}
