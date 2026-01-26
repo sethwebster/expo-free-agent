@@ -75,13 +75,22 @@ export function requireWorkerAccess(db: DatabaseService, requireBuildIdHeader = 
       });
     }
 
-    // Allow access if:
-    // 1. Worker is assigned to this build, OR
-    // 2. Build is pending (worker is about to be assigned)
-    if (build.worker_id && build.worker_id !== workerId) {
-      return reply.status(403).send({
-        error: 'Worker not authorized for this build',
-      });
+    // For secure endpoints (requireBuildIdHeader=true), require assignment
+    if (requireBuildIdHeader) {
+      if (build.worker_id !== workerId) {
+        return reply.status(403).send({
+          error: 'Worker not assigned to this build',
+        });
+      }
+    } else {
+      // For other endpoints, allow access if:
+      // 1. Worker is assigned to this build, OR
+      // 2. Build is pending (worker is about to be assigned)
+      if (build.worker_id && build.worker_id !== workerId) {
+        return reply.status(403).send({
+          error: 'Worker not authorized for this build',
+        });
+      }
     }
 
     // Attach build to request for convenience

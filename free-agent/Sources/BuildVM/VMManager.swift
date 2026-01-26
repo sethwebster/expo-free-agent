@@ -419,6 +419,7 @@ public enum VMError: Error, LocalizedError {
     case buildFailed
     case artifactNotFound
     case bootstrapTimeout
+    case invalidInput(String)
 
     public var errorDescription: String? {
         switch self {
@@ -438,6 +439,8 @@ public enum VMError: Error, LocalizedError {
             return "Artifact not found"
         case .bootstrapTimeout:
             return "VM bootstrap timed out - check /tmp/free-agent-bootstrap.log in VM"
+        case .invalidInput(let message):
+            return "Invalid input: \(message)"
         }
     }
 }

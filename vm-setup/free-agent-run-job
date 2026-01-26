@@ -10,6 +10,7 @@
 #
 
 set -e
+set -o pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -154,7 +155,7 @@ xcodebuild archive \
     -allowProvisioningUpdates \
     | tee -a "$OUT_DIR/xcodebuild.log"
 
-if [ $? -ne 0 ]; then
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
     log_error "Archive failed"
     exit 1
 fi
@@ -188,7 +189,7 @@ xcodebuild -exportArchive \
     -exportOptionsPlist "$WORK_DIR/ExportOptions.plist" \
     | tee -a "$OUT_DIR/xcodebuild.log"
 
-if [ $? -ne 0 ]; then
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
     log_error "Export failed"
     exit 1
 fi

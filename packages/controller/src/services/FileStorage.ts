@@ -193,16 +193,32 @@ export function unzipCerts(zipBuffer: Buffer): CertsBundle {
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
 
+  // Zip bomb protection: check total uncompressed size
+  const MAX_UNCOMPRESSED_SIZE = 50 * 1024 * 1024; // 50MB limit
+  let totalUncompressed = 0;
+  for (const entry of entries) {
+    totalUncompressed += entry.header.size;
+    if (totalUncompressed > MAX_UNCOMPRESSED_SIZE) {
+      throw new Error('Cert bundle exceeds maximum uncompressed size (50MB)');
+    }
+  }
+
   let p12: Buffer | null = null;
   let password = '';
   const profiles: Buffer[] = [];
 
   for (const entry of entries) {
-    if (entry.entryName.endsWith('.p12')) {
+    // Entry name validation: prevent path traversal
+    const entryName = entry.entryName;
+    if (entryName.includes('..') || entryName.startsWith('/') || entryName.includes('\\')) {
+      throw new Error(`Invalid entry name in cert bundle: ${entryName}`);
+    }
+
+    if (entryName.endsWith('.p12')) {
       p12 = entry.getData();
-    } else if (entry.entryName === 'password.txt') {
+    } else if (entryName === 'password.txt') {
       password = entry.getData().toString('utf-8').trim();
-    } else if (entry.entryName.endsWith('.mobileprovision')) {
+    } else if (entryName.endsWith('.mobileprovision')) {
       profiles.push(entry.getData());
     }
   }

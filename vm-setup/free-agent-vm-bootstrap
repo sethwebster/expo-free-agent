@@ -81,7 +81,7 @@ log "=========================================="
 
 log "Phase 1: Randomizing admin password..."
 NEW_PASSWORD=$(openssl rand -base64 32)
-if echo "admin:$NEW_PASSWORD" | sudo chpasswd 2>/dev/null; then
+if dscl . -passwd /Users/admin "$NEW_PASSWORD" 2>/dev/null; then
     log "✓ Admin password randomized (32 bytes)"
     # Clear password from memory
     unset NEW_PASSWORD
@@ -115,9 +115,23 @@ if [[ ${#MISSING_VARS[@]} -gt 0 ]]; then
     error_exit "Missing required environment variables: ${MISSING_VARS[*]}" 1
 fi
 
+# Validate format to prevent shell injection
+if ! [[ "$BUILD_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    error_exit "Invalid BUILD_ID format (must be alphanumeric, hyphens, underscores only)" 1
+fi
+if ! [[ "$WORKER_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    error_exit "Invalid WORKER_ID format (must be alphanumeric, hyphens, underscores only)" 1
+fi
+if ! [[ "$API_KEY" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    error_exit "Invalid API_KEY format (must be alphanumeric, hyphens, underscores only)" 1
+fi
+if ! [[ "$CONTROLLER_URL" =~ ^https?://[a-zA-Z0-9._:-]+(/[a-zA-Z0-9._/-]*)?$ ]]; then
+    error_exit "Invalid CONTROLLER_URL format (must be valid HTTP/HTTPS URL)" 1
+fi
+
 log "✓ BUILD_ID: $BUILD_ID"
 log "✓ WORKER_ID: $WORKER_ID"
-log "✓ API_KEY: ${API_KEY:0:8}..." # Log only first 8 chars
+log "✓ API_KEY: [REDACTED]" # Never log API keys
 log "✓ CONTROLLER_URL: $CONTROLLER_URL"
 
 # ========================================

@@ -48,6 +48,28 @@ public class TartVMManager {
         var created = false
         var monitorPID: Int32?
 
+        // Validate inputs to prevent command injection
+        if let buildId = buildId {
+            guard buildId.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil else {
+                throw VMError.invalidInput("buildId contains invalid characters")
+            }
+        }
+        if let workerId = workerId {
+            guard workerId.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil else {
+                throw VMError.invalidInput("workerId contains invalid characters")
+            }
+        }
+        if let apiKey = apiKey {
+            guard apiKey.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil else {
+                throw VMError.invalidInput("apiKey contains invalid characters")
+            }
+        }
+        if let controllerURL = controllerURL {
+            guard controllerURL.range(of: "^https?://[a-zA-Z0-9._:-]+(/[a-zA-Z0-9._/-]*)?$", options: .regularExpression) != nil else {
+                throw VMError.invalidInput("controllerURL is not a valid HTTP/HTTPS URL")
+            }
+        }
+
         do {
             // 1) Clone template into ephemeral job VM
             let jobID = UUID().uuidString.prefix(8)
@@ -130,7 +152,22 @@ public class TartVMManager {
             // 8) Start build monitor (sends heartbeats to controller)
             if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
                 logs += "Starting build monitor...\n"
-                let monitorCommand = "/usr/local/bin/vm-monitor.sh '\(controllerURL)' '\(buildId)' '\(workerId)' '\(apiKey)' 30 > /dev/null 2>&1 & echo $!"
+
+                // Write credentials to temp file (avoid ps visibility)
+                let credFile = "/tmp/monitor-creds-\(UUID().uuidString)"
+                let createCredsCmd = """
+                cat > '\(credFile)' << 'EOFCREDS'
+                CONTROLLER_URL=\(controllerURL)
+                BUILD_ID=\(buildId)
+                WORKER_ID=\(workerId)
+                API_KEY=\(apiKey)
+                EOFCREDS
+                chmod 600 '\(credFile)'
+                """
+                _ = try await sshCommand(ip: vmIP!, command: createCredsCmd)
+
+                // Start monitor with creds file (not visible in ps)
+                let monitorCommand = "/usr/local/bin/vm-monitor.sh '\(credFile)' 30 > /dev/null 2>&1 & echo $!"
                 let pidOutput = try await sshCommand(ip: vmIP!, command: monitorCommand)
                 if let pid = Int32(pidOutput.trimmingCharacters(in: .whitespacesAndNewlines)) {
                     monitorPID = pid
