@@ -10,7 +10,7 @@ export interface NetworkStats {
 
 export function useNetworkStats() {
   const [stats, setStats] = useState<NetworkStats>({
-    nodesOnline: 124,
+    nodesOnline: 154,
     buildsQueued: 82, // Start high
     activeBuilds: 60,
     buildsToday: 1402,
@@ -22,13 +22,21 @@ export function useNetworkStats() {
     const interval = setInterval(() => {
       setStats(prev => {
         // 1. Slowly increase nodes online (trend upwards)
-        // 90% chance to stay same, 7% chance to +1, 3% chance to -1
-        const nodeRandom = Math.random();
+        // Fluctuate between 150 and 300
+        const currentNodes = prev.nodesOnline;
         let nodeChange = 0;
-        if (nodeRandom > 0.93) nodeChange = 1;      // Grow
-        else if (nodeRandom > 0.90) nodeChange = -1; // Churn
 
-        const newNodes = Math.max(100, prev.nodesOnline + nodeChange);
+        // Strong push back if out of bounds
+        if (currentNodes < 150) nodeChange = 1;
+        else if (currentNodes > 300) nodeChange = -1;
+        else {
+          // Random drift
+          const r = Math.random();
+          if (r > 0.6) nodeChange = 1;
+          else if (r < 0.4) nodeChange = -1;
+        }
+
+        const newNodes = Math.max(10, currentNodes + nodeChange);
 
         // 2. Active builds is a function of nodes (~50% utilization + variation)
         // Utilization fluctuates between 45% and 55%

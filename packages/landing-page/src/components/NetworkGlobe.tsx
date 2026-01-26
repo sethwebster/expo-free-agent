@@ -4,6 +4,8 @@ import { useNetwork } from "../context/NetworkContext";
 
 export function NetworkGlobe() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pointerInteracting = useRef(null);
+  const pointerInteractionMovement = useRef(0);
   const { nodesOnline } = useNetwork();
 
   // Use a ref to hold markers so onRender can access fresh data without re-running useEffect
@@ -68,8 +70,11 @@ export function NetworkGlobe() {
       glowColor: [0.4, 0.4, 0.5],
       markers: [], // We update this in onRender
       onRender: (state) => {
-        state.phi = phi;
-        phi += 0.003;
+        // Called on every animation frame.
+        if (!pointerInteracting.current) {
+          phi += 0.003;
+        }
+        state.phi = phi + pointerInteractionMovement.current;
 
         // Animate marker sizes and update state
         markersRef.current.forEach(m => {
@@ -89,7 +94,33 @@ export function NetworkGlobe() {
   }, []);
 
   return (
-    <div className="absolute inset-0 z-0 flex items-center justify-center opacity-70 mix-blend-plus-lighter pointer-events-none">
+    <div
+      className="absolute inset-0 z-0 flex items-center justify-center opacity-70 mix-blend-plus-lighter cursor-grab active:cursor-grabbing"
+      onPointerDown={(e) => {
+        // @ts-ignore
+        pointerInteracting.current = e.clientX - pointerInteractionMovement.current;
+      }}
+      onPointerUp={() => {
+        // @ts-ignore
+        pointerInteracting.current = null;
+      }}
+      onPointerOut={() => {
+        // @ts-ignore
+        pointerInteracting.current = null;
+      }}
+      onMouseMove={(e) => {
+        if (pointerInteracting.current !== null) {
+          const delta = e.clientX - (pointerInteracting.current as unknown as number);
+          pointerInteractionMovement.current = delta * 0.005;
+        }
+      }}
+      onTouchMove={(e) => {
+        if (pointerInteracting.current !== null && e.touches[0]) {
+          const delta = e.touches[0].clientX - (pointerInteracting.current as unknown as number);
+          pointerInteractionMovement.current = delta * 0.005;
+        }
+      }}
+    >
       <canvas
         ref={canvasRef}
         style={{ width: 600, height: 600, maxWidth: "100%", aspectRatio: 1 }}
