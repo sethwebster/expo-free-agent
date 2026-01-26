@@ -9,16 +9,16 @@ export function NetworkGlobe() {
   const { nodesOnline } = useNetwork();
 
   // Use a ref to hold markers so onRender can access fresh data without re-running useEffect
-  const markersRef = useRef([
-    { location: [37.7595, -122.4367] as [number, number], size: 0.03 }, // SF
-    { location: [40.7128, -74.0060] as [number, number], size: 0.03 }, // NY
-    { location: [51.5074, -0.1278] as [number, number], size: 0.03 }, // London
-    { location: [35.6762, 139.6503] as [number, number], size: 0.03 }, // Tokyo
-    { location: [-33.8688, 151.2093] as [number, number], size: 0.03 }, // Sydney
-    { location: [52.5200, 13.4050] as [number, number], size: 0.03 }, // Berlin
-    { location: [1.3521, 103.8198] as [number, number], size: 0.03 }, // Singapore
-    { location: [12.9716, 77.5946] as [number, number], size: 0.03 }, // Bangalore
-    { location: [-23.5505, -46.6333] as [number, number], size: 0.03 }, // São Paulo
+  const markersRef = useRef<{ location: [number, number]; size: number; flash?: boolean }[]>([
+    { location: [37.7595, -122.4367], size: 0.03 }, // SF
+    { location: [40.7128, -74.0060], size: 0.03 }, // NY
+    { location: [51.5074, -0.1278], size: 0.03 }, // London
+    { location: [35.6762, 139.6503], size: 0.03 }, // Tokyo
+    { location: [-33.8688, 151.2093], size: 0.03 }, // Sydney
+    { location: [52.5200, 13.4050], size: 0.03 }, // Berlin
+    { location: [1.3521, 103.8198], size: 0.03 }, // Singapore
+    { location: [12.9716, 77.5946], size: 0.03 }, // Bangalore
+    { location: [-23.5505, -46.6333], size: 0.03 }, // São Paulo
   ]);
 
   // Sync markers count with nodesOnline
@@ -76,11 +76,25 @@ export function NetworkGlobe() {
         }
         state.phi = phi + pointerInteractionMovement.current;
 
-        // Animate marker sizes and update state
+        // Animate marker sizes (Twinkling effect)
+        // We use phi as a time source for the sin wave
         markersRef.current.forEach(m => {
-          // Easing in
-          if (m.size < 0.03) {
-            m.size += 0.0005;
+          // If this is a new marker (size near 0), grow it in
+          // Otherwise, pulse it
+          if (m.size < 0.03 && !m.flash) {
+            m.size += 0.002;
+          } else {
+            // Mark as active/flashing
+            m.flash = true;
+            // Pulse between 0.015 and 0.045
+            // Use marker's unique location as a seed for phase to avoid uniform pulsing
+            const phase = m.location[0] + m.location[1];
+            // Speed varies slightly by location too
+            const speed = 3 + Math.abs(m.location[0] / 50);
+
+            const sine = Math.sin((phi * speed) + phase);
+            // map -1..1 to 0.02..0.04
+            m.size = 0.03 + (sine * 0.015);
           }
         });
 
