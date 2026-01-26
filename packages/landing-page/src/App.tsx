@@ -143,11 +143,11 @@ function Hero() {
                   className="inline-block will-change-transform"
                   style={{
                     transform: `translateY(-${scrollY * ((12 - i) * 0.15)}px)`,
-                    filter: `blur(${scrollY * ((12 - i) * 0.01)}px)`
+                    filter: `blur(${0.5 + scrollY * ((12 - i) * 0.01)}px)`
                   }}
                 >
                   <span
-                    className="inline-block animate-letter-rise bg-clip-text text-transparent pb-4 bg-[linear-gradient(8deg,#4f46e5_0%,#818cf8_50%,#4f46e5_100%)]"
+                    className="inline-block animate-letter-rise bg-clip-text text-transparent pb-4 bg-[linear-gradient(8deg,rgba(79,70,229,0.5)_0%,rgba(129,140,248,0.8)_50%,rgba(79,70,229,0.5)_100%)]"
                     style={{
                       animationDelay: `${500 + i * 75}ms`
                     }}
