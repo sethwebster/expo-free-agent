@@ -173,6 +173,16 @@ function Hero() {
   );
 }
 
+import { NetworkGlobe } from "./components/NetworkGlobe";
+
+// ... existing imports ...
+
+// ... existing App component ...
+
+// ... existing Nav component ...
+
+// ... existing Hero component ...
+
 function BentoGrid() {
   const { ref: headerRef, isVisible: headerVisible } = useScrollReveal();
 
@@ -214,7 +224,6 @@ function BentoGrid() {
             colSpan="md:col-span-3"
             title="Community Mesh."
             subtitle="No servers to manage. No cloud bills. Just a peer-to-peer build network built by Expo developers just like you."
-            image="/assets/feature-network.png"
             align="center"
             delay={300}
           />
@@ -224,7 +233,7 @@ function BentoGrid() {
   );
 }
 
-function BentoCard({ colSpan, title, subtitle, image, dark, align = "left", delay = 0 }: { colSpan: string, title: string, subtitle: string, image: string, dark?: boolean, align?: "left" | "center", delay?: number }) {
+function BentoCard({ colSpan, title, subtitle, image, dark, align = "left", delay = 0 }: { colSpan: string, title: string, subtitle: string, image?: string, dark?: boolean, align?: "left" | "center", delay?: number }) {
   const { ref, isVisible } = useScrollReveal();
 
   return (
@@ -234,7 +243,11 @@ function BentoCard({ colSpan, title, subtitle, image, dark, align = "left", dela
       className={`relative group overflow-hidden rounded-[2rem] border border-zinc-200 dark:border-zinc-800 ${colSpan} ${dark ? 'bg-black text-white' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white'} transition-all duration-1000 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'} hover:shadow-2xl`}
     >
       <div className="absolute inset-0 z-0 overflow-hidden">
-        <img src={image} className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-1000 ease-out" alt={title} />
+        {image ? (
+          <img src={image} className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-1000 ease-out" alt={title} />
+        ) : (
+          <NetworkGlobe />
+        )}
         <div className={`absolute inset-0 bg-gradient-to-t ${dark ? 'from-black via-black/40 to-transparent' : 'from-white via-white/40 to-transparent dark:from-black dark:via-black/40'}`} />
       </div>
 
