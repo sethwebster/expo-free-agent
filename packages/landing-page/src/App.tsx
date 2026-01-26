@@ -142,8 +142,8 @@ function Hero() {
                   key={i}
                   className="inline-block will-change-transform"
                   style={{
-                    transform: `translateY(-${scrollY * ((12 - i) * 0.15)}px)`,
-                    filter: `blur(${scrollY * ((12 - i) * 0.01)}px)`,
+                    transform: `translateY(-${Math.max(0, scrollY - (i * 50)) * 1.5}px)`,
+                    filter: `blur(${Math.max(0, scrollY - (i * 50)) * 0.05}px)`,
                     backdropFilter: 'blur(5px)',
                     WebkitBackdropFilter: 'blur(5px)',
                   }}
