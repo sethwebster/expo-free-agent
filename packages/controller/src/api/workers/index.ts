@@ -63,6 +63,7 @@ export const workersRoutes: FastifyPluginAsync<WorkersPluginOptions> = async (
       return reply.send({
         id: workerId,
         status: 'registered',
+        baseImageId: config.baseImageId,
       });
     } catch (err) {
       fastify.log.error('Worker registration error:', err);
@@ -106,6 +107,7 @@ export const workersRoutes: FastifyPluginAsync<WorkersPluginOptions> = async (
             certs_url: activeBuild!.certs_path
               ? `/api/builds/${activeBuild!.id}/certs`
               : null,
+            baseImageId: config.baseImageId,
           },
         });
       }
@@ -140,6 +142,7 @@ export const workersRoutes: FastifyPluginAsync<WorkersPluginOptions> = async (
           platform: build.platform,
           source_url: `/api/builds/${build.id}/source`,
           certs_url: build.certs_path ? `/api/builds/${build.id}/certs` : null,
+          baseImageId: config.baseImageId,
         },
       });
     } catch (err) {

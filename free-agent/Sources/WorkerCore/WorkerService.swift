@@ -216,8 +216,10 @@ public actor WorkerService {
                 buildTimeoutMinutes: configuration.buildTimeoutMinutes
             )
 
-            vmManager = TartVMManager(configuration: vmConfig)
-            print("✓ Tart VM Manager created")
+            // Use baseImageId from controller (fallback to default if not provided)
+            let templateImage = job.baseImageId ?? "expo-free-agent-tahoe-26.2-xcode-expo-54"
+            vmManager = TartVMManager(configuration: vmConfig, templateImage: templateImage)
+            print("✓ Tart VM Manager created with template: \(templateImage)")
 
             let buildResult = try await vmManager!.executeBuild(
                 sourceCodePath: buildPackagePath!,
@@ -417,12 +419,14 @@ public struct BuildJob: Codable, Sendable {
     public let platform: String
     public let source_url: String
     public let certs_url: String?
+    public let baseImageId: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case platform
         case source_url
         case certs_url
+        case baseImageId
     }
 }
 

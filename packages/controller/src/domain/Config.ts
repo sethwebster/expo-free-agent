@@ -17,6 +17,9 @@ export interface ControllerConfig {
   // Production would need per-worker API keys stored in DB
   apiKey: string;
 
+  // Worker configuration
+  baseImageId: string;  // Tart VM template name (e.g., expo-free-agent-tahoe-26.2-xcode-expo-54)
+
   // Upload limits (in bytes)
   maxSourceFileSize: number;  // Default: 500MB (large iOS apps)
   maxCertsFileSize: number;   // Default: 10MB (certs are small)
@@ -30,6 +33,9 @@ export const DEFAULT_CONFIG: Omit<ControllerConfig, 'port' | 'dbPath' | 'storage
   // Generate random API key if not provided
   // In production, this should be set via environment variable
   apiKey: process.env.CONTROLLER_API_KEY || 'dev-insecure-key-change-in-production',
+
+  // Worker configuration
+  baseImageId: process.env.BASE_IMAGE_ID || 'expo-free-agent-tahoe-26.2-xcode-expo-54',
 
   // Upload limits
   maxSourceFileSize: 500 * 1024 * 1024,   // 500MB

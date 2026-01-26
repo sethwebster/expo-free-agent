@@ -1,0 +1,95 @@
+name: Release Worker App
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Swift
+        run: swift --version
+
+      - name: Build Swift app
+        working-directory: free-agent
+        run: swift build -c release
+
+      # Note: Code signing and notarization are skipped for now
+      # TODO: Add code signing when we have Expo Developer ID certificate
+      # - name: Code Sign
+      #   env:
+      #     SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+      #   run: |
+      #     codesign --sign "$SIGNING_IDENTITY" --deep --force \
+      #       free-agent/.build/release/FreeAgent.app
+
+      # TODO: Add notarization step
+      # - name: Notarize
+      #   env:
+      #     APPLE_ID: ${{ secrets.APPLE_ID }}
+      #     APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      #     APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      #   run: |
+      #     xcrun notarytool submit FreeAgent.app.tar.gz \
+      #       --apple-id "$APPLE_ID" \
+      #       --password "$APPLE_PASSWORD" \
+      #       --team-id "$APPLE_TEAM_ID" \
+      #       --wait
+      #     xcrun stapler staple free-agent/.build/release/FreeAgent.app
+
+      - name: Create tarball
+        run: |
+          cd free-agent/.build/release
+          tar -czf FreeAgent.app.tar.gz FreeAgent.app
+          mv FreeAgent.app.tar.gz ../../../
+
+      - name: Generate checksums
+        run: |
+          shasum -a 256 FreeAgent.app.tar.gz > FreeAgent.app.tar.gz.sha256
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            FreeAgent.app.tar.gz
+            FreeAgent.app.tar.gz.sha256
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-installer:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: packages/worker-installer
+        run: bun install
+
+      - name: Build installer
+        working-directory: packages/worker-installer
+        run: bun run build
+
+      - name: Publish to npm
+        working-directory: packages/worker-installer
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          npm publish --access public
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
