@@ -143,7 +143,7 @@ function Hero() {
                   className="inline-block will-change-transform"
                   style={{
                     transform: `translateY(-${scrollY * ((12 - i) * 0.15)}px)`,
-                    filter: `blur(${0.5 + scrollY * ((12 - i) * 0.01)}px)`
+                    filter: `blur(${2 + scrollY * ((12 - i) * 0.01)}px)`
                   }}
                 >
                   <span
