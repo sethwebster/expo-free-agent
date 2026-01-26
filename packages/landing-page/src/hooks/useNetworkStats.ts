@@ -5,6 +5,7 @@ export interface NetworkStats {
   buildsQueued: number;
   activeBuilds: number;
   buildsToday: number;
+  totalBuilds: number;
 }
 
 export function useNetworkStats() {
@@ -13,6 +14,7 @@ export function useNetworkStats() {
     buildsQueued: 82, // Start high
     activeBuilds: 60,
     buildsToday: 1402,
+    totalBuilds: 8439021, // ~8.4M lifetime
   });
 
   useEffect(() => {
@@ -58,23 +60,23 @@ export function useNetworkStats() {
         if (newQueued > targetQueue) newQueued -= 1;
 
         // Ensure bounds
-        newQueued = Math.max(0, Math.floor(newQueued));
-        newNodes = Math.floor(newNodes);
-        newActive = Math.floor(newActive);
+        const finalQueued = Math.max(0, Math.floor(newQueued));
+        const finalNodes = Math.floor(newNodes);
+        const finalActive = Math.floor(newActive);
 
 
         // 4. Builds completed today
         // Every active build has a small chance of finishing *right now*
-        // e.g. 5% chance per active build per tick? 
-        // Simpler: Just increment based on purely probability weighted by active count
-        const completions = Math.random() < (newActive * 0.05) ? 1 : 0;
+        const completions = Math.random() < (finalActive * 0.05) ? 1 : 0;
         const newToday = prev.buildsToday + completions;
+        const newTotal = prev.totalBuilds + completions;
 
         return {
-          nodesOnline: newNodes,
-          buildsQueued: newQueued,
-          activeBuilds: newActive,
+          nodesOnline: finalNodes,
+          buildsQueued: finalQueued,
+          activeBuilds: finalActive,
           buildsToday: newToday,
+          totalBuilds: newTotal,
         };
       });
     }, 800); // 800ms tick for "alive" feeling

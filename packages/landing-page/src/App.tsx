@@ -26,16 +26,22 @@ function useScrollReveal(delay = 0) {
   return { ref, isVisible, delay };
 }
 
+import { NetworkProvider } from "./context/NetworkContext";
+
+// ... existing imports ...
+
 export default function App() {
   return (
-    <div className="min-h-screen bg-white dark:bg-black overflow-x-hidden selection:bg-indigo-500/30 font-sans text-zinc-900 dark:text-zinc-100 transition-colors duration-500">
-      <Nav />
-      <Hero />
-      <BentoGrid />
-      <HowItWorks />
-      <GetStarted />
-      <Footer />
-    </div>
+    <NetworkProvider>
+      <div className="min-h-screen bg-white dark:bg-black overflow-x-hidden selection:bg-indigo-500/30 font-sans text-zinc-900 dark:text-zinc-100 transition-colors duration-500">
+        <Nav />
+        <Hero />
+        <BentoGrid />
+        <HowItWorks />
+        <GetStarted />
+        <Footer />
+      </div>
+    </NetworkProvider>
   );
 }
 
@@ -235,13 +241,27 @@ function BentoGrid() {
 
 function BentoCard({ colSpan, title, subtitle, image, dark, align = "left", delay = 0 }: { colSpan: string, title: string, subtitle: string, image?: string, dark?: boolean, align?: "left" | "center", delay?: number }) {
   const { ref, isVisible } = useScrollReveal();
+  const [maximized, setMaximized] = useState(false);
 
-  return (
-    <div
-      ref={ref}
-      style={{ transitionDelay: `${delay}ms` }}
-      className={`relative group overflow-hidden rounded-[2rem] border border-zinc-200 dark:border-zinc-800 ${colSpan} ${dark ? 'bg-black text-white' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white'} transition-all duration-1000 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'} hover:shadow-2xl`}
-    >
+  // Close on Escape key
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMaximized(false);
+    };
+    if (maximized) {
+      window.addEventListener("keydown", handleEsc);
+      document.body.style.overflow = "hidden"; // Lock scroll
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      window.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "";
+    };
+  }, [maximized]);
+
+  const CardContent = () => (
+    <>
       <div className="absolute inset-0 z-0 overflow-hidden">
         {image ? (
           <img src={image} className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-1000 ease-out" alt={title} />
@@ -252,9 +272,47 @@ function BentoCard({ colSpan, title, subtitle, image, dark, align = "left", dela
       </div>
 
       <div className={`relative z-10 h-full flex flex-col justify-end p-10 ${align === 'center' ? 'items-center text-center' : 'items-start'}`}>
-        <h3 className="text-4xl md:text-5xl font-semibold tracking-tighter mb-4 drop-shadow-sm">{title}</h3>
+        <h3 className={`${maximized ? 'text-6xl md:text-8xl' : 'text-4xl md:text-5xl'} font-semibold tracking-tighter mb-4 drop-shadow-sm transition-all duration-500`}>{title}</h3>
         <p className={`text-xl font-medium max-w-xl ${dark ? 'text-zinc-400' : 'text-zinc-600 dark:text-zinc-300'} drop-shadow-sm`}>{subtitle}</p>
+
+        {!image && !maximized && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setMaximized(true); }}
+            className="mt-6 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-sm font-medium transition-colors"
+          >
+            Explore Network ↗
+          </button>
+        )}
       </div>
+
+      {maximized && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setMaximized(false); }}
+          className="absolute top-8 right-8 z-50 p-4 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-md transition-colors"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      )}
+    </>
+  );
+
+  if (maximized) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-black animate-in fade-in zoom-in duration-300">
+        <div className={`relative w-full h-full ${dark ? 'text-white' : 'text-zinc-900 dark:text-white'}`}>
+          <CardContent />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={ref}
+      style={{ transitionDelay: `${delay}ms` }}
+      className={`relative group overflow-hidden rounded-[2rem] border border-zinc-200 dark:border-zinc-800 ${colSpan} ${dark ? 'bg-black text-white' : 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white'} transition-all duration-1000 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20'} hover:shadow-2xl`}
+    >
+      <CardContent />
     </div>
   );
 }
