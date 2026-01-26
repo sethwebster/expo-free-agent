@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd packages/landing-page && bun run build",
-  "outputDirectory": "packages/landing-page/dist",
-  "installCommand": "bun install",
-  "framework": null
-}

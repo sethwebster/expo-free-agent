@@ -1,0 +1,15 @@
+name = "expo-free-agent"
+compatibility_date = "2024-01-01"
+
+pages_build_output_dir = "dist"
+
+[build]
+command = "bun run build"
+
+[build.upload]
+format = "directory"
+dir = "dist"
+
+# Environment variables (if needed)
+# [vars]
+# API_URL = "https://api.example.com"

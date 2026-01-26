@@ -182,10 +182,24 @@ bun run landing-page:build  # Output to packages/landing-page/dist
 bun run landing-page:preview  # Preview production build
 ```
 
-**Deploy:**
-- Vercel: Connect repo, automatically deploys from `packages/landing-page/dist`
-- Netlify: Connect repo, automatically deploys from `packages/landing-page/dist`
-- Configuration: See `vercel.json` in root
+**Deploy to Cloudflare Pages:**
+
+Option 1 - Dashboard:
+1. Go to Cloudflare Dashboard → Pages
+2. Connect GitHub repo
+3. Configure:
+   - Build command: `cd packages/landing-page && bun run build`
+   - Build output: `packages/landing-page/dist`
+   - Framework preset: None
+
+Option 2 - Wrangler CLI:
+```bash
+cd packages/landing-page
+bun run build
+npx wrangler pages deploy dist --project-name=expo-free-agent
+```
+
+Configuration: See `packages/landing-page/wrangler.toml`
 
 ## Next Steps (Week 2+)
 
