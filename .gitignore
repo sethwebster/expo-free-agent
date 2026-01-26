@@ -10,6 +10,9 @@ build/
 *.swiftsourceinfo
 *.abi.json
 
+# Landing page
+packages/landing-page/.tanstack
+
 # Test artifacts
 .test-*/
 *.db

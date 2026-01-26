@@ -8,6 +8,9 @@
   "scripts": {
     "controller": "bun --cwd packages/controller start",
     "controller:dev": "bun --cwd packages/controller dev",
+    "landing-page:dev": "bun --cwd packages/landing-page dev",
+    "landing-page:build": "bun --cwd packages/landing-page build",
+    "landing-page:preview": "bun --cwd packages/landing-page preview",
     "test": "bun test",
     "test:controller": "bun test packages/controller/src/__tests__",
     "test:cli": "bun test cli/src/__tests__",

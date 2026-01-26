@@ -18,8 +18,10 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for full design and prototype plan.
 expo-free-agent/
 ├── packages/
 │   ├── controller/        # Central controller server (✅ IMPLEMENTED)
-│   ├── cli/              # Build submission CLI (TODO)
-│   └── free-agent/       # macOS worker app (TODO)
+│   ├── landing-page/      # Marketing landing page (✅ IMPLEMENTED)
+│   ├── worker-installer/  # Worker installation CLI (✅ IMPLEMENTED)
+│   └── free-agent/       # macOS worker app (✅ IMPLEMENTED)
+├── cli/                   # Build submission CLI (✅ IMPLEMENTED)
 ├── ARCHITECTURE.md       # Full design document
 ├── AGENTS.md            # Agent rules and requirements
 └── README.md
@@ -160,6 +162,30 @@ See **[TESTING.md](./TESTING.md)** for comprehensive testing documentation.
 # Start with auto-reload
 bun controller:dev
 ```
+
+### Landing Page
+
+Static marketing site built with Vite + React 19 + Tailwind CSS v4.
+
+**Development:**
+```bash
+bun run landing-page:dev  # http://localhost:5173
+```
+
+**Build:**
+```bash
+bun run landing-page:build  # Output to packages/landing-page/dist
+```
+
+**Preview:**
+```bash
+bun run landing-page:preview  # Preview production build
+```
+
+**Deploy:**
+- Vercel: Connect repo, automatically deploys from `packages/landing-page/dist`
+- Netlify: Connect repo, automatically deploys from `packages/landing-page/dist`
+- Configuration: See `vercel.json` in root
 
 ## Next Steps (Week 2+)
 
