@@ -34,14 +34,15 @@ public class TartVMManager {
 
     /// Execute build in ephemeral Tart VM
     /// CRITICAL: Always calls cleanup, even on failure
+    /// signingCertsPath is now optional - VM fetches certs directly when nil
     public func executeBuild(
         sourceCodePath: URL,
         signingCertsPath: URL?,
         buildTimeout: TimeInterval,
-        buildId: String? = nil,
-        workerId: String? = nil,
-        controllerURL: String? = nil,
-        apiKey: String? = nil
+        buildId: String?,
+        workerId: String?,
+        controllerURL: String?,
+        apiKey: String?
     ) async throws -> BuildResult {
         var logs = ""
         var created = false
@@ -61,22 +62,47 @@ public class TartVMManager {
             created = true
             logs += "✓ VM cloned\n\n"
 
-            // 2) Run headless, detached (using screen)
-            logs += "Starting VM headless...\n"
-            try await executeCommand("screen", ["-d", "-m", tartPath, "run", vmName!, "--no-graphics"])
-            logs += "✓ VM started\n\n"
+            // 2) Run headless, detached (using screen) with env vars for bootstrap
+            logs += "Starting VM headless with secure bootstrap...\n"
+            var runArgs = ["-d", "-m", tartPath, "run", vmName!, "--no-graphics"]
 
-            // 3) Wait for IP
+            // Add env vars for VM bootstrap (cert fetch)
+            if let buildId = buildId {
+                runArgs.append("--env")
+                runArgs.append("BUILD_ID=\(buildId)")
+            }
+            if let workerId = workerId {
+                runArgs.append("--env")
+                runArgs.append("WORKER_ID=\(workerId)")
+            }
+            if let controllerURL = controllerURL {
+                runArgs.append("--env")
+                runArgs.append("CONTROLLER_URL=\(controllerURL)")
+            }
+            if let apiKey = apiKey {
+                runArgs.append("--env")
+                runArgs.append("API_KEY=\(apiKey)")
+            }
+
+            try await executeCommand("screen", runArgs)
+            logs += "✓ VM started with secure bootstrap env vars\n\n"
+
+            // 3) Wait for bootstrap completion (password randomization + cert fetch)
+            logs += "Waiting for VM bootstrap (password randomization + cert fetch)...\n"
+            try await waitForBootstrapComplete(vmName!, timeout: 180)
+            logs += "✓ Bootstrap complete - certs installed, SSH blocked\n\n"
+
+            // 4) Wait for IP
             logs += "Waiting for IP address...\n"
             vmIP = try await waitForIP(vmName!, timeout: ipTimeout)
             logs += "✓ IP: \(vmIP!)\n\n"
 
-            // 4) Wait for SSH ready
+            // 5) Wait for SSH ready
             logs += "Waiting for SSH...\n"
             try await waitForSSH(ip: vmIP!, timeout: sshTimeout)
             logs += "✓ SSH ready\n\n"
 
-            // 5) Verify Xcode ready (hard fail if missing)
+            // 6) Verify Xcode ready (hard fail if missing)
             logs += "Verifying Xcode...\n"
             let xcodeVersion = try await sshCommand(ip: vmIP!, command: "xcodebuild -version")
             logs += xcodeVersion + "\n"
@@ -89,7 +115,7 @@ public class TartVMManager {
             _ = try? await sshCommand(ip: vmIP!, command: "sudo xcodebuild -license accept || true")
             _ = try? await sshCommand(ip: vmIP!, command: "sudo xcodebuild -runFirstLaunch || true")
 
-            // 6) Verify Expo toolchain
+            // 7) Verify Expo toolchain
             logs += "Verifying Expo toolchain...\n"
             let nodeVersion = try await sshCommand(ip: vmIP!, command: "node -v")
             logs += "Node: \(nodeVersion)\n"
@@ -101,7 +127,7 @@ public class TartVMManager {
             logs += "Expo: \(expoVersion)\n"
             logs += "✓ Toolchain ready\n\n"
 
-            // 7) Start build monitor (sends heartbeats to controller)
+            // 8) Start build monitor (sends heartbeats to controller)
             if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
                 logs += "Starting build monitor...\n"
                 let monitorCommand = "/usr/local/bin/vm-monitor.sh '\(controllerURL)' '\(buildId)' '\(workerId)' '\(apiKey)' 30 > /dev/null 2>&1 & echo $!"
@@ -114,26 +140,22 @@ public class TartVMManager {
                 }
             }
 
-            // 8) Prepare directories
+            // 9) Prepare directories
             logs += "Preparing build directories...\n"
             _ = try await sshCommand(ip: vmIP!, command: "mkdir -p ~/free-agent/in ~/free-agent/out ~/free-agent/work")
             logs += "✓ Directories created\n\n"
 
-            // 9) Upload source
+            // 10) Upload source (certs already installed by bootstrap)
             logs += "Uploading source code...\n"
             try await scpUpload(localPath: sourceCodePath.path, remotePath: "~/free-agent/in/source.tar.gz", ip: vmIP!)
             logs += "✓ Source uploaded\n\n"
 
-            // Upload signing bundle if provided
-            if let certsPath = signingCertsPath {
-                logs += "Uploading signing bundle...\n"
-                try await scpUpload(localPath: certsPath.path, remotePath: "~/free-agent/in/signing.zip", ip: vmIP!)
-                logs += "✓ Signing bundle uploaded\n\n"
-            } else {
-                logs += "No signing bundle provided\n\n"
+            // Note: Signing bundle upload removed - VM fetches certs directly via bootstrap
+            if signingCertsPath != nil {
+                logs += "⚠️  signingCertsPath provided but ignored - VM fetches certs securely via bootstrap\n\n"
             }
 
-            // 10) Run build
+            // 11) Run build
             logs += "=== Starting build ===\n"
             let buildLogs = try await sshCommand(
                 ip: vmIP!,
@@ -143,14 +165,14 @@ public class TartVMManager {
             logs += buildLogs + "\n"
             logs += "=== Build complete ===\n\n"
 
-            // 11) Stop build monitor
+            // 12) Stop build monitor
             if let pid = monitorPID {
                 logs += "Stopping build monitor...\n"
                 _ = try? await sshCommand(ip: vmIP!, command: "kill \(pid) 2>/dev/null || true")
                 logs += "✓ Monitor stopped\n\n"
             }
 
-            // 12) Download artifacts
+            // 13) Download artifacts
             logs += "Downloading artifacts...\n"
 
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("fa-\(jobID)")
@@ -227,6 +249,27 @@ public class TartVMManager {
     }
 
     // MARK: - Helpers
+
+    /// Wait for VM bootstrap to complete (password randomization + cert fetch)
+    /// Polls for /tmp/free-agent-ready file via tart exec
+    private func waitForBootstrapComplete(_ vmName: String, timeout: TimeInterval) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            // Check if bootstrap signal file exists via tart exec
+            let checkCmd = "test -f /tmp/free-agent-ready"
+            let (code, _) = try await executeCommandWithResult(tartPath, ["exec", vmName, "--", checkCmd], timeout: 5)
+
+            if code == 0 {
+                return // Bootstrap complete
+            }
+
+            // Not ready yet, wait before next check
+            try await Task.sleep(for: .seconds(2))
+        }
+
+        throw VMError.bootstrapTimeout
+    }
 
     /// Wait for tart ip <vm> to return a valid IP
     private func waitForIP(_ vmName: String, timeout: TimeInterval) async throws -> String {
@@ -361,7 +404,7 @@ public class TartVMManager {
 
 extension VMError {
     static func timeout(_ message: String) -> VMError {
-        .buildFailed // Reuse existing error type
+        .buildFailed
     }
 
     static func sshFailed(_ output: String) -> VMError {

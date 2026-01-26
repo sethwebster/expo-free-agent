@@ -1,6 +1,7 @@
-import { mkdirSync, existsSync, createWriteStream, createReadStream, unlinkSync } from 'fs';
+import { mkdirSync, existsSync, createWriteStream, createReadStream, unlinkSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import type { Readable } from 'stream';
+import AdmZip from 'adm-zip';
 
 /**
  * Local filesystem storage service
@@ -155,4 +156,60 @@ export class FileStorage {
       exists: existsSync(this.storagePath),
     };
   }
+
+  /**
+   * Read and unzip certificate bundle
+   * Extracts P12 certificate, password, and provisioning profiles
+   */
+  readBuildCerts(certsPath: string): Buffer {
+    const normalized = resolve(certsPath);
+    const storageRoot = resolve(this.storagePath);
+
+    // Prevent path traversal
+    if (!normalized.startsWith(storageRoot)) {
+      throw new Error('Path traversal attempt blocked: file must be inside storage directory');
+    }
+
+    if (!existsSync(normalized)) {
+      throw new Error('Certs file not found');
+    }
+
+    return readFileSync(normalized);
+  }
+}
+
+export interface CertsBundle {
+  p12: Buffer;
+  password: string;
+  profiles: Buffer[];
+}
+
+/**
+ * Unzip certificate bundle and extract components
+ * @param zipBuffer - ZIP file containing P12, password.txt, and provisioning profiles
+ * @returns Extracted certificate components
+ */
+export function unzipCerts(zipBuffer: Buffer): CertsBundle {
+  const zip = new AdmZip(zipBuffer);
+  const entries = zip.getEntries();
+
+  let p12: Buffer | null = null;
+  let password = '';
+  const profiles: Buffer[] = [];
+
+  for (const entry of entries) {
+    if (entry.entryName.endsWith('.p12')) {
+      p12 = entry.getData();
+    } else if (entry.entryName === 'password.txt') {
+      password = entry.getData().toString('utf-8').trim();
+    } else if (entry.entryName.endsWith('.mobileprovision')) {
+      profiles.push(entry.getData());
+    }
+  }
+
+  if (!p12) {
+    throw new Error('No P12 certificate found in bundle');
+  }
+
+  return { p12, password, profiles };
 }

@@ -18,7 +18,7 @@ let package = Package(
             name: "FreeAgent",
             dependencies: ["BuildVM", "WorkerCore", "DiagnosticsCore"],
             path: "Sources/FreeAgent",
-            resources: [.process("Resources")]
+            resources: [.copy("Resources")]
         ),
         .target(
             name: "BuildVM",

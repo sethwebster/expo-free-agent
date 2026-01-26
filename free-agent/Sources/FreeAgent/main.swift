@@ -317,7 +317,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateIconForCurrentState() {
         guard let button = statusItem?.button else { return }
         button.image = createIconForState(connectionState)
-        button.image?.isTemplate = (connectionState != .building)
+        // Template mode is now handled per-icon in creation methods
     }
 
     private func createIconForState(_ state: ConnectionState) -> NSImage {
@@ -334,32 +334,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func createTrayIcon() -> NSImage {
-        // Try to load and render SVG logo, fallback to simple pattern
-        if let svgPath = Bundle.main.path(forResource: "free-agent-logo", ofType: "svg"),
-           let svgData = try? Data(contentsOf: URL(fileURLWithPath: svgPath)),
-           let image = NSImage(data: svgData) {
-            // Render SVG at small size for tray
-            let traySize = NSSize(width: 18, height: 18)
+        let traySize = NSSize(width: 18, height: 18)
+
+        // Load SVG logo from Resources
+        if let svgURL = Bundle.module.url(forResource: "free-agent-logo", withExtension: "svg"),
+           let svgImage = NSImage(contentsOf: svgURL) {
             let trayImage = NSImage(size: traySize, flipped: false) { rect in
-                image.draw(in: rect)
+                svgImage.draw(in: rect)
                 return true
             }
+            trayImage.isTemplate = true
             return trayImage
         }
 
         // Fallback: Simple block pattern if SVG not found
-        let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { rect in
-            // Create simple block pattern:
-            //   ■
-            // ■ ■ ■
+        let image = NSImage(size: traySize, flipped: false) { rect in
             let blockSize: CGFloat = 4.5
-
-            // Top block (centered)
             let topBlock = NSRect(x: 6.75, y: 9, width: blockSize, height: blockSize)
             NSBezierPath(rect: topBlock).fill()
 
-            // Bottom row - 3 blocks
             let bottomY: CGFloat = 4
             let bottomLeft = NSRect(x: 2.25, y: bottomY, width: blockSize, height: blockSize)
             let bottomCenter = NSRect(x: 6.75, y: bottomY, width: blockSize, height: blockSize)
@@ -371,25 +364,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             return true
         }
+        image.isTemplate = true
         return image
     }
 
     private func createConnectingIcon() -> NSImage {
-        let size = NSSize(width: 18, height: 18)
+        let size = NSSize(width: 18, height: 20)
         let image = NSImage(size: size, flipped: false) { rect in
-            // Draw base icon
-            let blockSize: CGFloat = 4.5
-            let topBlock = NSRect(x: 6.75, y: 9, width: blockSize, height: blockSize)
-            NSBezierPath(rect: topBlock).fill()
-
-            let bottomY: CGFloat = 4
-            let bottomLeft = NSRect(x: 2.25, y: bottomY, width: blockSize, height: blockSize)
-            let bottomCenter = NSRect(x: 6.75, y: bottomY, width: blockSize, height: blockSize)
-            let bottomRight = NSRect(x: 11.25, y: bottomY, width: blockSize, height: blockSize)
-
-            NSBezierPath(rect: bottomLeft).fill()
-            NSBezierPath(rect: bottomCenter).fill()
-            NSBezierPath(rect: bottomRight).fill()
+            // Draw base logo
+            let baseIcon = self.createTrayIcon()
+            baseIcon.draw(in: NSRect(x: 0, y: 4, width: 18, height: 18))
 
             // Draw animated dots below
             let dotSize: CGFloat = 2.0
@@ -410,37 +394,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func createOnlineIcon() -> NSImage {
-        let size = NSSize(width: 20, height: 18)
+        let size = NSSize(width: 22, height: 18)
         let image = NSImage(size: size, flipped: false) { rect in
-            // Draw base icon
-            let blockSize: CGFloat = 4.5
-            let topBlock = NSRect(x: 6.75, y: 9, width: blockSize, height: blockSize)
-            NSBezierPath(rect: topBlock).fill()
+            // Draw base logo in black (will adapt to menu bar)
+            NSColor.black.setFill()
 
-            let bottomY: CGFloat = 4
-            let bottomLeft = NSRect(x: 2.25, y: bottomY, width: blockSize, height: blockSize)
-            let bottomCenter = NSRect(x: 6.75, y: bottomY, width: blockSize, height: blockSize)
-            let bottomRight = NSRect(x: 11.25, y: bottomY, width: blockSize, height: blockSize)
+            // Load and draw SVG or fallback pattern
+            if let svgURL = Bundle.module.url(forResource: "free-agent-logo", withExtension: "svg"),
+               let svgImage = NSImage(contentsOf: svgURL) {
+                svgImage.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
+            } else {
+                // Fallback block pattern
+                let blockSize: CGFloat = 4.5
+                let topBlock = NSRect(x: 6.75, y: 9, width: blockSize, height: blockSize)
+                NSBezierPath(rect: topBlock).fill()
 
-            NSBezierPath(rect: bottomLeft).fill()
-            NSBezierPath(rect: bottomCenter).fill()
-            NSBezierPath(rect: bottomRight).fill()
+                let bottomY: CGFloat = 4
+                NSBezierPath(rect: NSRect(x: 2.25, y: bottomY, width: blockSize, height: blockSize)).fill()
+                NSBezierPath(rect: NSRect(x: 6.75, y: bottomY, width: blockSize, height: blockSize)).fill()
+                NSBezierPath(rect: NSRect(x: 11.25, y: bottomY, width: blockSize, height: blockSize)).fill()
+            }
 
-            // Draw green checkmark in top-right
-            let checkSize: CGFloat = 6.0
-            let checkX: CGFloat = 14.0
-            let checkY: CGFloat = 11.0
+            // Draw bright green checkmark badge in top-right
+            let checkX: CGFloat = 14.5
+            let checkY: CGFloat = 10.5
+            let circleSize: CGFloat = 7.5
 
-            NSColor(calibratedRed: 0.0, green: 0.8, blue: 0.0, alpha: 1.0).setStroke()
+            // White circle background
+            let circleRect = NSRect(x: checkX - 0.5, y: checkY - 1, width: circleSize, height: circleSize)
+            NSColor.white.setFill()
+            NSBezierPath(ovalIn: circleRect).fill()
+
+            // Bright green checkmark
+            NSColor(calibratedRed: 0.0, green: 1.0, blue: 0.0, alpha: 1.0).setStroke()
             let checkPath = NSBezierPath()
-            checkPath.lineWidth = 1.5
-            checkPath.move(to: NSPoint(x: checkX, y: checkY))
-            checkPath.line(to: NSPoint(x: checkX + 2.0, y: checkY - 2.0))
-            checkPath.line(to: NSPoint(x: checkX + checkSize, y: checkY + 2.0))
+            checkPath.lineWidth = 2.0
+            checkPath.move(to: NSPoint(x: checkX + 0.5, y: checkY + 1.5))
+            checkPath.line(to: NSPoint(x: checkX + 2.0, y: checkY - 0.5))
+            checkPath.line(to: NSPoint(x: checkX + 5.5, y: checkY + 3.5))
             checkPath.stroke()
 
             return true
         }
+        image.isTemplate = false  // Preserve colors
         return image
     }
 
@@ -463,6 +459,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             return true
         }
+        image.isTemplate = false  // Preserve green dot color
         return image
     }
 

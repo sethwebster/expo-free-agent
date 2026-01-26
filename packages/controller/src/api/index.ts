@@ -31,6 +31,7 @@ export interface ApiPluginOptions {
  *     GET    /:id/download    - Download result
  *     GET    /:id/source      - Download source (workers only)
  *     GET    /:id/certs       - Download certs (workers only)
+ *     GET    /:id/certs-secure - Get certs JSON for VM bootstrap (workers only, requires X-Build-Id)
  *     POST   /:id/heartbeat   - Send heartbeat
  *     POST   /:id/cancel      - Cancel build
  *

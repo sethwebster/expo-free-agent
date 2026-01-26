@@ -44,6 +44,13 @@ export async function saveConfig(config: Partial<Config>): Promise<void> {
 }
 
 export async function getControllerUrl(): Promise<string> {
+  // Prefer environment variable
+  const envUrl = process.env.EXPO_CONTROLLER_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+
+  // Fall back to config file
   const config = await loadConfig();
   return config.controllerUrl;
 }

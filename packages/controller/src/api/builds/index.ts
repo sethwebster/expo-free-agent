@@ -1,8 +1,10 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 import type { DatabaseService } from '../../db/Database.js';
 import type { JobQueue } from '../../services/JobQueue.js';
 import type { FileStorage } from '../../services/FileStorage.js';
+import { unzipCerts } from '../../services/FileStorage.js';
 import type { ControllerConfig } from '../../domain/Config.js';
 import { requireWorkerAccess } from '../../middleware/auth.js';
 
@@ -305,6 +307,45 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
       } catch (err) {
         fastify.log.error('File read error:', err);
         return reply.status(500).send({ error: 'Failed to read certs file' });
+      }
+    }
+  );
+
+  /**
+   * GET /builds/:id/certs-secure
+   * Get build certs in secure JSON format for VM bootstrap
+   * SECURITY: Requires X-Worker-Id and X-Build-Id headers
+   * Returns: { p12: base64, p12Password: string, keychainPassword: random, provisioningProfiles: [base64...] }
+   */
+  fastify.get<{ Params: BuildParams }>(
+    '/:id/certs-secure',
+    {
+      preHandler: requireWorkerAccess(db, true),
+    },
+    async (request, reply) => {
+      const build = (request as any).build;
+
+      if (!build.certs_path) {
+        return reply.status(404).send({ error: 'Certs not found' });
+      }
+
+      try {
+        // Generate random keychain password (24 bytes = 32 chars base64)
+        const keychainPassword = crypto.randomBytes(24).toString('base64');
+
+        // Read and unzip certs
+        const certsBuffer = storage.readBuildCerts(build.certs_path);
+        const { p12, password, profiles } = unzipCerts(certsBuffer);
+
+        return reply.send({
+          p12: p12.toString('base64'),
+          p12Password: password,
+          keychainPassword,
+          provisioningProfiles: profiles.map((p) => p.toString('base64')),
+        });
+      } catch (err) {
+        fastify.log.error('Failed to read/unzip certs:', err);
+        return reply.status(500).send({ error: 'Failed to process certs file' });
       }
     }
   );

@@ -17,16 +17,17 @@ struct StatisticsView: View {
     @State private var error: String?
     @State private var lastUpdated: Date?
     @State private var currentTime = Date()
+    @State private var startTime: Date?
 
-    let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
     let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
             // Header with logo
             VStack(spacing: 16) {
-                if let logoPath = Bundle.main.path(forResource: "expo-free-agent-logo-white", ofType: "png"),
-                   let nsImage = NSImage(contentsOfFile: logoPath) {
+                if let logoURL = Bundle.module.url(forResource: "expo-free-agent-logo-white", withExtension: "png"),
+                   let nsImage = NSImage(contentsOf: logoURL) {
                     Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -78,42 +79,71 @@ struct StatisticsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let stats = stats {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 20) {
                         // Worker Info
-                        GroupBox(label: Label("Worker Information", systemImage: "desktopcomputer")) {
-                            VStack(alignment: .leading, spacing: 12) {
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
                                 StatRow(label: "Name", value: stats.workerName)
-                                StatRow(label: "Status", value: stats.status.capitalized, valueColor: stats.status == "running" ? .green : .secondary)
-                                if let uptime = stats.uptime {
-                                    StatRow(label: "Uptime", value: uptime)
-                                }
+                                StatRow(
+                                    label: "Status",
+                                    value: stats.status.capitalized,
+                                    valueColor: statusColor(for: stats.status)
+                                )
+                                StatRow(label: "Uptime", value: liveUptime())
                             }
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                        } label: {
+                            Label("Worker Information", systemImage: "desktopcomputer")
+                                .font(.system(size: 14, weight: .semibold))
                         }
 
                         // Build Statistics
-                        GroupBox(label: Label("Build Statistics", systemImage: "hammer")) {
-                            VStack(alignment: .leading, spacing: 12) {
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
                                 StatRow(label: "Total Builds", value: "\(stats.totalBuilds)")
                                 StatRow(label: "Successful", value: "\(stats.successfulBuilds)", valueColor: .green)
                                 StatRow(label: "Failed", value: "\(stats.failedBuilds)", valueColor: stats.failedBuilds > 0 ? .red : .secondary)
 
                                 if stats.totalBuilds > 0 {
+                                    Divider()
+                                        .padding(.vertical, 4)
                                     let successRate = Double(stats.successfulBuilds) / Double(stats.totalBuilds) * 100
                                     StatRow(label: "Success Rate", value: String(format: "%.1f%%", successRate))
                                 }
                             }
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                        } label: {
+                            Label("Build Statistics", systemImage: "hammer")
+                                .font(.system(size: 14, weight: .semibold))
                         }
 
                         // Configuration
-                        GroupBox(label: Label("Configuration", systemImage: "gearshape")) {
-                            VStack(alignment: .leading, spacing: 12) {
-                                StatRow(label: "Controller URL", value: configuration.controllerURL)
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Controller URL")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                    Text(configuration.controllerURL)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(.primary)
+                                        .lineLimit(2)
+                                }
+                                .padding(.vertical, 2)
+
+                                Divider()
+                                    .padding(.vertical, 4)
+
                                 StatRow(label: "Max Concurrent Builds", value: "\(configuration.maxConcurrentBuilds)")
                                 StatRow(label: "Auto-start", value: configuration.autoStart ? "Enabled" : "Disabled")
                             }
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                        } label: {
+                            Label("Configuration", systemImage: "gearshape")
+                                .font(.system(size: 14, weight: .semibold))
                         }
                     }
                     .padding(24)
@@ -168,7 +198,13 @@ struct StatisticsView: View {
                     uptime: nil
                 )
             } else if httpResponse.statusCode == 200 {
-                stats = try JSONDecoder().decode(WorkerStats.self, from: data)
+                let newStats = try JSONDecoder().decode(WorkerStats.self, from: data)
+                stats = newStats
+
+                // Calculate start time from uptime
+                if let uptime = newStats.uptime, let elapsed = parseUptime(uptime) {
+                    startTime = Date().addingTimeInterval(-elapsed)
+                }
             } else {
                 throw NSError(domain: "", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"])
             }
@@ -200,7 +236,14 @@ struct StatisticsView: View {
                 return
             }
 
-            stats = try JSONDecoder().decode(WorkerStats.self, from: data)
+            let newStats = try JSONDecoder().decode(WorkerStats.self, from: data)
+            stats = newStats
+
+            // Recalculate start time from uptime
+            if let uptime = newStats.uptime, let elapsed = parseUptime(uptime) {
+                startTime = Date().addingTimeInterval(-elapsed)
+            }
+
             lastUpdated = Date()
             error = nil
         } catch {
@@ -222,6 +265,67 @@ struct StatisticsView: View {
             return "\(hours)h ago"
         }
     }
+
+    private func parseUptime(_ uptime: String) -> TimeInterval? {
+        // Parse uptime strings like "1m 23s", "38s", "2h 15m"
+        let components = uptime.split(separator: " ")
+        var totalSeconds: TimeInterval = 0
+
+        for component in components {
+            let str = String(component)
+            if str.hasSuffix("d") {
+                let days = Double(str.dropLast()) ?? 0
+                totalSeconds += days * 86400
+            } else if str.hasSuffix("h") {
+                let hours = Double(str.dropLast()) ?? 0
+                totalSeconds += hours * 3600
+            } else if str.hasSuffix("m") {
+                let minutes = Double(str.dropLast()) ?? 0
+                totalSeconds += minutes * 60
+            } else if str.hasSuffix("s") {
+                let seconds = Double(str.dropLast()) ?? 0
+                totalSeconds += seconds
+            }
+        }
+
+        return totalSeconds > 0 ? totalSeconds : nil
+    }
+
+    private func liveUptime() -> String {
+        guard let start = startTime else {
+            return stats?.uptime ?? "—"
+        }
+
+        let elapsed = currentTime.timeIntervalSince(start)
+        return formatDuration(elapsed)
+    }
+
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds)
+        let days = s / 86400
+        let hours = (s % 86400) / 3600
+        let minutes = (s % 3600) / 60
+        let secs = s % 60
+
+        if days > 0 {
+            return String(format: "%dd %dh %dm", days, hours, minutes)
+        } else if hours > 0 {
+            return String(format: "%dh %dm %ds", hours, minutes, secs)
+        } else if minutes > 0 {
+            return String(format: "%dm %ds", minutes, secs)
+        } else {
+            return String(format: "%ds", secs)
+        }
+    }
+
+    private func statusColor(for status: String) -> Color {
+        switch status.lowercased() {
+        case "idle": return .green
+        case "building": return .blue
+        case "offline": return .red
+        default: return .secondary
+        }
+    }
 }
 
 struct StatRow: View {
@@ -230,14 +334,16 @@ struct StatRow: View {
     var valueColor: Color = .primary
 
     var body: some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline) {
             Text(label)
+                .font(.system(size: 13))
                 .foregroundColor(.secondary)
             Spacer()
             Text(value)
-                .fontWeight(.medium)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundColor(valueColor)
         }
+        .padding(.vertical, 2)
     }
 }
 

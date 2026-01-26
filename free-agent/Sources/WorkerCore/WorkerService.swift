@@ -196,7 +196,6 @@ public actor WorkerService {
 
     private func performBuild(_ job: BuildJob) async throws {
         var buildPackagePath: URL?
-        var certsPath: URL?
         var vmManager: TartVMManager?
 
         do {
@@ -204,11 +203,8 @@ public actor WorkerService {
             buildPackagePath = try await downloadBuildPackage(job)
             print("✓ Downloaded build package")
 
-            // Download signing certificates (optional - may be nil)
-            certsPath = try await downloadSigningCertificates(job)
-            if certsPath != nil {
-                print("✓ Downloaded certificates")
-            }
+            // NO CERT DOWNLOAD - VM fetches directly via bootstrap now
+            print("Skipping cert download - VM will fetch certs securely via bootstrap")
 
             // Create VM and execute build
             let vmConfig = VMConfiguration(
@@ -225,7 +221,7 @@ public actor WorkerService {
 
             let buildResult = try await vmManager!.executeBuild(
                 sourceCodePath: buildPackagePath!,
-                signingCertsPath: certsPath,
+                signingCertsPath: nil, // VM fetches via API now
                 buildTimeout: TimeInterval(configuration.buildTimeoutMinutes * 60),
                 buildId: job.id,
                 workerId: configuration.workerID,
@@ -250,10 +246,6 @@ public actor WorkerService {
                 if let path = buildPackagePath {
                     try FileManager.default.removeItem(at: path)
                 }
-
-                if let path = certsPath {
-                    try FileManager.default.removeItem(at: path)
-                }
             } catch {
                 print("Cleanup error: \(error)")
             }
@@ -268,10 +260,6 @@ public actor WorkerService {
             }
 
             if let path = buildPackagePath {
-                try FileManager.default.removeItem(at: path)
-            }
-
-            if let path = certsPath {
                 try FileManager.default.removeItem(at: path)
             }
         } catch {
@@ -309,39 +297,6 @@ public actor WorkerService {
         return packagePath
     }
 
-    private func downloadSigningCertificates(_ job: BuildJob) async throws -> URL? {
-        // certs_url is optional - may be nil if no certs provided
-        guard let certsUrl = job.certs_url else {
-            print("No certificates to download for this build")
-            return nil
-        }
-
-        let tempDir = FileManager.default.temporaryDirectory
-        let certsPath = tempDir.appendingPathComponent("certs-\(job.id)")
-
-        try FileManager.default.createDirectory(at: certsPath, withIntermediateDirectories: true)
-
-        // Use certs_url from job (relative URL like /api/builds/{id}/certs)
-        let url = URL(string: "\(configuration.controllerURL)\(certsUrl)")!
-        var request = URLRequest(url: url)
-        request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
-        // Controller requires X-Worker-Id header for source/certs downloads
-        if let workerID = configuration.workerID {
-            request.setValue(workerID, forHTTPHeaderField: "X-Worker-Id")
-        }
-
-        let (localURL, response) = try await URLSession.shared.download(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw WorkerError.downloadFailed
-        }
-
-        let certFile = certsPath.appendingPathComponent("cert.p12")
-        try FileManager.default.moveItem(at: localURL, to: certFile)
-
-        print("Downloaded certificates to \(certsPath.path)")
-        return certsPath
-    }
 
     private func uploadBuildResult(_ jobID: String, result: BuildResult) async throws {
         let url = URL(string: "\(configuration.controllerURL)/api/workers/upload")!

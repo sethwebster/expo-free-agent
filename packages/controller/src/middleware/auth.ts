@@ -35,18 +35,37 @@ export function requireApiKey(config: ControllerConfig) {
  * Worker verification hook
  * Validates that worker_id in request matches assigned worker for build
  *
+ * For secure cert endpoint, also validates X-Build-Id header
+ *
  * Usage:
  *   fastify.addHook('preHandler', requireWorkerAccess(db));
+ *   fastify.addHook('preHandler', requireWorkerAccess(db, true)); // Require X-Build-Id
  */
-export function requireWorkerAccess(db: DatabaseService) {
+export function requireWorkerAccess(db: DatabaseService, requireBuildIdHeader = false) {
   return async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const workerId = request.headers['x-worker-id'] as string;
+    const buildIdHeader = request.headers['x-build-id'] as string;
     const buildId = request.params.id;
 
     if (!workerId) {
       return reply.status(401).send({
         error: 'Missing X-Worker-Id header',
       });
+    }
+
+    // For secure cert endpoint, require X-Build-Id header and verify match
+    if (requireBuildIdHeader) {
+      if (!buildIdHeader) {
+        return reply.status(401).send({
+          error: 'Missing X-Build-Id header',
+        });
+      }
+
+      if (buildIdHeader !== buildId) {
+        return reply.status(403).send({
+          error: 'X-Build-Id header does not match build ID in URL',
+        });
+      }
     }
 
     const build = db.getBuild(buildId);

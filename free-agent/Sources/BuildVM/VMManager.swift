@@ -410,7 +410,7 @@ extension VMManager: VZVirtualMachineDelegate {
 
 // MARK: - Errors
 
-public enum VMError: Error {
+public enum VMError: Error, LocalizedError {
     case virtualizationNotSupported
     case vmNotInitialized
     case invalidHardwareModel
@@ -418,6 +418,28 @@ public enum VMError: Error {
     case installationFailed
     case buildFailed
     case artifactNotFound
+    case bootstrapTimeout
+
+    public var errorDescription: String? {
+        switch self {
+        case .virtualizationNotSupported:
+            return "Virtualization is not supported on this system"
+        case .vmNotInitialized:
+            return "VM not initialized"
+        case .invalidHardwareModel:
+            return "Invalid hardware model"
+        case .invalidMachineIdentifier:
+            return "Invalid machine identifier"
+        case .installationFailed:
+            return "Installation failed"
+        case .buildFailed:
+            return "Build failed"
+        case .artifactNotFound:
+            return "Artifact not found"
+        case .bootstrapTimeout:
+            return "VM bootstrap timed out - check /tmp/free-agent-bootstrap.log in VM"
+        }
+    }
 }
 
 struct TimeoutError: Error {}
