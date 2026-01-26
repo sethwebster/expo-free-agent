@@ -93,9 +93,7 @@ function Hero() {
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
-    const handleScroll = () => {
-      requestAnimationFrame(() => setScrollY(window.scrollY));
-    };
+    const handleScroll = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
@@ -142,8 +140,8 @@ function Hero() {
                   key={i}
                   className="inline-block will-change-transform"
                   style={{
-                    transform: `translateY(-${Math.max(0, scrollY - (i * 50)) * 1.5}px)`,
-                    filter: `blur(${Math.max(0, scrollY - (i * 50)) * 0.05}px)`,
+                    transform: `translateY(-${Math.max(0, scrollY - (i * 30)) * 1.5}px)`,
+                    filter: `blur(${Math.max(0, scrollY - (i * 30)) * 0.05}px)`,
                     backdropFilter: 'blur(5px)',
                     WebkitBackdropFilter: 'blur(5px)',
                   }}
