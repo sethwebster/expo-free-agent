@@ -277,19 +277,25 @@ async function installWorker(options: InstallOptions): Promise<void> {
   const downloadSpinner = ora('Fetching latest release...').start();
 
   try {
-    const result = await downloadAndVerifyRelease((progress) => {
-      const percent = progress.percent.toFixed(1);
-      const mb = (progress.transferred / 1024 / 1024).toFixed(1);
-      const totalMb = (progress.total / 1024 / 1024).toFixed(1);
-      downloadSpinner.text = `Downloading ${version || 'release'}... ${percent}% (${mb}/${totalMb} MB)`;
-    });
+    const result = await downloadAndVerifyRelease(
+      (progress) => {
+        const percent = progress.percent.toFixed(1);
+        const mb = (progress.transferred / 1024 / 1024).toFixed(1);
+        const totalMb = (progress.total / 1024 / 1024).toFixed(1);
+        downloadSpinner.text = `Downloading ${version || 'release'}... ${percent}% (${mb}/${totalMb} MB)`;
+      },
+      (attempt, maxRetries, error) => {
+        downloadSpinner.warn(`Download attempt ${attempt - 1} failed: ${error.message}`);
+        downloadSpinner.start(`Retrying download (attempt ${attempt}/${maxRetries})...`);
+      }
+    );
 
     appPath = result.appPath;
     version = result.version;
 
     downloadSpinner.succeed(`Downloaded ${version}`);
   } catch (error) {
-    downloadSpinner.fail('Download failed');
+    downloadSpinner.fail('Download failed after multiple attempts');
     throw error;
   }
 

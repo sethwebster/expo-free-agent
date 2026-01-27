@@ -2,8 +2,8 @@ import Foundation
 
 extension Foundation.Bundle {
     /// Custom resource bundle accessor for production builds
-    /// Looks in Contents/Resources/FreeAgent_FreeAgent.bundle
-    static let resources: Bundle = {
+    /// Overrides SPM auto-generated accessor to look in Contents/Resources/
+    private static func findResourceBundle() -> Bundle {
         // Production path: Contents/Resources/FreeAgent_FreeAgent.bundle
         let resourcesPath = Bundle.main.bundleURL
             .appendingPathComponent("Contents")
@@ -19,8 +19,13 @@ extension Foundation.Bundle {
         } else if let bundle = Bundle(path: devResourcesPath) {
             return bundle
         } else {
-            // Create a bundle from the main bundle's resource path
-            return Bundle.main
+            Swift.fatalError("could not load resource bundle: from \(resourcesPath) or \(devResourcesPath)")
         }
-    }()
+    }
+
+    /// SPM-compatible accessor (overrides auto-generated version)
+    static let module: Bundle = findResourceBundle()
+
+    /// Convenience accessor
+    static let resources: Bundle = findResourceBundle()
 }

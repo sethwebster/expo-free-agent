@@ -8,7 +8,7 @@ import * as tar from 'tar';
 const APP_NAME = 'FreeAgent.app';
 // Direct download URL - update this when you publish new versions
 const DOWNLOAD_URL = process.env.FREEAGENT_DOWNLOAD_URL || 'https://github.com/sethwebster/expo-free-agent/releases/latest/download/FreeAgent.app.tar.gz';
-const VERSION = '0.1.3';
+const VERSION = '0.1.4';
 
 export interface DownloadProgress {
   percent: number;
@@ -21,14 +21,12 @@ export interface ReleaseInfo {
   download_url: string;
 }
 
-export async function downloadBinary(
+async function downloadBinaryAttempt(
   url: string,
+  tempDir: string,
+  filename: string,
   onProgress?: (progress: DownloadProgress) => void
 ): Promise<string> {
-  const tempDir = join(tmpdir(), `expo-free-agent-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
-
-  const filename = url.split('/').pop() || 'download.tar.gz';
   const downloadPath = join(tempDir, filename);
 
   const response = await fetch(url);
@@ -70,6 +68,65 @@ export async function downloadBinary(
   return downloadPath;
 }
 
+export interface DownloadOptions {
+  onProgress?: (progress: DownloadProgress) => void;
+  onRetry?: (attempt: number, maxRetries: number, error: Error) => void;
+  maxRetries?: number;
+}
+
+export async function downloadBinary(
+  url: string,
+  options: DownloadOptions = {}
+): Promise<string> {
+  const { onProgress, onRetry, maxRetries = 3 } = options;
+
+  const tempDir = join(tmpdir(), `expo-free-agent-${Date.now()}`);
+  mkdirSync(tempDir, { recursive: true });
+
+  const filename = url.split('/').pop() || 'download.tar.gz';
+  const downloadPath = join(tempDir, filename);
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 1) {
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        // Clean up partial download
+        try {
+          rmSync(downloadPath, { force: true });
+        } catch {
+          // Ignore cleanup errors
+        }
+
+        if (onRetry) {
+          onRetry(attempt, maxRetries, lastError!);
+        }
+      }
+
+      return await downloadBinaryAttempt(url, tempDir, filename, onProgress);
+    } catch (error) {
+      lastError = error as Error;
+
+      if (attempt === maxRetries) {
+        // Cleanup temp dir on final failure
+        try {
+          rmSync(tempDir, { recursive: true, force: true });
+        } catch {
+          // Ignore cleanup errors
+        }
+        throw new Error(`Download failed after ${maxRetries} attempts: ${lastError.message}`);
+      }
+    }
+  }
+
+  // Shouldn't reach here but TypeScript needs it
+  throw lastError || new Error('Download failed');
+}
+
 export async function extractApp(tarballPath: string, destination: string): Promise<string> {
   const extractDir = join(tmpdir(), `expo-free-agent-extract-${Date.now()}`);
   mkdirSync(extractDir, { recursive: true });
@@ -105,9 +162,10 @@ export function getSigningInfo(appPath: string): string | null {
 }
 
 export async function downloadAndVerifyRelease(
-  onProgress?: (progress: DownloadProgress) => void
+  onProgress?: (progress: DownloadProgress) => void,
+  onRetry?: (attempt: number, maxRetries: number, error: Error) => void
 ): Promise<{ appPath: string; version: string }> {
-  const tarballPath = await downloadBinary(DOWNLOAD_URL, onProgress);
+  const tarballPath = await downloadBinary(DOWNLOAD_URL, { onProgress, onRetry });
   const appPath = await extractApp(tarballPath, tmpdir());
 
   // Cleanup tarball
