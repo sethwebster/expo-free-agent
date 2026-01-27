@@ -40,30 +40,50 @@ async function downloadBinaryAttempt(
 
   const fileStream = createWriteStream(downloadPath);
 
-  if (response.body) {
-    const reader = response.body.getReader();
+  // Wait for stream to finish writing before returning
+  await new Promise<void>((resolve, reject) => {
+    fileStream.on('finish', resolve);
+    fileStream.on('error', reject);
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
+    if (response.body) {
+      const reader = response.body.getReader();
 
-        if (done) break;
+      const pump = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
 
-        downloaded += value.length;
-        fileStream.write(value);
+            if (done) {
+              fileStream.end();
+              break;
+            }
 
-        if (onProgress && contentLength > 0) {
-          onProgress({
-            percent: (downloaded / contentLength) * 100,
-            transferred: downloaded,
-            total: contentLength
-          });
+            downloaded += value.length;
+
+            // Check if stream is ready for more data
+            if (!fileStream.write(value)) {
+              await new Promise(resolve => fileStream.once('drain', resolve));
+            }
+
+            if (onProgress && contentLength > 0) {
+              onProgress({
+                percent: (downloaded / contentLength) * 100,
+                transferred: downloaded,
+                total: contentLength
+              });
+            }
+          }
+        } catch (error) {
+          fileStream.destroy();
+          reject(error);
         }
-      }
-    } finally {
+      };
+
+      pump();
+    } else {
       fileStream.end();
     }
-  }
+  });
 
   return downloadPath;
 }
