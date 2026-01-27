@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Service Identification -->
+    <key>Label</key>
+    <string>com.expo.free-agent.bootstrap</string>
+
+    <!-- Program Configuration -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/free-agent-vm-bootstrap</string>
+    </array>
+
+    <!-- Execution Timing -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>/tmp/free-agent-bootstrap.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/free-agent-bootstrap.log</string>
+
+    <!-- Environment Variables (populated by Tart --env) -->
+    <!-- These are passed from the host via: tart run --env KEY=VALUE -->
+    <!-- The LaunchDaemon automatically inherits environment variables -->
+    <!-- from the parent process (Tart VM), so no explicit configuration -->
+    <!-- is needed here. -->
+
+    <!-- Working Directory -->
+    <key>WorkingDirectory</key>
+    <string>/tmp</string>
+
+    <!-- Process Management -->
+    <key>AbandonProcessGroup</key>
+    <false/>
+
+    <!-- Security -->
+    <key>SessionCreate</key>
+    <false/>
+
+    <!-- Don't restart on failure (one-shot bootstrap) -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <!-- Timeout Configuration -->
+    <key>ExitTimeOut</key>
+    <integer>300</integer>
+
+    <!-- Run as user (will inherit from Tart VM context) -->
+    <key>UserName</key>
+    <string>admin</string>
+    <key>GroupName</key>
+    <string>staff</string>
+
+    <!-- Disable throttling for immediate execution -->
+    <key>ThrottleInterval</key>
+    <integer>0</integer>
+</dict>
+</plist>

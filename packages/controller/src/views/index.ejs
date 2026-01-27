@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expo Free Agent Controller<% if (isDemo) { %> - Demo<% } %></title>
+  <% if (isDemo) { %>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <% } %>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: white;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #111;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .demo-badge {
+      display: inline-block;
+      margin-left: 12px;
+      padding: 4px 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 4px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .chart-card {
+      background: white;
+      padding: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+    }
+
+    .chart-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #111;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+
+    .section {
+      background: white;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #111;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px;
+      background: #f9f9f9;
+      font-weight: 600;
+      font-size: 14px;
+      color: #666;
+    }
+
+    td {
+      padding: 12px;
+      font-size: 14px;
+      color: #111;
+    }
+
+    tr:not(:last-child) {
+      border-bottom: 1px solid #eee;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #e5e5e5;
+      color: #666;
+      border-radius: 4px;
+    }
+
+    .badge.pending { background: #fef3c7; color: #92400e; }
+    .badge.assigned { background: #dbeafe; color: #1e40af; }
+    .badge.building { background: #dbeafe; color: #1e40af; }
+    .badge.completed { background: #d1fae5; color: #065f46; }
+    .badge.failed { background: #fee2e2; color: #991b1b; }
+
+    .badge.idle { background: #d1fae5; color: #065f46; }
+    .badge.offline { background: #e5e5e5; color: #666; }
+
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-size: 14px;
+    }
+
+    a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        Expo Free Agent Controller
+        <% if (isDemo) { %><span class="demo-badge">Demo Mode</span><% } %>
+      </h1>
+    </header>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.totalBuilds %></div>
+        <div class="stat-label">Total Builds</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.pendingBuilds %></div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.activeBuilds %></div>
+        <div class="stat-label">Active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value"><%= stats.totalWorkers %></div>
+        <div class="stat-label">Workers</div>
+      </div>
+    </div>
+
+    <% if (isDemo && chartData) { %>
+    <!-- Analytics Charts -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>📊 Builds Over Time (Last 7 Days)</h3>
+        <div class="chart-container">
+          <canvas id="buildsOverTimeChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>📱 Platform Distribution</h3>
+        <div class="chart-container">
+          <canvas id="platformChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>✅ Build Status Distribution</h3>
+        <div class="chart-container">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>⚡ Success Rate (Last 24 Hours)</h3>
+        <div class="chart-container">
+          <canvas id="successRateChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>👷 Worker Utilization</h3>
+        <div class="chart-container">
+          <canvas id="workerUtilizationChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>⏱️ Average Build Duration</h3>
+        <div class="chart-container">
+          <canvas id="buildDurationChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <% } %>
+
+    <div class="section">
+      <h2>Recent Builds</h2>
+      <% if (builds.length === 0) { %>
+        <div class="empty">No builds yet</div>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Platform</th>
+              <th>Status</th>
+              <th>Worker</th>
+              <th>Submitted</th>
+              <th>Duration</th>
+              <% if (!isDemo) { %>
+              <th>Actions</th>
+              <% } %>
+            </tr>
+          </thead>
+          <tbody>
+            <% builds.forEach(build => { %>
+              <tr>
+                <td><code><%= build.id.substring(0, 8) %></code></td>
+                <td><%= build.platform %></td>
+                <td><span class="badge <%= build.status %>"><%= build.status %></span></td>
+                <td>
+                  <% if (build.worker_name) { %>
+                    <%= build.worker_name %>
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td><%= new Date(build.submitted_at).toLocaleString() %></td>
+                <td>
+                  <% if (build.completed_at) { %>
+                    <%= Math.round((build.completed_at - build.submitted_at) / 1000) %>s
+                  <% } else if (build.started_at) { %>
+                    <%= Math.round((Date.now() - build.started_at) / 1000) %>s
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <% if (!isDemo) { %>
+                <td>
+                  <a href="/api/builds/<%= build.id %>/status">Status</a>
+                  <% if (build.status === 'completed') { %>
+                    | <a href="/api/builds/<%= build.id %>/download">Download</a>
+                  <% } %>
+                </td>
+                <% } %>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+
+    <div class="section">
+      <h2>Workers</h2>
+      <% if (workers.length === 0) { %>
+        <div class="empty">No workers registered</div>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Capabilities</th>
+              <th>Completed</th>
+              <th>Failed</th>
+              <th>Last Seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% workers.forEach(worker => { %>
+              <tr>
+                <td><%= worker.name %></td>
+                <td><span class="badge <%= worker.status %>"><%= worker.status %></span></td>
+                <td>
+                  <%
+                    const caps = JSON.parse(worker.capabilities);
+                    const platforms = caps.platforms || [];
+                  %>
+                  <%= platforms.join(', ') %>
+                </td>
+                <td><%= worker.builds_completed %></td>
+                <td><%= worker.builds_failed %></td>
+                <td><%= new Date(worker.last_seen_at).toLocaleString() %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (isDemo && chartData) { %>
+  <script>
+    // Chart.js default config
+    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    Chart.defaults.color = '#666';
+
+    // Builds Over Time Chart
+    new Chart(document.getElementById('buildsOverTimeChart'), {
+      type: 'line',
+      data: {
+        labels: <%- JSON.stringify(chartData.buildsOverTime.map(d => d.date)) %>,
+        datasets: [
+          {
+            label: 'iOS',
+            data: <%- JSON.stringify(chartData.buildsOverTime.map(d => d.ios)) %>,
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            fill: true,
+            tension: 0.4,
+          },
+          {
+            label: 'Android',
+            data: <%- JSON.stringify(chartData.buildsOverTime.map(d => d.android)) %>,
+            borderColor: '#3ddc84',
+            backgroundColor: 'rgba(61, 220, 132, 0.1)',
+            fill: true,
+            tension: 0.4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              precision: 0
+            }
+          }
+        }
+      }
+    });
+
+    // Platform Distribution Chart
+    new Chart(document.getElementById('platformChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['iOS', 'Android'],
+        datasets: [{
+          data: [
+            <%= chartData.platformDistribution.ios %>,
+            <%= chartData.platformDistribution.android %>
+          ],
+          backgroundColor: [
+            '#667eea',
+            '#3ddc84'
+          ],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+          }
+        }
+      }
+    });
+
+    // Status Distribution Chart
+    new Chart(document.getElementById('statusChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Completed', 'Failed', 'Building', 'Pending'],
+        datasets: [{
+          data: [
+            <%= chartData.statusDistribution.completed %>,
+            <%= chartData.statusDistribution.failed %>,
+            <%= chartData.statusDistribution.building %>,
+            <%= chartData.statusDistribution.pending %>
+          ],
+          backgroundColor: [
+            '#10b981',
+            '#ef4444',
+            '#3b82f6',
+            '#f59e0b'
+          ],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+          }
+        }
+      }
+    });
+
+    // Success Rate Chart
+    new Chart(document.getElementById('successRateChart'), {
+      type: 'bar',
+      data: {
+        labels: <%- JSON.stringify(chartData.successRate.map(d => `${d.hour}:00`)) %>,
+        datasets: [
+          {
+            label: 'Success',
+            data: <%- JSON.stringify(chartData.successRate.map(d => d.success)) %>,
+            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+          },
+          {
+            label: 'Failed',
+            data: <%- JSON.stringify(chartData.successRate.map(d => d.failed)) %>,
+            backgroundColor: 'rgba(239, 68, 68, 0.8)',
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+          }
+        },
+        scales: {
+          x: {
+            stacked: true,
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            ticks: {
+              precision: 0
+            }
+          }
+        }
+      }
+    });
+
+    // Worker Utilization Chart
+    new Chart(document.getElementById('workerUtilizationChart'), {
+      type: 'bar',
+      data: {
+        labels: <%- JSON.stringify(chartData.workerUtilization.map(w => w.worker)) %>,
+        datasets: [
+          {
+            label: 'Completed',
+            data: <%- JSON.stringify(chartData.workerUtilization.map(w => w.completed)) %>,
+            backgroundColor: 'rgba(102, 126, 234, 0.8)',
+          },
+          {
+            label: 'Failed',
+            data: <%- JSON.stringify(chartData.workerUtilization.map(w => w.failed)) %>,
+            backgroundColor: 'rgba(239, 68, 68, 0.8)',
+          }
+        ]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+          }
+        },
+        scales: {
+          x: {
+            stacked: true,
+            beginAtZero: true,
+          },
+          y: {
+            stacked: true,
+          }
+        }
+      }
+    });
+
+    // Build Duration Chart
+    new Chart(document.getElementById('buildDurationChart'), {
+      type: 'bar',
+      data: {
+        labels: <%- JSON.stringify(chartData.buildDurations.map(d => d.platform)) %>,
+        datasets: [
+          {
+            label: 'Min Duration (s)',
+            data: <%- JSON.stringify(chartData.buildDurations.map(d => d.minDuration)) %>,
+            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+          },
+          {
+            label: 'Avg Duration (s)',
+            data: <%- JSON.stringify(chartData.buildDurations.map(d => d.avgDuration)) %>,
+            backgroundColor: 'rgba(102, 126, 234, 0.8)',
+          },
+          {
+            label: 'Max Duration (s)',
+            data: <%- JSON.stringify(chartData.buildDurations.map(d => d.maxDuration)) %>,
+            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+          }
+        }
+      }
+    });
+  </script>
+  <% } %>
+</body>
+</html>

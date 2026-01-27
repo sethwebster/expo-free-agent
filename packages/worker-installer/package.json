@@ -1,0 +1,48 @@
+{
+  "name": "@sethwebster/expo-free-agent-worker",
+  "version": "0.1.6",
+  "description": "Install and configure the Expo Free Agent Worker macOS app",
+  "type": "module",
+  "bin": {
+    "expo-free-agent-worker": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun build src/cli.ts --outdir=dist --target=node",
+    "dev": "bun run src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src/__tests__",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "expo",
+    "free-agent",
+    "build-worker",
+    "ios",
+    "android",
+    "ci"
+  ],
+  "author": "Expo",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^12.1.0",
+    "ora": "^8.1.1",
+    "prompts": "^2.4.2",
+    "tar": "^7.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/prompts": "^2.4.9",
+    "@types/tar": "^6.1.13",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

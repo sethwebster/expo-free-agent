@@ -1,0 +1,39 @@
+{
+  "name": "@expo-free-agent/landing-page",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "bun run build && CLOUDFLARE_ACCOUNT_ID=76a59d239619ed344d267008c790ba18 wrangler pages deploy dist --project-name=expo-free-agent --commit-dirty=true"
+  },
+  "devDependencies": {
+    "@cloudflare/kv-asset-handler": "^0.4.2",
+    "@cloudflare/workers-types": "^4.20260127.0",
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/bun": "latest",
+    "@types/three": "^0.182.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "autoprefixer": "^10.4.23",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "vite": "^7.3.1",
+    "wrangler": "^4.60.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@react-three/postprocessing": "^3.0.4",
+    "@types/react": "^19.2.9",
+    "@types/react-dom": "^19.2.3",
+    "cobe": "^0.6.5",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "three": "^0.182.0"
+  }
+}

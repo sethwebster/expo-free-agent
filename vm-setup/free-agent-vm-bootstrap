@@ -1,0 +1,232 @@
+#!/bin/bash
+#
+# free-agent-vm-bootstrap
+#
+# VM bootstrap script for secure certificate handling.
+# Runs at VM boot via LaunchDaemon.
+#
+# Responsibilities:
+#   1. Randomize admin password (prevents host SSH access)
+#   2. Remove SSH authorized_keys
+#   3. Validate required environment variables
+#   4. Fetch signing certificates from controller
+#   5. Install certificates via helper script
+#   6. Securely delete certificate files
+#   7. Signal bootstrap completion
+#
+# Environment Variables (passed by Tart --env):
+#   - BUILD_ID: Build identifier
+#   - WORKER_ID: Worker identifier
+#   - API_KEY: Authentication key
+#   - CONTROLLER_URL: Controller base URL
+#
+# Exit Codes:
+#   0: Success
+#   1: Missing environment variables
+#   2: Certificate fetch failed (after retries)
+#   3: Certificate installation failed
+#
+
+set -e
+set -o pipefail
+
+# Configuration
+LOG_FILE="/tmp/free-agent-bootstrap.log"
+READY_SIGNAL="/tmp/free-agent-ready"
+CERTS_FILE="/tmp/certs-secure.json"
+MAX_RETRIES=3
+RETRY_DELAYS=(5 15 45)  # Exponential backoff: 5s, 15s, 45s
+
+# Logging helper
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+# Error handler
+error_exit() {
+    log "ERROR: $1"
+    exit "${2:-1}"
+}
+
+# Secure file deletion (shred if available, fallback to rm)
+secure_delete() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        return 0
+    fi
+
+    if command -v shred &> /dev/null; then
+        log "Shredding $file..."
+        shred -u -n 3 "$file" 2>/dev/null || rm -f "$file"
+    else
+        log "Shred not available, using rm for $file..."
+        rm -f "$file"
+    fi
+}
+
+# Cleanup on exit
+cleanup() {
+    log "Cleaning up temporary files..."
+    secure_delete "$CERTS_FILE"
+}
+trap cleanup EXIT
+
+# ========================================
+# Phase 1: Security Lockdown
+# ========================================
+
+log "=========================================="
+log "Expo Free Agent - VM Bootstrap"
+log "=========================================="
+
+log "Phase 1: Randomizing admin password..."
+NEW_PASSWORD=$(openssl rand -base64 32)
+if dscl . -passwd /Users/admin "$NEW_PASSWORD" 2>/dev/null; then
+    log "✓ Admin password randomized (32 bytes)"
+    # Clear password from memory
+    unset NEW_PASSWORD
+else
+    error_exit "Failed to randomize admin password" 1
+fi
+
+log "Phase 1: Removing SSH authorized_keys..."
+if [[ -f ~/.ssh/authorized_keys ]]; then
+    secure_delete ~/.ssh/authorized_keys
+    log "✓ SSH authorized_keys removed"
+else
+    log "✓ No authorized_keys found (already clean)"
+fi
+
+log "Phase 1: Security lockdown complete"
+
+# ========================================
+# Phase 2: Environment Validation
+# ========================================
+
+log "Phase 2: Validating environment variables..."
+
+MISSING_VARS=()
+[[ -z "${BUILD_ID:-}" ]] && MISSING_VARS+=("BUILD_ID")
+[[ -z "${WORKER_ID:-}" ]] && MISSING_VARS+=("WORKER_ID")
+[[ -z "${API_KEY:-}" ]] && MISSING_VARS+=("API_KEY")
+[[ -z "${CONTROLLER_URL:-}" ]] && MISSING_VARS+=("CONTROLLER_URL")
+
+if [[ ${#MISSING_VARS[@]} -gt 0 ]]; then
+    error_exit "Missing required environment variables: ${MISSING_VARS[*]}" 1
+fi
+
+# Validate format to prevent shell injection
+if ! [[ "$BUILD_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    error_exit "Invalid BUILD_ID format (must be alphanumeric, hyphens, underscores only)" 1
+fi
+if ! [[ "$WORKER_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    error_exit "Invalid WORKER_ID format (must be alphanumeric, hyphens, underscores only)" 1
+fi
+if ! [[ "$API_KEY" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    error_exit "Invalid API_KEY format (must be alphanumeric, hyphens, underscores only)" 1
+fi
+if ! [[ "$CONTROLLER_URL" =~ ^https?://[a-zA-Z0-9._:-]+(/[a-zA-Z0-9._/-]*)?$ ]]; then
+    error_exit "Invalid CONTROLLER_URL format (must be valid HTTP/HTTPS URL)" 1
+fi
+
+log "✓ BUILD_ID: $BUILD_ID"
+log "✓ WORKER_ID: $WORKER_ID"
+log "✓ API_KEY: [REDACTED]" # Never log API keys
+log "✓ CONTROLLER_URL: $CONTROLLER_URL"
+
+# ========================================
+# Phase 3: Fetch Certificates
+# ========================================
+
+log "Phase 3: Fetching signing certificates from controller..."
+
+FETCH_URL="${CONTROLLER_URL}/api/builds/${BUILD_ID}/certs-secure"
+FETCH_SUCCESS=false
+
+for attempt in $(seq 1 $MAX_RETRIES); do
+    log "Attempt $attempt/$MAX_RETRIES: Fetching from $FETCH_URL"
+
+    HTTP_CODE=$(curl -w "%{http_code}" -o "$CERTS_FILE" \
+        -H "X-API-Key: $API_KEY" \
+        -H "X-Worker-Id: $WORKER_ID" \
+        -H "X-Build-Id: $BUILD_ID" \
+        -H "Accept: application/json" \
+        --silent \
+        --show-error \
+        --max-time 30 \
+        "$FETCH_URL" 2>&1 | tail -n 1 || echo "000")
+
+    if [[ "$HTTP_CODE" == "200" ]]; then
+        # Verify JSON is valid
+        if jq empty "$CERTS_FILE" 2>/dev/null; then
+            log "✓ Certificates fetched successfully (HTTP $HTTP_CODE)"
+            FETCH_SUCCESS=true
+            break
+        else
+            log "✗ Invalid JSON response (HTTP $HTTP_CODE)"
+            secure_delete "$CERTS_FILE"
+        fi
+    elif [[ "$HTTP_CODE" == "404" ]]; then
+        error_exit "Certificates not found for build $BUILD_ID (HTTP 404)" 2
+    elif [[ "$HTTP_CODE" == "403" ]]; then
+        error_exit "Worker $WORKER_ID not authorized for build $BUILD_ID (HTTP 403)" 2
+    else
+        log "✗ Fetch failed (HTTP $HTTP_CODE)"
+    fi
+
+    # Retry with exponential backoff (except on last attempt)
+    if [[ $attempt -lt $MAX_RETRIES ]]; then
+        DELAY=${RETRY_DELAYS[$((attempt - 1))]}
+        log "Retrying in ${DELAY}s..."
+        sleep "$DELAY"
+    fi
+done
+
+if [[ "$FETCH_SUCCESS" != "true" ]]; then
+    error_exit "Failed to fetch certificates after $MAX_RETRIES attempts" 2
+fi
+
+# Verify cert bundle structure
+log "Validating certificate bundle structure..."
+REQUIRED_KEYS=("p12" "p12Password" "keychainPassword" "provisioningProfiles")
+for key in "${REQUIRED_KEYS[@]}"; do
+    if ! jq -e ".$key" "$CERTS_FILE" >/dev/null 2>&1; then
+        error_exit "Missing required key in cert bundle: $key" 2
+    fi
+done
+log "✓ Certificate bundle structure valid"
+
+# ========================================
+# Phase 4: Install Certificates
+# ========================================
+
+log "Phase 4: Installing signing certificates..."
+
+if [[ ! -x /usr/local/bin/install-signing-certs ]]; then
+    error_exit "Certificate installer not found: /usr/local/bin/install-signing-certs" 3
+fi
+
+if /usr/local/bin/install-signing-certs --certs "$CERTS_FILE" >> "$LOG_FILE" 2>&1; then
+    log "✓ Certificates installed successfully"
+else
+    EXIT_CODE=$?
+    error_exit "Certificate installation failed (exit code: $EXIT_CODE)" 3
+fi
+
+# ========================================
+# Phase 5: Cleanup & Signal
+# ========================================
+
+log "Phase 5: Cleaning up certificate files..."
+secure_delete "$CERTS_FILE"
+log "✓ Certificate files securely deleted"
+
+log "Phase 5: Signaling bootstrap completion..."
+touch "$READY_SIGNAL"
+log "✓ Ready signal created: $READY_SIGNAL"
+
+log "=========================================="
+log "Bootstrap complete! VM ready for builds."
+log "=========================================="
+
+exit 0

@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand: #4f46e5;
+
+  --animate-letter-rise: letter-rise 1.5s cubic-bezier(0.2, 0, 0.4, 1) both;
+
+  @keyframes letter-rise {
+    0% {
+      transform: translateY(120%) scale(0.8);
+      opacity: 0;
+      filter: blur(12px) drop-shadow(0 10px 10px rgba(0,0,0,0.5));
+    }
+
+    40% {
+      transform: translateY(-15px) scale(1.1);
+      opacity: 1;
+      color: transparent;
+      filter: blur(0) drop-shadow(0 30px 40px transparent);
+    }
+
+    70% {
+       transform: translateY(5px) scale(1.02);
+       filter: blur(0) drop-shadow(0 20px 20px rgba(0,0,0,0.4));
+    }
+
+    100% {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      color: transparent;
+      filter: blur(0) drop-shadow(0 10px 3px rgba(0,0,0,0.5));
+    }
+  }
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body {
+    @apply font-sans antialiased;
+    background-color: #ffffff;
+    color: #18181b;
+  }
+  @variant dark {
+    body { background-color: #000000; color: #fafafa; }
+  }
+}
