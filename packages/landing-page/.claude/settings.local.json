@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PORT=5175 npx vite:*)",
+      "Bash(npx vite)",
+      "Bash(ps:*)",
+      "Bash(npx vite:*)"
+    ]
+  }
+}

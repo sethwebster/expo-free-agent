@@ -71,7 +71,7 @@ defmodule ExpoController.Orchestration.HeartbeatMonitor do
     stuck_count = check_stuck_builds(state.build_timeout)
 
     if stuck_count > 0 do
-      Logger.warn("Marked #{stuck_count} builds as failed due to timeout")
+      Logger.warning("Marked #{stuck_count} builds as failed due to timeout")
     end
 
     # Check for offline workers

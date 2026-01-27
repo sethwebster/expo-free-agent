@@ -7,7 +7,7 @@ defmodule ExpoController.Orchestration.QueueManager do
   use GenServer
   require Logger
 
-  alias ExpoController.{Builds, Workers}
+  alias ExpoController.Builds
   alias Phoenix.PubSub
 
   # Client API
@@ -63,6 +63,9 @@ defmodule ExpoController.Orchestration.QueueManager do
 
     broadcast_queue_updated(length(new_queue))
 
+    # Notify idle workers that a job is available
+    broadcast_job_available()
+
     {:reply, :ok, new_state}
   end
 
@@ -82,7 +85,7 @@ defmodule ExpoController.Orchestration.QueueManager do
 
           {:error, reason} ->
             # Build couldn't be assigned, remove from queue anyway
-            Logger.warn("Failed to assign build #{build_id}: #{inspect(reason)}")
+            Logger.warning("Failed to assign build #{build_id}: #{inspect(reason)}")
             new_state = %{state | queue: rest}
             {:reply, {:error, reason}, new_state}
         end
@@ -151,6 +154,10 @@ defmodule ExpoController.Orchestration.QueueManager do
 
   defp broadcast_queue_updated(count) do
     broadcast("queue:updated", %{pending_count: count})
+  end
+
+  defp broadcast_job_available do
+    broadcast("job:available", %{})
   end
 
   defp broadcast(event, payload) do

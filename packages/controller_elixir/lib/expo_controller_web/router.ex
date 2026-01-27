@@ -1,8 +1,32 @@
 defmodule ExpoControllerWeb.Router do
   use ExpoControllerWeb, :router
+  import Phoenix.LiveView.Router
+
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {ExpoControllerWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
 
   pipeline :api do
     plug :accepts, ["json"]
+  end
+
+  # Public dashboard (no auth required)
+  scope "/", ExpoControllerWeb do
+    pipe_through :browser
+
+    live "/", DashboardLive
+  end
+
+  # Public statistics endpoint (no auth required - for landing page)
+  scope "/public", ExpoControllerWeb do
+    pipe_through :api
+
+    get "/stats", PublicController, :stats
   end
 
   scope "/api", ExpoControllerWeb do
@@ -16,13 +40,13 @@ defmodule ExpoControllerWeb.Router do
     post "/workers/heartbeat", WorkerController, :heartbeat
 
     # Build endpoints
+    get "/builds/statistics", BuildController, :statistics
+
     resources "/builds", BuildController, only: [:index, :show, :create] do
       get "/logs", BuildController, :logs
       get "/download/:type", BuildController, :download
       post "/cancel", BuildController, :cancel
     end
-
-    get "/builds/statistics", BuildController, :statistics
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

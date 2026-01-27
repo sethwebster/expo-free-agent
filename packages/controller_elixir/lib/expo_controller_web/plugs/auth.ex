@@ -6,7 +6,7 @@ defmodule ExpoControllerWeb.Plugs.Auth do
   import Plug.Conn
   import Phoenix.Controller
 
-  alias ExpoController.{Workers, Builds}
+  alias ExpoController.Workers
 
   @doc """
   Validates the API key from the X-API-Key header.

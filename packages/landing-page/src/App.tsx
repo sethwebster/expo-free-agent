@@ -11,6 +11,8 @@ export default function App() {
         <Hero />
         <BentoGrid />
         <HowItWorks />
+        <GetStarted />
+        <Footer />
       </div>
     </NetworkProvider>
   );
@@ -34,7 +36,7 @@ function Hero() {
   return (
     <section className="relative h-screen flex flex-col justify-center overflow-hidden">
       {/* Interactive WebGL Background */}
-      <div className="fixed inset-0 z-0">
+      <div className="absolute inset-0 z-0">
         <HeroVisualization
           className="w-full h-full"
           nodeCount={18}
@@ -43,6 +45,8 @@ function Hero() {
           disappearanceRate={5}
           scrollProgress={scrollProgress}
         />
+        {/* Bottom fade gradient */}
+        <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-white dark:from-black to-transparent pointer-events-none z-10" />
       </div>
 
       {/* Content */}
@@ -222,5 +226,85 @@ function Step({ num, title, desc, side }: { num: string; title: string; desc: st
       </div>
       <div className="hidden md:block flex-1" />
     </div>
+  );
+}
+
+function GetStarted() {
+  return (
+    <section id="get-started" className="py-32 bg-white dark:bg-zinc-950 px-6">
+      <div className="max-w-[980px] mx-auto text-center">
+        <h2 className="text-4xl md:text-6xl font-semibold tracking-tighter mb-8 text-zinc-900 dark:text-white">
+          Ready to build?
+        </h2>
+        <p className="text-xl text-zinc-500 mb-12 font-medium">Submit your first build in seconds. No signup required.</p>
+
+        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-12">
+          <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-8 shadow-xl text-left">
+            <h3 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-white">Submit a Build</h3>
+            <div className="flex gap-2 mb-4 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+            </div>
+            <div className="font-mono text-sm space-y-3">
+              <div className="flex gap-3 items-center">
+                <span className="text-indigo-500 font-bold select-none">❯</span>
+                <span className="text-zinc-700 dark:text-zinc-300">npx expo-free-agent build --ios</span>
+              </div>
+              <div className="flex gap-3 items-center opacity-60">
+                <span className="text-zinc-400 select-none">#</span>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">pnpm dlx expo-free-agent build --ios</span>
+              </div>
+              <div className="flex gap-3 items-center opacity-60">
+                <span className="text-zinc-400 select-none">#</span>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">bunx expo-free-agent build --ios</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-8 shadow-xl text-left">
+            <h3 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-white">Earn Credits</h3>
+            <div className="flex gap-2 mb-4 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+            </div>
+            <div className="font-mono text-sm space-y-3">
+              <div className="flex gap-3 items-center">
+                <span className="text-indigo-500 font-bold select-none">❯</span>
+                <span className="text-zinc-700 dark:text-zinc-300">npx expo-free-agent start</span>
+              </div>
+              <div className="flex gap-3 items-center opacity-60">
+                <span className="text-zinc-400 select-none">#</span>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">pnpm dlx expo-free-agent start</span>
+              </div>
+              <div className="flex gap-3 items-center opacity-60">
+                <span className="text-zinc-400 select-none">#</span>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">bunx expo-free-agent start</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-sm text-zinc-400 dark:text-zinc-500">
+          Open source. MIT Licensed. <a href="https://github.com/expo/expo-free-agent" className="text-indigo-500 hover:text-indigo-600 transition-colors">View on GitHub →</a>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="py-12 bg-zinc-50 dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
+      <div className="max-w-[980px] mx-auto px-6 flex flex-col md:flex-row justify-between items-center text-xs font-medium text-zinc-500 gap-4">
+        <p>Before you build, you must first create the universe.</p>
+        <div className="flex gap-6">
+          <a href="https://github.com/expo/expo-free-agent" className="hover:text-zinc-900 dark:hover:text-white transition-colors">GitHub</a>
+          <a href="https://twitter.com/expo" className="hover:text-zinc-900 dark:hover:text-white transition-colors">Twitter</a>
+          <a href="https://expo.dev" className="hover:text-zinc-900 dark:hover:text-white transition-colors">Expo</a>
+        </div>
+      </div>
+    </footer>
   );
 }
