@@ -8,30 +8,64 @@ export interface NetworkStats {
   totalBuilds: number;
 }
 
+const DAILY_BUILDS = 36768;
+// "Launched 233 days ago" from the perspective of the math start
+// BASELINE_TOTAL is the count at the start of "today"
+const DAYS_LAUNCHED = 233;
+const BASELINE_TOTAL = DAYS_LAUNCHED * DAILY_BUILDS;
+
 export function useNetworkStats() {
-  const [stats, setStats] = useState<NetworkStats>({
-    nodesOnline: 154,
-    buildsQueued: 82, // Start high
-    activeBuilds: 60,
-    buildsToday: 1402,
-    totalBuilds: 8439021, // ~8.4M lifetime
+  const [stats, setStats] = useState<NetworkStats>(() => {
+    // Calculate initial logic synchronously to avoid hydration mismatch if possible, 
+    // or at least have a good starting value.
+    const now = new Date();
+    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const msSinceMidnight = now.getTime() - startOfToday.getTime();
+    /*
+      Math:
+      Daily = 36768
+      Ms in day = 86400000
+      Rate = 36768 / 86400000 approx 0.0004255 builds/ms
+    */
+    const calculatedBuildsToday = Math.floor((msSinceMidnight / 86400000) * DAILY_BUILDS);
+
+    return {
+      nodesOnline: 154,
+      buildsQueued: 82,
+      activeBuilds: 60,
+      buildsToday: calculatedBuildsToday,
+      totalBuilds: BASELINE_TOTAL + calculatedBuildsToday,
+    };
   });
 
-  // Track next update time for each metric independently
+  // Track next update time for simulated metrics
   const nextUpdates = useRef({
     nodes: 0,
     queue: 0,
     active: 0,
-    builds: 0
   });
 
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
 
+      // Recalculate deterministic build stats
+      const nowDate = new Date(now);
+      const startOfToday = new Date(Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate()));
+      const msSinceMidnight = now - startOfToday.getTime();
+      const targetBuildsToday = Math.floor((msSinceMidnight / 86400000) * DAILY_BUILDS);
+      const targetTotalBuilds = BASELINE_TOTAL + targetBuildsToday;
+
       setStats(prev => {
         let next = { ...prev };
         let changed = false;
+
+        // Sync build counts if they changed
+        if (next.buildsToday !== targetBuildsToday) {
+          next.buildsToday = targetBuildsToday;
+          next.totalBuilds = targetTotalBuilds;
+          changed = true;
+        }
 
         // 1. Nodes Online (Updates slowly: 800ms - 2000ms)
         if (now > nextUpdates.current.nodes) {
@@ -50,7 +84,6 @@ export function useNetworkStats() {
         }
 
         // 2. Active Builds (Updates medium: 400ms - 1000ms)
-        // Dependent on nodes, so usually follows node trend but with jitter
         if (now > nextUpdates.current.active) {
           const utilization = 0.45 + (Math.random() * 0.15);
           const targetActive = Math.floor(next.nodesOnline * utilization);
@@ -79,26 +112,9 @@ export function useNetworkStats() {
           changed = true;
         }
 
-        // 4. Completions (Updates randomly: 100ms - 8000ms based on probability)
-        if (now > nextUpdates.current.builds) {
-          // Chance to finish a build
-          // Higher active builds = more frequent completions
-          const chance = Math.max(0.1, next.activeBuilds / 500);
-          if (Math.random() < chance) {
-            next.buildsToday += 1;
-            next.totalBuilds += 1;
-            changed = true;
-            // If we finished one, maybe finish another soon?
-            nextUpdates.current.builds = now + 100 + (Math.random() * 500);
-          } else {
-            // Check again soon
-            nextUpdates.current.builds = now + 100;
-          }
-        }
-
         return changed ? next : prev;
       });
-    }, 100); // 100ms tick to check for updates
+    }, 100);
 
     return () => clearInterval(interval);
   }, []);

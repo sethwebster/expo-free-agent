@@ -1,6 +1,7 @@
-import { StrictMode } from "react";
+import { StrictMode, useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { HeroGlobePage } from "./pages/HeroGlobePage";
 import { ThemeProvider } from "./hooks/useTheme";
 import "./styles/globals.css";
 
@@ -15,10 +16,28 @@ console.log(
   "color: #71717a; font-size: 12px;"
 );
 
+// Simple hash-based router
+function Router() {
+  const [route, setRoute] = useState(window.location.hash);
+
+  useEffect(() => {
+    const handleHashChange = () => setRoute(window.location.hash);
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  // Route matching
+  if (route === "#/hero-globe") {
+    return <HeroGlobePage />;
+  }
+
+  return <App />;
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
-      <App />
+      <Router />
     </ThemeProvider>
   </StrictMode>
 );

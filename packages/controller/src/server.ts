@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fastifyView from '@fastify/view';
+import fastifyCors from '@fastify/cors';
 import ejs from 'ejs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -7,6 +8,7 @@ import { DatabaseService } from './db/Database.js';
 import { JobQueue } from './services/JobQueue.js';
 import { FileStorage } from './services/FileStorage.js';
 import { registerApiRoutes } from './api/index.js';
+import { statsRoutes } from './api/stats/index.js';
 import type { ControllerConfig } from './domain/Config.js';
 import { generateDemoData } from './demo/generateDemoData.js';
 
@@ -54,6 +56,12 @@ export class ControllerServer {
   }
 
   private setupMiddleware() {
+    // CORS for landing page
+    this.app.register(fastifyCors, {
+      origin: true, // Allow all origins in dev (TODO: restrict in prod)
+      credentials: true,
+    });
+
     // Request logging
     this.app.addHook('onRequest', async (request, reply) => {
       console.log(`[${new Date().toISOString()}] ${request.method} ${request.url}`);
@@ -69,7 +77,13 @@ export class ControllerServer {
       root: join(__dirname, 'views'),
     });
 
-    // API routes
+    // Public stats endpoint (no auth)
+    this.app.register(statsRoutes, {
+      prefix: '/api/stats',
+      db: this.db,
+    });
+
+    // Protected API routes
     this.app.register(registerApiRoutes, {
       prefix: '/api',
       db: this.db,

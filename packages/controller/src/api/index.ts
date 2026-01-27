@@ -8,6 +8,7 @@ import { requireApiKey } from '../middleware/auth.js';
 import { buildsRoutes } from './builds/index.js';
 import { workersRoutes } from './workers/index.js';
 import { diagnosticsRoutes } from './diagnostics/index.js';
+import { statsRoutes } from './stats/index.js';
 
 export interface ApiPluginOptions {
   db: DatabaseService;
@@ -45,6 +46,9 @@ export interface ApiPluginOptions {
  *     POST   /report          - Submit diagnostic report
  *     GET    /:worker_id      - Get worker diagnostics
  *     GET    /:worker_id/latest - Get latest diagnostic
+ *
+ *   /stats
+ *     GET    /                - Get network stats (public, no auth)
  */
 export const registerApiRoutes: FastifyPluginAsync<ApiPluginOptions> = async (
   fastify,
