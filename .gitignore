@@ -37,6 +37,11 @@ deploy.tar
 
 # Swift build
 free-agent/.build/
+free-agent/FreeAgent.app/
+free-agent/FreeAgent.app.tar.gz
+free-agent/FreeAgent.app.zip
+free-agent/build-release.sh
+free-agent/free-agent/
 
 # IDE
 .vscode/
