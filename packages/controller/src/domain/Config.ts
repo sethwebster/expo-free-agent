@@ -18,7 +18,7 @@ export interface ControllerConfig {
   apiKey: string;
 
   // Worker configuration
-  baseImageId: string;  // Tart VM template name (e.g., expo-free-agent-tahoe-26.2-xcode-expo-54)
+  baseImageId: string;  // Tart VM template name (e.g., ghcr.io/sethwebster/expo-free-agent-base:latest)
 
   // Upload limits (in bytes)
   maxSourceFileSize: number;  // Default: 500MB (large iOS apps)
@@ -35,7 +35,7 @@ export const DEFAULT_CONFIG: Omit<ControllerConfig, 'port' | 'dbPath' | 'storage
   apiKey: process.env.CONTROLLER_API_KEY || 'dev-insecure-key-change-in-production',
 
   // Worker configuration
-  baseImageId: process.env.BASE_IMAGE_ID || 'expo-free-agent-tahoe-26.2-xcode-expo-54',
+  baseImageId: process.env.BASE_IMAGE_ID || 'ghcr.io/sethwebster/expo-free-agent-base:latest',
 
   // Upload limits
   maxSourceFileSize: 500 * 1024 * 1024,   // 500MB

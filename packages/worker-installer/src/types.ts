@@ -9,6 +9,7 @@ export interface WorkerConfiguration {
   controllerURL: string;
   apiKey: string;
   workerID?: string;
+  publicIdentifier?: string;  // Unique identifier safe for public display (no PII)
   deviceName?: string;
   pollIntervalSeconds?: number;
   maxCPUPercent?: number;
@@ -34,6 +35,7 @@ export interface WorkerCapabilities {
 
 export interface RegistrationResponse {
   workerID: string;
+  publicIdentifier: string;
   message: string;
 }
 

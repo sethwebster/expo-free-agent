@@ -17,8 +17,7 @@ let package = Package(
         .executableTarget(
             name: "FreeAgent",
             dependencies: ["BuildVM", "WorkerCore", "DiagnosticsCore"],
-            path: "Sources/FreeAgent",
-            resources: [.copy("Resources")]
+            path: "Sources/FreeAgent"
         ),
         .target(
             name: "BuildVM",

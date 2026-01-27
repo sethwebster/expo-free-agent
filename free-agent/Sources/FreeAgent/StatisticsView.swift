@@ -26,7 +26,7 @@ struct StatisticsView: View {
         VStack(spacing: 0) {
             // Header with logo
             VStack(spacing: 16) {
-                if let logoURL = Bundle.module.url(forResource: "expo-free-agent-logo-white", withExtension: "png"),
+                if let logoURL = Bundle.resources.url(forResource: "expo-free-agent-logo-white", withExtension: "png"),
                    let nsImage = NSImage(contentsOf: logoURL) {
                     Image(nsImage: nsImage)
                         .resizable()

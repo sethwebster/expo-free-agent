@@ -1,15 +1,21 @@
 import { hostname } from 'os';
 import type { WorkerCapabilities, WorkerConfiguration, RegistrationResponse } from './types.js';
+import { generatePublicIdentifier } from './identifier.js';
 
 export async function registerWorker(
   controllerURL: string,
   apiKey: string,
-  capabilities: WorkerCapabilities
+  capabilities: WorkerCapabilities,
+  publicIdentifier?: string
 ): Promise<RegistrationResponse> {
   const workerName = hostname();
 
+  // Generate public identifier if not provided
+  const identifier = publicIdentifier || generatePublicIdentifier();
+
   const payload = {
     name: workerName,
+    publicIdentifier: identifier,
     capabilities,
     apiKey
   };
@@ -29,10 +35,11 @@ export async function registerWorker(
       throw new Error(`Registration failed (${response.status}): ${errorText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
 
     return {
       workerID: data.workerID || data.id || 'unknown',
+      publicIdentifier: identifier,
       message: data.message || 'Worker registered successfully'
     };
   } catch (error) {
@@ -60,12 +67,14 @@ export function createConfiguration(
   controllerURL: string,
   apiKey: string,
   workerID: string,
-  deviceName: string
+  deviceName: string,
+  publicIdentifier: string
 ): WorkerConfiguration {
   return {
     controllerURL,
     apiKey,
     workerID,
+    publicIdentifier,
     deviceName,
     pollIntervalSeconds: 30,
     maxCPUPercent: 70,

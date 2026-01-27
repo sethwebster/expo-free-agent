@@ -1,18 +1,80 @@
 import SwiftUI
 import WorkerCore
+import DiagnosticsCore
 
 struct SettingsView: View {
     @State private var configuration: WorkerConfiguration
     let onSave: (WorkerConfiguration) -> Void
+    let onProgressUpdate: ((DownloadProgress) -> Void)?
 
     @State private var showingSaveConfirmation = false
+    @State private var downloadProgress: DownloadProgress?
+    @State private var isCheckingTemplate = false
 
-    init(configuration: WorkerConfiguration, onSave: @escaping (WorkerConfiguration) -> Void) {
+    init(
+        configuration: WorkerConfiguration,
+        onSave: @escaping (WorkerConfiguration) -> Void,
+        onProgressUpdate: ((DownloadProgress) -> Void)? = nil
+    ) {
         _configuration = State(initialValue: configuration)
         self.onSave = onSave
+        self.onProgressUpdate = onProgressUpdate
     }
 
     var body: some View {
+        if let progress = downloadProgress {
+            // Show download progress overlay
+            TemplateDownloadView(progress: progress) {
+                downloadProgress = nil
+            }
+        } else {
+            settingsContent
+        }
+    }
+
+    private var settingsContent: some View {
+        content
+            .onAppear {
+                checkTemplateExists()
+            }
+    }
+
+    private func checkTemplateExists() {
+        guard !isCheckingTemplate else { return }
+        isCheckingTemplate = true
+
+        Task {
+            let check = TemplateVMCheck(templateImage: "ghcr.io/sethwebster/expo-free-agent-base:latest")
+
+            // Set up progress handler
+            await check.setProgressHandler { progress in
+                Task { @MainActor in
+                    downloadProgress = progress
+                    onProgressUpdate?(progress)
+                }
+            }
+
+            let result = await check.run()
+
+            if result.status == .fail {
+                // Template doesn't exist, trigger download
+                do {
+                    _ = try await check.autoFix()
+                } catch {
+                    Task { @MainActor in
+                        downloadProgress = DownloadProgress(
+                            status: .failed,
+                            message: "Failed to download template: \(error.localizedDescription)"
+                        )
+                    }
+                }
+            }
+
+            isCheckingTemplate = false
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Free Agent Settings")
                 .font(.title)

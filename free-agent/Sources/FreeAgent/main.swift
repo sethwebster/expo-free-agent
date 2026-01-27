@@ -21,7 +21,7 @@ if CommandLine.arguments.contains("doctor") {
             workerId: workerId,
             controllerURL: config.controllerURL,
             apiKey: config.apiKey,
-            templateImage: "expo-free-agent-tahoe-26.2-xcode-expo-54"
+            templateImage: "ghcr.io/sethwebster/expo-free-agent-base:latest"
         )
 
         // Run diagnostics with auto-fix
@@ -64,11 +64,23 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.run()
 
-enum ConnectionState {
+enum ConnectionState: Equatable {
     case connecting
     case online
     case building
+    case downloading(percent: Double)
     case offline
+
+    static func == (lhs: ConnectionState, rhs: ConnectionState) -> Bool {
+        switch (lhs, rhs) {
+        case (.connecting, .connecting), (.online, .online), (.building, .building), (.offline, .offline):
+            return true
+        case (.downloading(let lhsPercent), .downloading(let rhsPercent)):
+            return abs(lhsPercent - rhsPercent) < 0.01  // Close enough for visual update
+        default:
+            return false
+        }
+    }
 }
 
 @MainActor
@@ -83,6 +95,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentBuilds: [ActiveBuild] = []
     private var connectionState: ConnectionState = .connecting
     private var animationFrame = 0
+    private var downloadProgress: Double = 0.0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Create menu bar item
@@ -328,6 +341,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return createOnlineIcon()
         case .building:
             return createBuildingIcon()
+        case .downloading(let percent):
+            return createDownloadingIcon(percent: percent)
         case .offline:
             return createTrayIcon()
         }
@@ -337,7 +352,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let traySize = NSSize(width: 18, height: 18)
 
         // Load SVG logo from Resources
-        if let svgURL = Bundle.module.url(forResource: "free-agent-logo", withExtension: "svg"),
+        if let svgURL = Bundle.resources.url(forResource: "free-agent-logo", withExtension: "svg"),
            let svgImage = NSImage(contentsOf: svgURL) {
             let trayImage = NSImage(size: traySize, flipped: false) { rect in
                 svgImage.draw(in: rect)
@@ -400,7 +415,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSColor.black.setFill()
 
             // Load and draw SVG or fallback pattern
-            if let svgURL = Bundle.module.url(forResource: "free-agent-logo", withExtension: "svg"),
+            if let svgURL = Bundle.resources.url(forResource: "free-agent-logo", withExtension: "svg"),
                let svgImage = NSImage(contentsOf: svgURL) {
                 svgImage.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
             } else {
@@ -463,6 +478,54 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return image
     }
 
+    private func createDownloadingIcon(percent: Double) -> NSImage {
+        let size = NSSize(width: 26, height: 22)
+        let image = NSImage(size: size, flipped: false) { rect in
+            // Draw base logo
+            let baseIcon = self.createTrayIcon()
+            baseIcon.draw(in: NSRect(x: 4, y: 2, width: 18, height: 18))
+
+            // Draw orange pie chart in bottom-right
+            let pieSize: CGFloat = 12
+            let pieRect = NSRect(x: size.width - pieSize - 2,
+                                 y: 2,
+                                 width: pieSize,
+                                 height: pieSize)
+
+            // Background circle (light gray)
+            NSColor(calibratedWhite: 0.8, alpha: 1.0).setFill()
+            NSBezierPath(ovalIn: pieRect).fill()
+
+            // Progress arc (orange)
+            NSColor(calibratedRed: 1.0, green: 0.6, blue: 0.0, alpha: 1.0).setFill()
+            let path = NSBezierPath()
+            let center = NSPoint(x: pieRect.midX, y: pieRect.midY)
+            let radius = pieSize / 2.0
+            let startAngle: CGFloat = 90.0  // Start at top
+            let endAngle = startAngle - (CGFloat(percent) / 100.0 * 360.0)  // Clockwise
+
+            path.move(to: center)
+            path.line(to: NSPoint(x: center.x, y: center.y + radius))
+            path.appendArc(withCenter: center,
+                          radius: radius,
+                          startAngle: startAngle,
+                          endAngle: endAngle,
+                          clockwise: true)
+            path.close()
+            path.fill()
+
+            // Border circle
+            NSColor.black.setStroke()
+            let borderPath = NSBezierPath(ovalIn: pieRect)
+            borderPath.lineWidth = 0.5
+            borderPath.stroke()
+
+            return true
+        }
+        image.isTemplate = false  // Preserve orange color
+        return image
+    }
+
     @objc private func toggleWorker() {
         guard let service = workerService else { return }
 
@@ -488,6 +551,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         await self?.workerService?.stop()
                         config.save()
                         self?.workerService = WorkerService(configuration: config)
+                    }
+                },
+                onProgressUpdate: { [weak self] progress in
+                    Task { @MainActor in
+                        guard let self = self else { return }
+
+                        // Update connection state based on download progress
+                        switch progress.status {
+                        case .downloading, .extracting:
+                            let percent = progress.percentComplete ?? 0.0
+                            self.connectionState = .downloading(percent: percent)
+                            self.updateIconForCurrentState()
+                        case .complete, .failed:
+                            // Restore previous state
+                            if await self.workerService?.isRunning == true {
+                                self.connectionState = .online
+                            } else {
+                                self.connectionState = .offline
+                            }
+                            self.updateIconForCurrentState()
+                        case .idle:
+                            break
+                        }
                     }
                 }
             )

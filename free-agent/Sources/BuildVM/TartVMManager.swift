@@ -16,7 +16,7 @@ public class TartVMManager {
     private let ipTimeout: TimeInterval = 120
     private let sshTimeout: TimeInterval = 180
 
-    public init(configuration: VMConfiguration, templateImage: String = "expo-free-agent-tahoe-26.2-xcode-expo-54", vmUser: String = "admin", tartPath: String = "/opt/homebrew/bin/tart") {
+    public init(configuration: VMConfiguration, templateImage: String = "ghcr.io/sethwebster/expo-free-agent-base:latest", vmUser: String = "admin", tartPath: String = "/opt/homebrew/bin/tart") {
         self.configuration = configuration
         self.templateImage = templateImage
         self.vmUser = vmUser

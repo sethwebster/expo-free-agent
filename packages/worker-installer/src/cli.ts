@@ -28,6 +28,7 @@ import {
   testConnection,
   createConfiguration
 } from './register.js';
+import { generatePublicIdentifier } from './identifier.js';
 import {
   saveConfiguration,
   loadConfiguration,
@@ -207,7 +208,8 @@ async function installWorker(options: InstallOptions): Promise<void> {
           config.controllerURL,
           config.apiKey,
           registration.workerID,
-          deviceName
+          deviceName,
+          registration.publicIdentifier
         );
 
         saveConfiguration(fullConfig);
@@ -359,13 +361,14 @@ async function installWorker(options: InstallOptions): Promise<void> {
       capabilities
     );
 
-    registerSpinner.succeed(`Worker registered (ID: ${registration.workerID})`);
+    registerSpinner.succeed(`Worker registered (ID: ${registration.workerID}, Name: ${registration.publicIdentifier})`);
 
     const fullConfig = createConfiguration(
       config.controllerURL,
       config.apiKey,
       registration.workerID,
-      deviceName
+      deviceName,
+      registration.publicIdentifier
     );
 
     saveConfiguration(fullConfig);
@@ -374,11 +377,13 @@ async function installWorker(options: InstallOptions): Promise<void> {
     registerSpinner.fail('Registration failed');
     console.log(chalk.yellow('Saving configuration anyway. You can retry registration from the app.\n'));
 
+    const fallbackIdentifier = generatePublicIdentifier();
     const fallbackConfig = createConfiguration(
       config.controllerURL,
       config.apiKey,
       'pending-registration',
-      deviceName
+      deviceName,
+      fallbackIdentifier
     );
 
     saveConfiguration(fallbackConfig);
