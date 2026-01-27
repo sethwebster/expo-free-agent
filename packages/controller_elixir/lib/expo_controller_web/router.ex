@@ -29,6 +29,13 @@ defmodule ExpoControllerWeb.Router do
     get "/stats", PublicController, :stats
   end
 
+  # Legacy stats endpoint alias for backwards compatibility
+  scope "/api", ExpoControllerWeb do
+    pipe_through :api
+
+    get "/stats", PublicController, :stats
+  end
+
   scope "/api", ExpoControllerWeb do
     pipe_through :api
 
