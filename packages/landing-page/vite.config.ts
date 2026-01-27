@@ -11,4 +11,17 @@ export default defineConfig({
     }),
     tailwindcss(),
   ],
+  server: {
+    proxy: {
+      // Proxy API requests to Elixir controller during development
+      "/api": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+      },
+      "/public": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+      },
+    },
+  },
 });

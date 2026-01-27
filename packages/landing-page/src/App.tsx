@@ -249,15 +249,15 @@ function GetStarted() {
             <div className="font-mono text-sm space-y-3">
               <div className="flex gap-3 items-center">
                 <span className="text-indigo-500 font-bold select-none">❯</span>
-                <span className="text-zinc-700 dark:text-zinc-300">npx expo-free-agent build --ios</span>
+                <span className="text-zinc-700 dark:text-zinc-300">npx expo-free-agent submit .</span>
               </div>
               <div className="flex gap-3 items-center opacity-60">
                 <span className="text-zinc-400 select-none">#</span>
-                <span className="text-zinc-500 dark:text-zinc-500 text-xs">pnpm dlx expo-free-agent build --ios</span>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">pnpm dlx expo-free-agent submit .</span>
               </div>
               <div className="flex gap-3 items-center opacity-60">
                 <span className="text-zinc-400 select-none">#</span>
-                <span className="text-zinc-500 dark:text-zinc-500 text-xs">bunx expo-free-agent build --ios</span>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">bunx expo-free-agent submit .</span>
               </div>
             </div>
           </div>
