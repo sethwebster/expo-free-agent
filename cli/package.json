@@ -1,6 +1,6 @@
 {
   "name": "@sethwebster/expo-free-agent",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "CLI for Expo Free Agent distributed build system",
   "type": "module",
   "bin": {

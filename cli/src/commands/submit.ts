@@ -5,6 +5,7 @@ import path from 'path';
 import os from 'os';
 import readline from 'readline';
 import { apiClient, APIClient } from '../api-client.js';
+import { saveBuildToken } from '../build-tokens.js';
 import chalk from 'chalk';
 import ora from 'ora';
 
@@ -113,12 +114,15 @@ export function createSubmitCommand(): Command {
           ? new APIClient(options.controllerUrl, options.apiKey)
           : apiClient;
 
-        const { buildId } = await client.submitBuild({
+        const { buildId, accessToken } = await client.submitBuild({
           projectPath: zipPath,
           certPath: options.cert ? path.resolve(options.cert) : undefined,
           profilePath: options.profile ? path.resolve(options.profile) : undefined,
           appleId: options.appleId,
         });
+
+        // Store build token for future access
+        await saveBuildToken(buildId, accessToken);
 
         spinner.succeed(chalk.green('Build submitted successfully'));
 

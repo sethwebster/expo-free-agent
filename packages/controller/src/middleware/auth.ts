@@ -32,6 +32,49 @@ export function requireApiKey(config: ControllerConfig) {
 }
 
 /**
+ * Build access verification hook
+ * Accepts either admin API key OR build-specific access token
+ *
+ * Security model:
+ * - Admin API key (X-API-Key): Full access to all builds
+ * - Build token (X-Build-Token): Access only to that specific build
+ *
+ * Usage:
+ *   fastify.addHook('preHandler', requireBuildAccess(config, db));
+ */
+export function requireBuildAccess(config: ControllerConfig, db: DatabaseService) {
+  return async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const apiKey = request.headers['x-api-key'] as string;
+    const buildToken = request.headers['x-build-token'] as string;
+    const buildId = request.params.id;
+
+    // Check if admin API key provided
+    if (apiKey === config.apiKey) {
+      // Admin access granted
+      return;
+    }
+
+    // Check if build token provided
+    if (!buildToken) {
+      return reply.status(401).send({
+        error: 'Missing X-API-Key or X-Build-Token header',
+      });
+    }
+
+    // Verify build token matches this build
+    const build = db.verifyBuildToken(buildId, buildToken);
+    if (!build) {
+      return reply.status(403).send({
+        error: 'Invalid or expired build token',
+      });
+    }
+
+    // Build token verified - attach build to request
+    (request as any).build = build;
+  };
+}
+
+/**
  * Worker verification hook
  * Validates that worker_id in request matches assigned worker for build
  *

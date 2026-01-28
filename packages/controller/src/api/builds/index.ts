@@ -6,7 +6,7 @@ import type { JobQueue } from '../../services/JobQueue.js';
 import type { FileStorage } from '../../services/FileStorage.js';
 import { unzipCerts } from '../../services/FileStorage.js';
 import type { ControllerConfig } from '../../domain/Config.js';
-import { requireWorkerAccess } from '../../middleware/auth.js';
+import { requireWorkerAccess, requireBuildAccess } from '../../middleware/auth.js';
 
 interface BuildsPluginOptions {
   db: DatabaseService;
@@ -102,6 +102,9 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
         );
       }
 
+      // Generate unique access token for this build
+      const accessToken = crypto.randomBytes(32).toString('base64url');
+
       // Create build record
       db.createBuild({
         id: buildId,
@@ -110,6 +113,7 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
         source_path: sourcePath,
         certs_path: certsPath,
         submitted_at: timestamp,
+        access_token: accessToken,
       });
 
       // Add to queue
@@ -128,6 +132,7 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
         id: buildId,
         status: 'pending',
         submitted_at: timestamp,
+        access_token: accessToken,
       });
     } catch (err) {
       fastify.log.error('Build submission error:', err);
@@ -175,83 +180,104 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
   /**
    * GET /builds/:id/status
    * Get build status
+   * Requires: X-API-Key (admin) OR X-Build-Token (build submitter)
    */
-  fastify.get<{ Params: BuildParams }>('/:id/status', async (request, reply) => {
-    const build = db.getBuild(request.params.id);
+  fastify.get<{ Params: BuildParams }>(
+    '/:id/status',
+    {
+      preHandler: requireBuildAccess(config, db),
+    },
+    async (request, reply) => {
+      const build = db.getBuild(request.params.id);
 
-    if (!build) {
-      return reply.status(404).send({ error: 'Build not found' });
+      if (!build) {
+        return reply.status(404).send({ error: 'Build not found' });
+      }
+
+      return reply.send({
+        id: build.id,
+        status: build.status,
+        platform: build.platform,
+        worker_id: build.worker_id,
+        submitted_at: build.submitted_at,
+        started_at: build.started_at,
+        completed_at: build.completed_at,
+        error_message: build.error_message,
+      });
     }
-
-    return reply.send({
-      id: build.id,
-      status: build.status,
-      platform: build.platform,
-      worker_id: build.worker_id,
-      submitted_at: build.submitted_at,
-      started_at: build.started_at,
-      completed_at: build.completed_at,
-      error_message: build.error_message,
-    });
-  });
+  );
 
   /**
    * GET /builds/:id/logs
    * Get build logs
+   * Requires: X-API-Key (admin) OR X-Build-Token (build submitter)
    */
-  fastify.get<{ Params: BuildParams }>('/:id/logs', async (request, reply) => {
-    const build = db.getBuild(request.params.id);
+  fastify.get<{ Params: BuildParams }>(
+    '/:id/logs',
+    {
+      preHandler: requireBuildAccess(config, db),
+    },
+    async (request, reply) => {
+      const build = db.getBuild(request.params.id);
 
-    if (!build) {
-      return reply.status(404).send({ error: 'Build not found' });
+      if (!build) {
+        return reply.status(404).send({ error: 'Build not found' });
+      }
+
+      const logs = db.getBuildLogs(request.params.id);
+
+      return reply.send({
+        build_id: request.params.id,
+        logs: logs.map((log) => ({
+          timestamp: log.timestamp,
+          level: log.level,
+          message: log.message,
+        })),
+      });
     }
-
-    const logs = db.getBuildLogs(request.params.id);
-
-    return reply.send({
-      build_id: request.params.id,
-      logs: logs.map((log) => ({
-        timestamp: log.timestamp,
-        level: log.level,
-        message: log.message,
-      })),
-    });
-  });
+  );
 
   /**
    * GET /builds/:id/download
    * Download build result
+   * Requires: X-API-Key (admin) OR X-Build-Token (build submitter)
    */
-  fastify.get<{ Params: BuildParams }>('/:id/download', async (request, reply) => {
-    const build = db.getBuild(request.params.id);
+  fastify.get<{ Params: BuildParams }>(
+    '/:id/download',
+    {
+      preHandler: requireBuildAccess(config, db),
+    },
+    async (request, reply) => {
+      const build = db.getBuild(request.params.id);
 
-    if (!build) {
-      return reply.status(404).send({ error: 'Build not found' });
+      if (!build) {
+        return reply.status(404).send({ error: 'Build not found' });
+      }
+
+      if (build.status !== 'completed') {
+        return reply.status(400).send({ error: 'Build not completed' });
+      }
+
+      if (!build.result_path) {
+        return reply.status(404).send({ error: 'Build result not found' });
+      }
+
+      const extension = build.platform === 'ios' ? 'ipa' : 'apk';
+      const filename = `${build.id}.${extension}`;
+
+      try {
+        const stream = storage.createReadStream(build.result_path);
+
+        return reply
+          .header('Content-Disposition', `attachment; filename="${filename}"`)
+          .header('Content-Type', 'application/octet-stream')
+          .send(stream);
+      } catch (err) {
+        fastify.log.error('File read error:', err);
+        return reply.status(500).send({ error: 'Failed to read build result' });
+      }
     }
-
-    if (build.status !== 'completed') {
-      return reply.status(400).send({ error: 'Build not completed' });
-    }
-
-    if (!build.result_path) {
-      return reply.status(404).send({ error: 'Build result not found' });
-    }
-
-    const extension = build.platform === 'ios' ? 'ipa' : 'apk';
-    const filename = `${build.id}.${extension}`;
-
-    try {
-      const stream = storage.createReadStream(build.result_path);
-
-      return reply
-        .header('Content-Disposition', `attachment; filename="${filename}"`)
-        .header('Content-Type', 'application/octet-stream')
-        .send(stream);
-    } catch (err) {
-      fastify.log.error('File read error:', err);
-      return reply.status(500).send({ error: 'Failed to read build result' });
-    }
-  });
+  );
 
   /**
    * GET /builds/:id/source
