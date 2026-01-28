@@ -1,6 +1,6 @@
 {
   "name": "@sethwebster/expo-free-agent-worker",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Install and configure the Expo Free Agent Worker macOS app",
   "type": "module",
   "bin": {
