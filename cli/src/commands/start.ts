@@ -21,11 +21,13 @@ function isWorkerRunning(): boolean {
 }
 
 function launchWorker(): void {
-  // Remove ALL quarantine attributes and reset Gatekeeper cache
+  // Remove ALL quarantine attributes and add to Gatekeeper allowlist
   try {
     execSync(`xattr -cr "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
     execSync(`xattr -d com.apple.quarantine "${WORKER_APP_PATH}" 2>/dev/null || true`, { stdio: 'pipe' });
-    // Reset Launch Services database entry to clear Gatekeeper cache
+    // Add to Gatekeeper's allowlist
+    execSync(`spctl --add "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
+    // Reset Launch Services database entry
     execSync(`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
   } catch {
     // Ignore if commands fail

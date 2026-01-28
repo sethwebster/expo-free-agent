@@ -77,7 +77,14 @@ export function installApp(sourcePath: string, force: boolean = false): void {
     console.warn('Warning: Could not set executable permissions:', error);
   }
 
-  // Reset Launch Services database for this app to clear Gatekeeper cache
+  // Add to Gatekeeper's allowlist to bypass quarantine checks
+  try {
+    execSync(`spctl --add "${destPath}"`, { stdio: 'ignore' });
+  } catch (error) {
+    // Ignore errors - may require user approval or sudo
+  }
+
+  // Reset Launch Services database for this app
   try {
     execSync(`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "${destPath}"`, { stdio: 'ignore' });
   } catch (error) {
