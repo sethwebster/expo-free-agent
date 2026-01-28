@@ -314,6 +314,53 @@ Red Flags — STOP IMMEDIATELY
 
 ⸻
 
+Version Synchronization — MANDATORY
+
+All packages in the monorepo MUST maintain synchronized version numbers.
+
+Mismatched versions create release chaos, broken installations, and user confusion.
+
+Iron Rules
+	1.	EVERY version bump updates ALL packages
+	•	Root package.json
+	•	cli/package.json
+	•	packages/controller/package.json
+	•	packages/landing-page/package.json
+	•	packages/worker-installer/package.json
+	2.	EVERY version bump updates ALL version constants
+	•	cli/src/index.ts (.version())
+	•	packages/worker-installer/src/download.ts (VERSION constant)
+	3.	EVERY version bump releases synchronized app
+	•	Build FreeAgent.app with matching version
+	•	Create GitHub release
+	•	Publish npm packages
+	4.	Correct Workflow
+
+./free-agent/release.sh X.Y.Z
+gh release create vX.Y.Z free-agent/FreeAgent.app.tar.gz
+cd packages/worker-installer && npm publish
+cd cli && npm publish
+
+
+Pre-commit Hook
+	•	Automatically checks version sync before commit
+	•	Fails if any package versions don't match
+	•	Located in .githooks/pre-commit
+	•	Enabled via: git config core.hooksPath .githooks
+
+Test Suite
+	•	bun run test:versions - Check version synchronization
+	•	Runs in CI on every PR
+	•	Blocks merge if versions out of sync
+
+Red Flags — STOP IMMEDIATELY
+	•	Package versions don't match
+	•	Version constants out of sync with package.json
+	•	App release version differs from npm packages
+	•	Pre-commit hook skipped or bypassed
+
+⸻
+
 Security Notice (CRITICAL)
 
 AI attribution is FORBIDDEN.

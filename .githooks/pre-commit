@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Version Synchronization Check
+# Ensures all package.json files and version constants are synchronized
+
+echo "🔍 Checking version synchronization..."
+
+# Run the version check script
+bun run scripts/check-versions.ts
+
+# Capture exit code
+VERSION_CHECK_EXIT=$?
+
+if [ $VERSION_CHECK_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ Pre-commit hook failed: Version synchronization check failed"
+  echo ""
+  echo "All packages must have the same version number."
+  echo "Update all package.json files and version constants, then try again."
+  echo ""
+  exit 1
+fi
+
+echo "✓ Version synchronization check passed"
+echo ""
+
+exit 0
