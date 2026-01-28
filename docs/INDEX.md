@@ -25,6 +25,7 @@ Essential guides for new users and contributors.
 System design, component structure, and technical decisions.
 
 - [Architecture](./architecture/architecture.md) - Overall system design and prototype plan
+- [Security](./architecture/security.md) - Security model, threat mitigation, and isolation
 - [Agents](./architecture/agents.md) - Agent rules and guardrails for code changes
 - [CLI Implementation](./architecture/cli-implementation.md) - Submit CLI design
 - [VM Implementation](./architecture/vm-implementation.md) - VM execution architecture
@@ -34,6 +35,7 @@ System design, component structure, and technical decisions.
 Production deployment, releases, and operational procedures.
 
 - [Release](./operations/release.md) - FreeAgent.app release process (build/sign/notarize)
+- [Notarization Setup](./operations/notarization-setup.md) - One-time notarization credentials setup
 - [Gatekeeper](./operations/gatekeeper.md) - macOS code signing and notarization details
 - [Worker Installer](./operations/worker-installer.md) - Worker installation process
 - [VM Setup](./operations/vm-setup.md) - VM image creation and configuration
@@ -67,7 +69,7 @@ Each component has its own README and component-specific docs:
 ### Worker App (`free-agent/`)
 - [README](../free-agent/README.md) - Worker app overview
 - [QUICK_START](../free-agent/QUICK_START.md) - Quick start guide
-- [DISTRIBUTION](../free-agent/DISTRIBUTION.md) - Distribution process
+- [DISTRIBUTION](../free-agent/DISTRIBUTION.md) - Distribution docs (redirects to operations)
 
 ### Worker Installer (`packages/worker-installer/`)
 - [README](../packages/worker-installer/README.md) - Installer overview
@@ -184,6 +186,7 @@ expo-free-agent/
 - **...get started quickly** → [Quickstart](./getting-started/quickstart.md)
 - **...set up my local environment** → [Setup Local](./getting-started/setup-local.md)
 - **...understand the architecture** → [Architecture](./architecture/architecture.md)
+- **...understand security** → [Security](./architecture/security.md)
 - **...release a new version** → [Release](./operations/release.md)
 - **...run tests** → [Testing](./testing/testing.md)
 - **...deploy to production** → [Setup Remote](./getting-started/setup-remote.md)

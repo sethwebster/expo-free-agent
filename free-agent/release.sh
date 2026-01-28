@@ -177,7 +177,7 @@ echo ""
 # Next steps
 echo "Next steps:"
 if [ "${SKIP_NOTARIZE}" = "1" ]; then
-    echo "  1. Set up notarization: see NOTARIZE.md"
+    echo "  1. Set up notarization: see ../docs/operations/notarization-setup.md"
     echo "  2. Run: ./release.sh ${VERSION}"
 else
     echo "  1. Test locally: open ${APP_NAME}.app"
