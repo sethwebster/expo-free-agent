@@ -1,6 +1,6 @@
 {
   "name": "@expo-free-agent/controller",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "type": "module",
   "bin": {
     "expo-controller": "./dist/cli.js"
