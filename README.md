@@ -43,6 +43,22 @@ expo-free-agent/
 
 **All Week 1 tasks completed.**
 
+## Worker Installation
+
+Install the Free Agent worker app on macOS to start earning build credits:
+
+```bash
+npx @sethwebster/expo-free-agent-worker@latest
+```
+
+Or start earning credits in one command:
+
+```bash
+npx @sethwebster/expo-free-agent start
+```
+
+**⚠️ Critical**: The worker uses native macOS tools (`tar`, `ditto`) to preserve code signatures during installation. See [GATEKEEPER.md](./GATEKEEPER.md) for technical details about notarization handling.
+
 ## Quick Start
 
 ### Smoketest (30 seconds)
@@ -237,7 +253,14 @@ storage/
 └── results/            # Build outputs (IPA/APK)
 ```
 
-## Notes
+## Important Notes
+
+### Security & Distribution
+
+- **Gatekeeper Fix**: v0.1.15+ uses native `tar` and `ditto` to preserve code signatures. Never manipulate quarantine attributes on notarized apps. See [GATEKEEPER.md](./GATEKEEPER.md) for details.
+- **Worker Distribution**: macOS app is code-signed with Developer ID and notarized by Apple. Distributed via npm as `.tar.gz`.
+
+### System Requirements
 
 - This is a prototype for self-hosting
 - No authentication yet (add before production)
