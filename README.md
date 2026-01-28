@@ -1,283 +1,320 @@
 # Expo Free Agent
 
-Distributed build mesh for Expo apps. Workers run on user Macs (background idle CPU) to build apps in isolated VMs.
+**Build Expo apps on your own hardware.** A distributed build system that runs on Mac computers you control.
+
+```
+┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│   Your CLI   │ ───> │  Controller  │ ───> │   Workers    │
+│              │      │ (Coordinates)│      │  (Build VMs) │
+└──────────────┘      └──────────────┘      └──────────────┘
+   Submit build       Queue & assign       Execute in isolation
+```
+
+## What Is This?
+
+Expo Free Agent is a self-hosted alternative to cloud build services. Instead of paying per-build or per-minute:
+
+- **Run builds on your Macs** - Use spare compute capacity
+- **Full control** - Your code never leaves your infrastructure
+- **Zero usage fees** - Pay only for hardware you already own
+- **VM isolation** - Every build runs in a fresh, isolated virtual machine
+
+**Perfect for:**
+- Teams with spare Mac hardware
+- Projects requiring on-premise builds
+- High build volume (cost savings vs cloud)
+- Air-gapped or regulated environments
+
+---
+
+## Quick Links
+
+| I want to... | Go here |
+|--------------|---------|
+| **Try it in 5 minutes** | [5-Minute Start](./docs/getting-started/5-minute-start.md) |
+| **Deploy to production** | [Setup Remote](./docs/getting-started/setup-remote.md) |
+| **Understand the architecture** | [Architecture Diagrams](./docs/architecture/diagrams.md) |
+| **Learn about security** | [Security Model](./docs/architecture/security.md) |
+| **Contribute code** | [Contributing Guide](./CLAUDE.md) |
+| **Browse all docs** | [Documentation Index](./docs/INDEX.md) |
+
+---
+
+## Get Started in 5 Minutes
+
+### 1. Verify Prerequisites
+
+```bash
+./scripts/verify-setup.sh
+```
+
+**Requirements:** macOS, Bun installed ([install Bun](https://bun.sh))
+
+### 2. Start Controller
+
+```bash
+git clone https://github.com/expo/expo-free-agent.git
+cd expo-free-agent
+bun install
+bun controller
+```
+
+Copy the API key from the output.
+
+### 3. Start Worker
+
+```bash
+npx @sethwebster/expo-free-agent-worker
+open /Applications/FreeAgent.app
+```
+
+Connect the worker to `http://localhost:3000` with your API key.
+
+### 4. Submit a Build
+
+```bash
+cd ~/my-expo-app
+npx expo-build submit --platform ios
+```
+
+**Done!** Your build is running. ☕ Coffee time (~10 minutes).
+
+[**Full 5-Minute Guide →**](./docs/getting-started/5-minute-start.md)
+
+---
 
 ## Architecture
 
-This is a self-hosted distributed build system with three components:
+```mermaid
+graph LR
+    A[Submit CLI] -->|HTTPS| B[Controller]
+    B -->|Assign job| C[Worker 1]
+    B -->|Assign job| D[Worker 2]
+    C -->|Build in VM| E[macOS VM]
+    D -->|Build in VM| F[macOS VM]
+    E & F -->|Upload| B
+    B -->|Download| A
+```
 
-1. **Central Controller** (Node.js/Bun) - Job queue, worker registry, file storage, web UI
-2. **Free Agent App** (macOS/Swift) - Worker agent that builds apps in VMs
-3. **Submit CLI** (Node.js) - Client for submitting builds
+**Three components:**
 
-See [ARCHITECTURE.md](./docs/architecture/architecture.md) for full design and prototype plan.
+1. **Controller** (Node.js/Bun) - Central server that coordinates builds
+   - SQLite database for state
+   - File storage for source/artifacts
+   - Job queue with worker assignment
+   - Web UI for monitoring
+
+2. **Worker** (macOS/Swift) - Runs on your Macs
+   - Menu bar app
+   - Creates isolated VMs for builds
+   - Downloads source, executes build, uploads results
+   - Automatic cleanup after each build
+
+3. **Submit CLI** (Node.js) - Command-line tool
+   - Bundles your project
+   - Submits to controller
+   - Downloads completed builds
+
+[**See Architecture Diagrams →**](./docs/architecture/diagrams.md)
+
+---
+
+## Features
+
+### ✅ Implemented
+
+- **VM Isolation** - Builds run in ephemeral macOS VMs (Apple Virtualization Framework)
+- **Secure** - Code signing, notarization, API key auth, path traversal protection
+- **Web UI** - Monitor builds and workers in real-time
+- **Worker Installer** - One command to install worker app
+- **CLI** - Submit builds, check status, download artifacts
+- **Testing** - Comprehensive test suite (unit, integration, e2e)
+- **Documentation** - Full docs with diagrams and guides
+
+### 🚧 Roadmap
+
+- **Multi-user support** - Isolated builds per user
+- **Build secrets** - Encrypted environment variables
+- **Worker pools** - Assign specific workers to projects
+- **Artifact encryption** - Encrypt stored builds
+- **Metrics** - Build time analytics, worker utilization
+
+---
+
+## Security
+
+Every build runs in an isolated VM with:
+- ❌ **No network access** (outbound blocked)
+- ❌ **No host filesystem access** (VM cannot see host)
+- ✅ **Ephemeral environment** (destroyed after build)
+- ✅ **Resource limits** (CPU, memory, disk, time)
+- ✅ **Code signing** (Worker app is Apple-notarized)
+
+**Read more:** [Security Architecture](./docs/architecture/security.md)
+
+---
 
 ## Project Structure
 
 ```
 expo-free-agent/
 ├── packages/
-│   ├── controller/        # Central controller server (✅ IMPLEMENTED)
-│   ├── landing-page/      # Marketing landing page (✅ IMPLEMENTED)
-│   ├── worker-installer/  # Worker installation CLI (✅ IMPLEMENTED)
-│   └── free-agent/       # macOS worker app (✅ IMPLEMENTED)
-├── cli/                   # Build submission CLI (✅ IMPLEMENTED)
-├── docs/                  # All documentation
-├── CLAUDE.md             # Agent rules and requirements
-└── README.md
+│   ├── controller/        # Central server (Express + SQLite + Web UI)
+│   ├── worker-installer/  # Worker installation CLI
+│   └── landing-page/      # Marketing site (Vite + React + Tailwind)
+├── cli/                   # Build submission CLI
+├── free-agent/           # macOS worker app (Swift)
+├── docs/                 # Documentation
+│   ├── getting-started/  # Quickstart, setup guides
+│   ├── architecture/     # System design, diagrams
+│   ├── operations/       # Deployment, release procedures
+│   └── testing/          # Test strategies
+├── scripts/              # Utility scripts
+└── test/                 # Test fixtures and utilities
 ```
 
-## Status - Week 1: Controller Implementation
+---
 
-✅ **Completed:**
-
-- Monorepo structure with Bun workspace
-- Express REST API server
-- SQLite database (builds, workers, build_logs)
-- In-memory FIFO job queue
-- Local filesystem storage
-- All API endpoints per ARCHITECTURE.md
-- Web UI for monitoring builds/workers
-- Round-robin worker assignment
-- Health checks and logging
-
-**All Week 1 tasks completed.**
-
-## Worker Installation
-
-Install the Free Agent worker app on macOS to start earning build credits:
-
-```bash
-npx @sethwebster/expo-free-agent-worker@latest
-```
-
-Or start earning credits in one command:
-
-```bash
-npx @sethwebster/expo-free-agent start
-```
-
-**⚠️ Critical**: The worker uses native macOS tools (`tar`, `ditto`) to preserve code signatures during installation. See [GATEKEEPER.md](./docs/operations/gatekeeper.md) for technical details about notarization handling.
-
-## Quick Start
-
-### Smoketest (30 seconds)
-
-Verify everything works:
-
-```bash
-./smoketest.sh
-```
-
-Or run full E2E test (5 minutes):
-
-```bash
-./test-e2e.sh
-```
-
-See **[SMOKETEST.md](./docs/testing/smoketest.md)** for detailed testing options.
-
-### Install Dependencies
-
-```bash
-bun install
-```
-
-### Start Controller
-
-```bash
-# Set API key (required)
-export CONTROLLER_API_KEY="your-secure-key-min-16-chars"
-
-# Start with defaults (port 3000)
-bun controller
-
-# Custom port
-bun controller -- --port 8080
-```
-
-### Access Web UI
-
-Open http://localhost:3000 to see dashboard with builds and workers.
-
-### Test API
-
-```bash
-# Health check
-curl http://localhost:3000/health
-
-# Register worker (simulate)
-curl -X POST http://localhost:3000/api/workers/register \
-  -H "Content-Type: application/json" \
-  -d '{"name": "test-mac", "capabilities": {"platforms": ["ios"], "xcode_version": "15.0"}}'
-
-# Run full test suite
-./test-api.sh
-```
-
-## API Endpoints
-
-### Builds
-
-- `POST /api/builds/submit` - Submit new build
-- `GET /api/builds/:id/status` - Check build status
-- `GET /api/builds/:id/download` - Download IPA/APK
-- `GET /api/builds/:id/logs` - Get build logs
-- `GET /api/builds/:id/source` - Download source (workers only)
-- `GET /api/builds/:id/certs` - Download certs (workers only)
-
-### Workers
-
-- `POST /api/workers/register` - Register new worker
-- `GET /api/workers/poll?worker_id=<id>` - Poll for jobs
-- `POST /api/workers/upload` - Upload build result
-
-### Monitoring
-
-- `GET /` - Web UI dashboard
-- `GET /health` - Health check with stats
-
-See [packages/controller/README.md](./packages/controller/README.md) for detailed API docs.
-
-## Testing
-
-Comprehensive test suite covering controller, CLI, and end-to-end flows.
-
-```bash
-# Run all tests
-bun run test:all
-
-# Run specific test suites
-bun run test:controller    # Controller integration tests
-bun run test:cli          # CLI integration tests
-bun run test:e2e          # End-to-end bash script
-
-# Run from packages
-cd packages/controller && bun test
-cd cli && bun test
-
-# Start mock worker for testing
-bun test/mock-worker.ts --help
-```
-
-**Test Coverage:**
-- ✅ Authentication (API key validation)
-- ✅ Build submission/download
-- ✅ Worker registration/polling
-- ✅ File upload/download with auth
-- ✅ Error handling
-- ✅ Queue persistence across restarts
-
-See **[TESTING.md](./docs/testing/testing.md)** for comprehensive testing documentation.
-
-## Development
+## Usage
 
 ### Controller
 
 ```bash
+# Start controller (development)
+bun controller
+
 # Start with auto-reload
 bun controller:dev
+
+# Custom port
+bun controller -- --port 8080
+
+# Health check
+curl http://localhost:3000/health
 ```
 
-### Landing Page
+### Worker
 
-Static marketing site built with Vite + React 19 + Tailwind CSS v4.
-
-**Development:**
 ```bash
-bun run landing-page:dev  # http://localhost:5173
+# Install worker app
+npx @sethwebster/expo-free-agent-worker
+
+# Launch (menu bar app)
+open /Applications/FreeAgent.app
 ```
 
-**Build:**
+### CLI
+
 ```bash
-bun run landing-page:build  # Output to packages/landing-page/dist
+# Submit build
+expo-build submit --platform ios
+
+# Check status
+expo-build status build-abc123
+
+# Download artifacts
+expo-build download build-abc123
+
+# List all builds
+expo-build list
 ```
 
-**Preview:**
+---
+
+## Testing
+
 ```bash
-bun run landing-page:preview  # Preview production build
+# Quick smoketest (30 seconds)
+./smoketest.sh
+
+# Full end-to-end test (5 minutes)
+./test-e2e.sh
+
+# Run all test suites
+bun run test:all
+
+# Specific suites
+bun run test:controller
+bun run test:cli
+bun run test:versions
 ```
 
-**Deploy to Cloudflare Pages:**
+[**Testing Documentation →**](./docs/testing/testing.md)
 
-Option 1 - Dashboard:
-1. Go to Cloudflare Dashboard → Pages
-2. Connect GitHub repo
-3. Configure:
-   - Build command: `cd packages/landing-page && bun run build`
-   - Build output: `packages/landing-page/dist`
-   - Framework preset: None
-
-Option 2 - Wrangler CLI:
-```bash
-cd packages/landing-page
-bun run build
-npx wrangler pages deploy dist --project-name=expo-free-agent
-```
-
-Configuration: See `packages/landing-page/wrangler.toml`
-
-## Next Steps (Week 2+)
-
-1. **Submit CLI** - Build submission tool
-2. **Free Agent App** - macOS worker with VM execution
-3. **Integration Testing** - End-to-end build flow
-4. **VM Setup** - macOS VM image with Xcode
-
-## Technical Stack
-
-- **Runtime:** Bun
-- **Server:** Express.js
-- **Database:** SQLite (bun:sqlite)
-- **Storage:** Local filesystem
-- **Queue:** In-memory (EventEmitter)
-- **Templates:** EJS
+---
 
 ## Documentation
 
-Complete documentation is organized in the `docs/` directory:
+All documentation is in the [`docs/`](./docs/) directory:
 
-- **[Documentation Index](./docs/INDEX.md)** - Central navigation for all docs
-- [Getting Started](./docs/getting-started/) - Setup and quickstart guides
-- [Architecture](./docs/architecture/) - System design and decisions
-- [Operations](./docs/operations/) - Deployment and release procedures
-- [Testing](./docs/testing/) - Testing documentation
+- [**Documentation Index**](./docs/INDEX.md) - Start here for navigation
+- [Getting Started](./docs/getting-started/) - Quickstart, setup guides
+- [Architecture](./docs/architecture/) - System design, security, diagrams
+- [Operations](./docs/operations/) - Deployment, release, troubleshooting
+- [Testing](./docs/testing/) - Test strategies and procedures
 
-## Design Principles (from AGENTS.md)
+---
 
-- No hard borders in UI
-- DDD architecture (repositories/use cases)
-- Production-quality from day 1
-- Less code over more code
-- Mobile-first design
+## Technical Stack
+
+| Component | Technology |
+|-----------|------------|
+| **Runtime** | Bun |
+| **Server** | Express.js |
+| **Database** | SQLite (bun:sqlite) |
+| **Storage** | Local filesystem |
+| **Queue** | In-memory (EventEmitter) |
+| **Worker** | Swift (macOS) |
+| **Virtualization** | Apple Virtualization Framework |
+| **UI** | EJS templates |
+| **Landing Page** | Vite + React 19 + Tailwind CSS v4 |
+
+---
 
 ## Storage Layout
 
 ```
 data/
-└── controller.db         # SQLite database
+└── controller.db         # SQLite database (builds, workers, jobs)
 
 storage/
-├── builds/              # Source code zips
-├── certs/              # Signing certificates
-└── results/            # Build outputs (IPA/APK)
+├── builds/{buildId}/
+│   ├── source/          # Source code tarballs
+│   └── artifacts/       # Built .ipa/.apk files
+└── certs/               # Signing certificates (future)
 ```
 
-## Important Notes
+---
 
-### Security & Distribution
+## Contributing
 
-- **Gatekeeper Fix**: v0.1.15+ uses native `tar` and `ditto` to preserve code signatures. Never manipulate quarantine attributes on notarized apps. See [GATEKEEPER.md](./docs/operations/gatekeeper.md) for details.
-- **Worker Distribution**: macOS app is code-signed with Developer ID and notarized by Apple. Distributed via npm as `.tar.gz`.
+We welcome contributions! This project follows strict guidelines to maintain quality:
 
-### System Requirements
+1. **Read first:** [CLAUDE.md](./CLAUDE.md) - Mandatory agent rules and guardrails
+2. **Setup:** [Local Development Guide](./docs/getting-started/setup-local.md)
+3. **Test:** All PRs must include tests and pass `bun run test:all`
+4. **Docs:** Update documentation for any user-facing changes
 
-- This is a prototype for self-hosting
-- No authentication yet (add before production)
-- No encryption (trust local network)
-- Local filesystem only (no S3)
-- In-memory queue (lost on restart)
+**Key principles:**
+- Less code is better than more code
+- Production-quality from day 1
+- Security by design (no regressions on Gatekeeper/notarization)
+- Version synchronization enforced by pre-commit hook
+
+---
 
 ## License
 
 MIT
+
+---
+
+## Questions?
+
+- **Documentation:** [docs/INDEX.md](./docs/INDEX.md)
+- **Issues:** [GitHub Issues](https://github.com/expo/expo-free-agent/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/expo/expo-free-agent/discussions)
+
+---
+
+**Made with ☕️ by engineers who wanted control over their build infrastructure.**

@@ -14,6 +14,7 @@ Central index for all documentation in this repository.
 
 Essential guides for new users and contributors.
 
+- [**5-Minute Start**](./getting-started/5-minute-start.md) - Get running in 5 minutes (start here!)
 - [Quickstart](./getting-started/quickstart.md) - Fast path to running the system
 - [Quicktest](./getting-started/quicktest.md) - Quick validation tests
 - [Setup Local](./getting-started/setup-local.md) - Local development setup
@@ -25,6 +26,7 @@ Essential guides for new users and contributors.
 System design, component structure, and technical decisions.
 
 - [Architecture](./architecture/architecture.md) - Overall system design and prototype plan
+- [Diagrams](./architecture/diagrams.md) - Visual architecture diagrams and flows
 - [Security](./architecture/security.md) - Security model, threat mitigation, and isolation
 - [Agents](./architecture/agents.md) - Agent rules and guardrails for code changes
 - [CLI Implementation](./architecture/cli-implementation.md) - Submit CLI design
@@ -36,6 +38,7 @@ Production deployment, releases, and operational procedures.
 
 - [Release](./operations/release.md) - FreeAgent.app release process (build/sign/notarize)
 - [Notarization Setup](./operations/notarization-setup.md) - One-time notarization credentials setup
+- [Troubleshooting](./operations/troubleshooting.md) - Comprehensive troubleshooting guide
 - [Gatekeeper](./operations/gatekeeper.md) - macOS code signing and notarization details
 - [Worker Installer](./operations/worker-installer.md) - Worker installation process
 - [VM Setup](./operations/vm-setup.md) - VM image creation and configuration
@@ -48,6 +51,22 @@ Test strategies, test suites, and testing procedures.
 - [Testing](./testing/testing.md) - Comprehensive testing documentation
 - [Smoketest](./testing/smoketest.md) - Fast sanity checks (30 seconds)
 - [Test Summary](./testing/test-summary.md) - Test coverage summary
+
+## Reference
+
+API references, error codes, and technical specifications.
+
+- [Error Reference](./reference/errors.md) - Complete error code catalog with solutions
+
+## Examples
+
+Complete, runnable examples for common workflows.
+
+- [Build for TestFlight](../examples/01-build-for-testflight/) - End-to-end iOS app deployment
+- [Setup Worker Mac](../examples/02-setup-worker-mac/) - Configure Mac hardware as worker
+- [Custom Build Pipeline](../examples/03-custom-build-pipeline/) - Advanced build configuration
+- [Debug Failed Build](../examples/04-debug-failed-build/) - Troubleshooting build failures
+- [Deploy Controller to VPS](../examples/05-deploy-controller-vps/) - Production deployment
 
 ## Component Documentation
 
