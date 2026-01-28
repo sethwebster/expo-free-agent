@@ -30,6 +30,75 @@ If a change touches a component, also skim that component’s README:
 
 ---
 
+## Documentation structure and navigation
+
+### Documentation organization
+
+All repository documentation is organized under `docs/` with this structure:
+
+```
+docs/
+├── INDEX.md              # START HERE - central documentation index
+├── README.md            # Quick navigation guide
+├── getting-started/     # Setup, quickstart guides
+├── architecture/        # System design, decisions, agent rules
+├── operations/          # Deployment, release, operational procedures
+├── testing/            # Test strategies, procedures
+└── historical/         # Archived docs, old plans
+```
+
+Component-specific docs remain in component directories:
+- `packages/controller/` - Controller implementation docs
+- `cli/` - CLI implementation docs
+- `free-agent/` - Worker app docs
+- `packages/worker-installer/` - Installer docs
+- `packages/landing-page/` - Landing page docs
+
+### When updating documentation
+
+**For new docs:**
+- Place in appropriate `docs/` subdirectory (getting-started, architecture, operations, or testing)
+- Add entry to `docs/INDEX.md` in relevant section
+- Use lowercase-with-hyphens naming (e.g., `setup-guide.md`)
+
+**For doc updates:**
+- Update cross-references to use relative paths from `docs/` structure
+- Component docs: `../../component/file.md`
+- Other docs sections: `../section/file.md`
+- Never use absolute paths or root-relative paths
+
+**For code reviews:**
+- Write to `plans/code-review-<description>.md` (not under `docs/historical/`)
+- Active plans stay in repo root `plans/` directory
+- Only move to `docs/historical/plans/` when archived
+
+**Breaking old doc references:**
+- If removing/moving docs, update all internal references
+- Check component READMEs for cross-references
+- Update `CLAUDE.md` symlink target if needed
+
+### Common doc reference patterns
+
+From component docs to central docs:
+```markdown
+See [Architecture](../../docs/architecture/architecture.md) for system design.
+See [Setup Guide](../../docs/getting-started/setup-local.md) for local development.
+```
+
+From central docs to component docs:
+```markdown
+See [Controller README](../../packages/controller/README.md) for API details.
+See [CLI Implementation](../../cli/README.md) for command reference.
+```
+
+Within docs/ subdirectories:
+```markdown
+See [Testing Guide](../testing/testing.md) for test strategies.
+See [Release Process](../operations/release.md) for deployment.
+```
+
+---
+
 ## Golden rules (non-negotiable)
 
 ### Use Bun, keep lockfiles clean
