@@ -457,6 +457,16 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
           message,
         });
 
+        // Save CPU snapshot if type is cpu_snapshot
+        if (type === 'cpu_snapshot' && data?.cpu_percent !== undefined && data?.memory_mb !== undefined) {
+          db.addCpuSnapshot({
+            build_id: buildId,
+            timestamp: Date.now(),
+            cpu_percent: data.cpu_percent,
+            memory_mb: data.memory_mb,
+          });
+        }
+
         // Update last heartbeat
         db.run('UPDATE builds SET last_heartbeat_at = ? WHERE id = ?', [
           Date.now(),

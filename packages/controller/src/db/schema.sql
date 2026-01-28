@@ -47,9 +47,20 @@ CREATE TABLE IF NOT EXISTS diagnostics (
   FOREIGN KEY (worker_id) REFERENCES workers(id)
 );
 
+CREATE TABLE IF NOT EXISTS cpu_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  build_id TEXT NOT NULL,
+  timestamp INTEGER NOT NULL,
+  cpu_percent REAL NOT NULL, -- 0-100% CPU usage
+  memory_mb REAL NOT NULL, -- Memory usage in MB
+  FOREIGN KEY (build_id) REFERENCES builds(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_builds_status ON builds(status);
 CREATE INDEX IF NOT EXISTS idx_builds_worker ON builds(worker_id);
 CREATE INDEX IF NOT EXISTS idx_builds_access_token ON builds(access_token);
 CREATE INDEX IF NOT EXISTS idx_logs_build ON build_logs(build_id);
 CREATE INDEX IF NOT EXISTS idx_diagnostics_worker ON diagnostics(worker_id);
 CREATE INDEX IF NOT EXISTS idx_diagnostics_run_at ON diagnostics(run_at);
+CREATE INDEX IF NOT EXISTS idx_cpu_snapshots_build ON cpu_snapshots(build_id);
+CREATE INDEX IF NOT EXISTS idx_cpu_snapshots_timestamp ON cpu_snapshots(timestamp);
