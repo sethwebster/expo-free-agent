@@ -12,6 +12,8 @@ public actor VMResourceMonitor {
 
     private var monitorTask: Task<Void, Never>?
     private var isRunning = false
+    private var consecutiveFailures = 0
+    private let maxConsecutiveFailures = 5
 
     public init(
         vmName: String,
@@ -72,20 +74,7 @@ public actor VMResourceMonitor {
 
     /// Get PID of Tart VM process
     private func getTartVMPid() async throws -> Int32? {
-        // Use ps to find tart process running our VM
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-ax", "-o", "pid,command"]
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8) else { return nil }
+        let output = try await runProcess("/bin/ps", args: ["-ax", "-o", "pid,command"])
 
         // Look for line with "tart run <vmName>"
         for line in output.components(separatedBy: "\n") {
@@ -103,22 +92,7 @@ public actor VMResourceMonitor {
 
     /// Get CPU and memory usage for a process using ps
     private func getProcessResourceUsage(pid: Int32) async throws -> (cpuPercent: Double, memoryMB: Double) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        // %cpu: CPU percentage, rss: resident set size in KB
-        process.arguments = ["-p", "\(pid)", "-o", "%cpu,rss"]
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8) else {
-            return (0, 0)
-        }
+        let output = try await runProcess("/bin/ps", args: ["-p", "\(pid)", "-o", "%cpu,rss"])
 
         // Parse output (skip header line)
         let lines = output.components(separatedBy: "\n").filter { !$0.isEmpty }
@@ -138,8 +112,13 @@ public actor VMResourceMonitor {
         return (cpu, memoryMB)
     }
 
-    /// Send CPU snapshot to controller
+    /// Send CPU snapshot to controller with circuit breaker
     private func sendCpuSnapshot(cpuPercent: Double, memoryMB: Double) async {
+        // Circuit breaker: stop trying after consecutive failures
+        guard consecutiveFailures < maxConsecutiveFailures else {
+            return
+        }
+
         let url = URL(string: "\(controllerURL)/api/builds/\(buildId)/telemetry")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -161,11 +140,50 @@ public actor VMResourceMonitor {
 
             let (_, response) = try await URLSession.shared.data(for: request)
 
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
-                print("Failed to send CPU snapshot: HTTP \(httpResponse.statusCode)")
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+                    consecutiveFailures = 0 // Reset on success
+                } else {
+                    consecutiveFailures += 1
+                    print("Failed to send CPU snapshot: HTTP \(httpResponse.statusCode) (failures: \(consecutiveFailures)/\(maxConsecutiveFailures))")
+                }
             }
         } catch {
-            print("Error sending CPU snapshot: \(error)")
+            consecutiveFailures += 1
+            print("Error sending CPU snapshot: \(error) (failures: \(consecutiveFailures)/\(maxConsecutiveFailures))")
+            if consecutiveFailures >= maxConsecutiveFailures {
+                print("Circuit breaker triggered - stopping telemetry after \(maxConsecutiveFailures) consecutive failures")
+            }
+        }
+    }
+
+    /// Run a process asynchronously without blocking the actor thread
+    private func runProcess(_ executable: String, args: [String]) async throws -> String {
+        return try await withCheckedThrowingContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = args
+
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+
+            process.terminationHandler = { _ in
+                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+
+                let output = String(data: outputData, encoding: .utf8) ?? ""
+                let error = String(data: errorData, encoding: .utf8) ?? ""
+
+                continuation.resume(returning: output + error)
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
         }
     }
 }

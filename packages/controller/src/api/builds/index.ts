@@ -459,11 +459,24 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
 
         // Save CPU snapshot if type is cpu_snapshot
         if (type === 'cpu_snapshot' && data?.cpu_percent !== undefined && data?.memory_mb !== undefined) {
+          const cpuPercent = Number(data.cpu_percent);
+          const memoryMb = Number(data.memory_mb);
+
+          // Validate bounds to prevent data corruption
+          if (!Number.isFinite(cpuPercent) || cpuPercent < 0 || cpuPercent > 1000) {
+            fastify.log.warn(`Invalid cpu_percent from worker: ${data.cpu_percent}`);
+            return reply.send({ status: 'ok' });
+          }
+          if (!Number.isFinite(memoryMb) || memoryMb < 0 || memoryMb > 1_000_000) {
+            fastify.log.warn(`Invalid memory_mb from worker: ${data.memory_mb}`);
+            return reply.send({ status: 'ok' });
+          }
+
           db.addCpuSnapshot({
             build_id: buildId,
             timestamp: Date.now(),
-            cpu_percent: data.cpu_percent,
-            memory_mb: data.memory_mb,
+            cpu_percent: cpuPercent,
+            memory_mb: memoryMb,
           });
         }
 
