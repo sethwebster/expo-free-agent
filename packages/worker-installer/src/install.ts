@@ -58,6 +58,13 @@ export function installApp(sourcePath: string, force: boolean = false): void {
   // Copy to /Applications
   cpSync(sourcePath, destPath, { recursive: true });
 
+  // Remove quarantine attribute (prevents "damaged app" error)
+  try {
+    execSync(`xattr -cr "${destPath}"`, { stdio: 'ignore' });
+  } catch (error) {
+    console.warn('Warning: Could not remove quarantine attribute:', error);
+  }
+
   // Ensure executable permissions
   try {
     const executablePath = join(destPath, 'Contents', 'MacOS', 'FreeAgent');
