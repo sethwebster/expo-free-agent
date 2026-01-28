@@ -236,7 +236,7 @@ async function installWorker(options: InstallOptions): Promise<void> {
 
   // Check for Tart - offer to install
   const tartCheck = checkTart();
-  if (tartCheck.status !== 'ok') {
+  if (tartCheck.status !== 'ok' && !options.autoAccept) {
     const { installTart } = await prompts({
       type: 'confirm',
       name: 'installTart',
@@ -257,16 +257,18 @@ async function installWorker(options: InstallOptions): Promise<void> {
     }
   }
 
-  const { proceed } = await prompts({
-    type: 'confirm',
-    name: 'proceed',
-    message: 'Continue with installation?',
-    initial: true
-  });
+  if (!options.autoAccept) {
+    const { proceed } = await prompts({
+      type: 'confirm',
+      name: 'proceed',
+      message: 'Continue with installation?',
+      initial: true
+    });
 
-  if (!proceed) {
-    console.log(chalk.gray('Cancelled.'));
-    return;
+    if (!proceed) {
+      console.log(chalk.gray('Cancelled.'));
+      return;
+    }
   }
 
   // Download binary
@@ -517,26 +519,25 @@ async function main(): Promise<void> {
     .option('--skip-launch', 'Skip launching the app after installation')
     .option('--force', 'Force reinstall if already installed')
     .option('--verbose', 'Verbose output')
+    .option('-y, --yes', 'Auto-accept all prompts')
     .action(async (options) => {
-      // If no command specified and no options, treat as install
-      if (process.argv.length === 2) {
-        try {
-          await installWorker({
-            controllerUrl: options.controllerUrl,
-            apiKey: options.apiKey,
-            skipLaunch: options.skipLaunch,
-            verbose: options.verbose,
-            forceReinstall: options.force
-          });
-        } catch (error) {
-          console.error(chalk.red('\n❌ Installation failed:'), error instanceof Error ? error.message : String(error));
+      try {
+        await installWorker({
+          controllerUrl: options.controllerUrl,
+          apiKey: options.apiKey,
+          skipLaunch: options.skipLaunch,
+          verbose: options.verbose,
+          forceReinstall: options.force,
+          autoAccept: options.yes
+        });
+      } catch (error) {
+        console.error(chalk.red('\n❌ Installation failed:'), error instanceof Error ? error.message : String(error));
 
-          if (options.verbose && error instanceof Error && error.stack) {
-            console.error(chalk.dim(error.stack));
-          }
-
-          process.exit(1);
+        if (options.verbose && error instanceof Error && error.stack) {
+          console.error(chalk.dim(error.stack));
         }
+
+        process.exit(1);
       }
     });
 

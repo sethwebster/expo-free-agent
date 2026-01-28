@@ -45,4 +45,5 @@ export interface InstallOptions {
   skipLaunch?: boolean;
   verbose?: boolean;
   forceReinstall?: boolean;
+  autoAccept?: boolean;
 }
