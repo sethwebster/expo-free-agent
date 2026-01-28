@@ -10,7 +10,7 @@ This is a self-hosted distributed build system with three components:
 2. **Free Agent App** (macOS/Swift) - Worker agent that builds apps in VMs
 3. **Submit CLI** (Node.js) - Client for submitting builds
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for full design and prototype plan.
+See [ARCHITECTURE.md](./docs/architecture/architecture.md) for full design and prototype plan.
 
 ## Project Structure
 
@@ -22,8 +22,8 @@ expo-free-agent/
 │   ├── worker-installer/  # Worker installation CLI (✅ IMPLEMENTED)
 │   └── free-agent/       # macOS worker app (✅ IMPLEMENTED)
 ├── cli/                   # Build submission CLI (✅ IMPLEMENTED)
-├── ARCHITECTURE.md       # Full design document
-├── AGENTS.md            # Agent rules and requirements
+├── docs/                  # All documentation
+├── CLAUDE.md             # Agent rules and requirements
 └── README.md
 ```
 
@@ -57,7 +57,7 @@ Or start earning credits in one command:
 npx @sethwebster/expo-free-agent start
 ```
 
-**⚠️ Critical**: The worker uses native macOS tools (`tar`, `ditto`) to preserve code signatures during installation. See [GATEKEEPER.md](./GATEKEEPER.md) for technical details about notarization handling.
+**⚠️ Critical**: The worker uses native macOS tools (`tar`, `ditto`) to preserve code signatures during installation. See [GATEKEEPER.md](./docs/operations/gatekeeper.md) for technical details about notarization handling.
 
 ## Quick Start
 
@@ -75,7 +75,7 @@ Or run full E2E test (5 minutes):
 ./test-e2e.sh
 ```
 
-See **[SMOKETEST.md](./SMOKETEST.md)** for detailed testing options.
+See **[SMOKETEST.md](./docs/testing/smoketest.md)** for detailed testing options.
 
 ### Install Dependencies
 
@@ -168,7 +168,7 @@ bun test/mock-worker.ts --help
 - ✅ Error handling
 - ✅ Queue persistence across restarts
 
-See **[TESTING.md](./TESTING.md)** for comprehensive testing documentation.
+See **[TESTING.md](./docs/testing/testing.md)** for comprehensive testing documentation.
 
 ## Development
 
@@ -233,6 +233,16 @@ Configuration: See `packages/landing-page/wrangler.toml`
 - **Queue:** In-memory (EventEmitter)
 - **Templates:** EJS
 
+## Documentation
+
+Complete documentation is organized in the `docs/` directory:
+
+- **[Documentation Index](./docs/INDEX.md)** - Central navigation for all docs
+- [Getting Started](./docs/getting-started/) - Setup and quickstart guides
+- [Architecture](./docs/architecture/) - System design and decisions
+- [Operations](./docs/operations/) - Deployment and release procedures
+- [Testing](./docs/testing/) - Testing documentation
+
 ## Design Principles (from AGENTS.md)
 
 - No hard borders in UI
@@ -257,7 +267,7 @@ storage/
 
 ### Security & Distribution
 
-- **Gatekeeper Fix**: v0.1.15+ uses native `tar` and `ditto` to preserve code signatures. Never manipulate quarantine attributes on notarized apps. See [GATEKEEPER.md](./GATEKEEPER.md) for details.
+- **Gatekeeper Fix**: v0.1.15+ uses native `tar` and `ditto` to preserve code signatures. Never manipulate quarantine attributes on notarized apps. See [GATEKEEPER.md](./docs/operations/gatekeeper.md) for details.
 - **Worker Distribution**: macOS app is code-signed with Developer ID and notarized by Apple. Distributed via npm as `.tar.gz`.
 
 ### System Requirements

@@ -15,11 +15,12 @@ This document defines **mandatory** rules for automated agents changing code/doc
 ## Required reading (before meaningful changes)
 
 - `README.md` (repo overview + key scripts)
-- `ARCHITECTURE.md` (system design + prototype constraints)
-- `TESTING.md` (how tests are structured/run)
-- `SETUP_LOCAL.md` / `SETUP_REMOTE.md` (how people actually run this)
-- `GATEKEEPER.md` (macOS distribution constraints; do not regress)
-- `RELEASE.md` (FreeAgent.app release process)
+- `docs/INDEX.md` (documentation navigation)
+- `docs/architecture/architecture.md` (system design + prototype constraints)
+- `docs/testing/testing.md` (how tests are structured/run)
+- `docs/getting-started/setup-local.md` / `docs/getting-started/setup-remote.md` (how people actually run this)
+- `docs/operations/gatekeeper.md` (macOS distribution constraints; do not regress)
+- `docs/operations/release.md` (FreeAgent.app release process)
 
 If a change touches a component, also skim that component’s README:
 - `packages/controller/README.md`
@@ -114,13 +115,13 @@ Run:
 
 ### Worker installer (`packages/worker-installer`)
 
-- Treat `GATEKEEPER.md` as the source of truth for install/extract/copy behavior.
+- Treat `docs/operations/gatekeeper.md` as the source of truth for install/extract/copy behavior.
 - Prefer native macOS tools when interacting with `.app` bundles.
 - Log securely: **never** print API keys; redact aggressively.
 
 ### Worker app (`free-agent`)
 
-- Treat `free-agent/release.sh` + `RELEASE.md` as canonical for building/signing/notarizing.
+- Treat `free-agent/release.sh` + `docs/operations/release.md` as canonical for building/signing/notarizing.
 - Avoid changes that require sandbox entitlements unless you also update signing/notarization and docs.
 - When changing the worker-controller protocol, update the controller endpoints and the mock worker/tests.
 
@@ -153,7 +154,7 @@ If you change an API contract, update tests to lock the behavior in.
 
 Worker app artifact:
 
-- Local build/sign/notarize package: `free-agent/release.sh` (see `RELEASE.md`)
+- Local build/sign/notarize package: `free-agent/release.sh` (see `docs/operations/release.md`)
 - CI release: tag `vX.Y.Z` and push to trigger GitHub Actions release workflow
 
 After releasing a new FreeAgent.app build:
@@ -167,4 +168,4 @@ After releasing a new FreeAgent.app build:
 
 - Make changes **small and reviewable**; don’t refactor unrelated code.
 - Prefer **boring, testable** implementations over cleverness.
-- When you introduce new behavior, also update the most relevant doc under the repo root (`README.md`, `TESTING.md`, `SETUP_*`, `RELEASE.md`, `GATEKEEPER.md`) if users will trip over it.
+- When you introduce new behavior, also update the most relevant doc (`README.md`, `docs/INDEX.md`, or appropriate docs under `docs/`) if users will trip over it.
