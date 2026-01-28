@@ -10,13 +10,14 @@ import { createCancelCommand } from './commands/cancel.js';
 import { createDoctorCommand } from './commands/doctor.js';
 import { createWorkerCommand } from './commands/worker.js';
 import { createLogsCommand } from './commands/logs.js';
+import { createRetryCommand } from './commands/retry.js';
 
 const program = new Command();
 
 program
   .name('expo-free-agent')
   .description('CLI for Expo Free Agent distributed build system')
-  .version('0.1.19');
+  .version('0.1.20');
 
 program.addCommand(createStartCommand());
 program.addCommand(createWorkerCommand());
@@ -26,6 +27,7 @@ program.addCommand(createLogsCommand());
 program.addCommand(createDownloadCommand());
 program.addCommand(createListCommand());
 program.addCommand(createCancelCommand());
+program.addCommand(createRetryCommand());
 program.addCommand(createConfigCommand());
 program.addCommand(createDoctorCommand());
 

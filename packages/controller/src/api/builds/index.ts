@@ -520,6 +520,94 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
       return reply.status(500).send({ error: 'Cancel failed' });
     }
   });
+
+  /**
+   * POST /builds/:id/retry
+   * Retry a failed or completed build with same source/settings
+   * Requires: X-API-Key (admin) OR X-Build-Token (build submitter)
+   */
+  fastify.post<{ Params: BuildParams }>(
+    '/:id/retry',
+    {
+      preHandler: requireBuildAccess(config, db),
+    },
+    async (request, reply) => {
+      try {
+        const originalBuild = db.getBuild(request.params.id);
+
+        if (!originalBuild) {
+          return reply.status(404).send({ error: 'Build not found' });
+        }
+
+        // Check if source still exists
+        if (!originalBuild.source_path || !storage.exists(originalBuild.source_path)) {
+          return reply.status(400).send({
+            error: 'Original build source no longer available. Please submit a new build.'
+          });
+        }
+
+        const newBuildId = nanoid();
+        const timestamp = Date.now();
+        const accessToken = crypto.randomBytes(32).toString('base64url');
+
+        // Copy source to new build
+        const newSourcePath = await storage.copyBuildSource(
+          originalBuild.source_path,
+          newBuildId
+        );
+
+        // Copy certs if they exist
+        let newCertsPath: string | null = null;
+        if (originalBuild.certs_path && storage.exists(originalBuild.certs_path)) {
+          newCertsPath = await storage.copyBuildCerts(
+            originalBuild.certs_path,
+            newBuildId
+          );
+        }
+
+        // Create new build record
+        db.createBuild({
+          id: newBuildId,
+          status: 'pending',
+          platform: originalBuild.platform,
+          source_path: newSourcePath,
+          certs_path: newCertsPath,
+          submitted_at: timestamp,
+          access_token: accessToken,
+        });
+
+        // Add to queue
+        const newBuild = db.getBuild(newBuildId)!;
+        queue.enqueue(newBuild);
+
+        // Log both builds
+        db.addBuildLog({
+          build_id: newBuildId,
+          timestamp,
+          level: 'info',
+          message: `Build submitted (retry of ${request.params.id})`,
+        });
+
+        db.addBuildLog({
+          build_id: request.params.id,
+          timestamp,
+          level: 'info',
+          message: `Retried as build ${newBuildId}`,
+        });
+
+        return reply.send({
+          id: newBuildId,
+          status: 'pending',
+          submitted_at: timestamp,
+          access_token: accessToken,
+          original_build_id: request.params.id,
+        });
+      } catch (err) {
+        fastify.log.error('Retry error:', err);
+        return reply.status(500).send({ error: 'Retry failed' });
+      }
+    }
+  );
 };
 
 /**
