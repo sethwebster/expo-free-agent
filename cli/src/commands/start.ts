@@ -21,6 +21,13 @@ function isWorkerRunning(): boolean {
 }
 
 function launchWorker(): void {
+  // Remove quarantine attribute to prevent "damaged app" error
+  try {
+    execSync(`xattr -cr "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
+  } catch {
+    // Ignore if xattr fails (might not have attribute)
+  }
+
   execSync(`open "${WORKER_APP_PATH}"`, { stdio: 'inherit' });
 }
 

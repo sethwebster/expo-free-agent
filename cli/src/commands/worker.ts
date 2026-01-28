@@ -62,6 +62,13 @@ export function createWorkerCommand(): Command {
           return;
         }
 
+        // Remove quarantine attribute to prevent "damaged app" error
+        try {
+          execSync(`xattr -cr "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
+        } catch {
+          // Ignore if xattr fails
+        }
+
         execSync(`open -a "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
         spinner.succeed('Worker started');
 
