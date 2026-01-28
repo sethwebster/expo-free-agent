@@ -11,10 +11,12 @@ export function createLogsCommand(): Command {
     .option('--api-key <key>', 'API key for authentication')
     .option('--controller-url <url>', 'Controller URL')
     .option('-f, --follow', 'Follow logs in real-time (poll for updates)')
+    .option('-w, --watch', 'Watch logs in real-time (alias for --follow)')
+    .option('-t, --tail', 'Tail logs in real-time (alias for --follow)')
     .option('--interval <ms>', 'Poll interval in milliseconds (default: 2000)', '2000')
     .action(async (buildId: string, options) => {
       try {
-        if (options.follow) {
+        if (options.follow || options.watch || options.tail) {
           await followLogs(buildId, options);
         } else {
           await showLogs(buildId, options);
