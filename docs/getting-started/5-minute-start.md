@@ -180,8 +180,8 @@ Next steps:
 ## What's Next?
 
 ### As a User (Building Apps)
-- [Submit More Builds](../operations/build-submission.md)
-- [Configure Build Settings](../operations/build-config.md)
+- [Submit More Builds](./setup-local.md)
+- [Configure Build Settings](./setup-local.md)
 - [Upload to TestFlight](../operations/testflight.md)
 
 ### As an Operator (Running Infrastructure)
@@ -277,3 +277,22 @@ EXPO_BUILD_TIMEOUT      # Default: 300 (5 min)
 **Got questions?** See the [Complete Setup Guide](./setup-local.md) for detailed explanations.
 
 **Having issues?** Check [Troubleshooting Guide](../operations/troubleshooting.md) or [open an issue](https://github.com/expo/expo-free-agent/issues).
+
+---
+
+## Feedback
+
+**Was this guide helpful?** 👍 👎
+
+Help us improve:
+- [Report an issue](https://github.com/expo/expo-free-agent/issues/new?labels=documentation&title=5-Minute%20Start:%20)
+- [Suggest improvements](https://github.com/expo/expo-free-agent/discussions)
+- [Edit this page](https://github.com/expo/expo-free-agent/edit/main/docs/getting-started/5-minute-start.md)
+
+**What would make this better?**
+- More examples?
+- Clearer explanations?
+- Missing steps?
+- Something confusing?
+
+Let us know!

@@ -317,4 +317,17 @@ MIT
 
 ---
 
+## Feedback
+
+**Was this documentation helpful?**
+
+👍 Yes • 👎 No
+
+Help us improve:
+- [Report an issue](https://github.com/expo/expo-free-agent/issues/new?labels=documentation)
+- [Suggest improvements](https://github.com/expo/expo-free-agent/discussions)
+- [Edit this page](https://github.com/expo/expo-free-agent/edit/main/README.md)
+
+---
+
 **Made with ☕️ by engineers who wanted control over their build infrastructure.**

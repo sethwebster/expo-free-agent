@@ -44,7 +44,7 @@ free-agent/FreeAgent.app.zip
 # IDE
 .vscode/
 .idea/
-.claude/settings.local.json
+.claude/
 
 # OS
 Thumbs.db

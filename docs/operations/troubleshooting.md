@@ -773,7 +773,7 @@ brew upgrade  # macOS
 
 ### Monitoring Setup
 
-See [monitoring-setup.md](./monitoring-setup.md) for detailed monitoring configuration.
+See [Runbook](./runbook.md) for detailed monitoring and operational procedures.
 
 ---
 
@@ -811,6 +811,25 @@ sqlite3 data/controller.db "PRAGMA query_only = ON;"
 # View slow queries
 sqlite3 data/controller.db "PRAGMA stats;"
 ```
+
+---
+
+## Feedback
+
+**Did this troubleshooting guide help?** 👍 👎
+
+Help us improve:
+- [Report missing scenarios](https://github.com/expo/expo-free-agent/issues/new?labels=documentation,troubleshooting&title=Troubleshooting:%20)
+- [Share your solution](https://github.com/expo/expo-free-agent/discussions)
+- [Edit this page](https://github.com/expo/expo-free-agent/edit/main/docs/operations/troubleshooting.md)
+
+**What would make this better?**
+- Missing error scenario?
+- Solution didn't work?
+- Need more detail?
+- Unclear diagnostic steps?
+
+Let us know!
 
 ---
 

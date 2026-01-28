@@ -37,6 +37,7 @@ System design, component structure, and technical decisions.
 Production deployment, releases, and operational procedures.
 
 - [Release](./operations/release.md) - FreeAgent.app release process (build/sign/notarize)
+- [Runbook](./operations/runbook.md) - Day-to-day operational procedures and emergency response
 - [Notarization Setup](./operations/notarization-setup.md) - One-time notarization credentials setup
 - [Troubleshooting](./operations/troubleshooting.md) - Comprehensive troubleshooting guide
 - [Gatekeeper](./operations/gatekeeper.md) - macOS code signing and notarization details
@@ -56,6 +57,7 @@ Test strategies, test suites, and testing procedures.
 
 API references, error codes, and technical specifications.
 
+- [API Reference](./reference/api.md) - Complete REST API documentation
 - [Error Reference](./reference/errors.md) - Complete error code catalog with solutions
 
 ## Examples
@@ -72,52 +74,26 @@ Complete, runnable examples for common workflows.
 
 Each component has its own README and component-specific docs:
 
-### Controller (`packages/controller/`)
+### Controller
+
+Component-specific docs in `packages/controller/`:
 - [README](../packages/controller/README.md) - Controller overview
 - [ROUTES](../packages/controller/ROUTES.md) - API endpoints reference
-- [SECURITY](../packages/controller/SECURITY.md) - Security considerations
-- [ARCHITECTURE-DDD](../packages/controller/ARCHITECTURE-DDD.md) - Domain-driven design
-- [DEPLOYMENT](../packages/controller/DEPLOYMENT.md) - Deployment guide
-- [DEPLOY_QUICK_START](../packages/controller/DEPLOY_QUICK_START.md) - Quick deploy
 
-### Submit CLI (`cli/`)
+### Submit CLI
+
+Component-specific docs in `cli/`:
 - [README](../cli/README.md) - CLI overview
-- [USAGE](../cli/USAGE.md) - Usage examples
-- [SECURITY](../cli/SECURITY.md) - Security considerations
 
-### Worker App (`free-agent/`)
+### Worker App
+
+Component-specific docs in `free-agent/`:
 - [README](../free-agent/README.md) - Worker app overview
-- [QUICK_START](../free-agent/QUICK_START.md) - Quick start guide
-- [DISTRIBUTION](../free-agent/DISTRIBUTION.md) - Distribution docs (redirects to operations)
 
-### Worker Installer (`packages/worker-installer/`)
+### Worker Installer
+
+Component-specific docs in `packages/worker-installer/`:
 - [README](../packages/worker-installer/README.md) - Installer overview
-- [TESTING](../packages/worker-installer/TESTING.md) - Installer testing
-- [CHANGELOG](../packages/worker-installer/CHANGELOG.md) - Version history
-
-### Landing Page (`packages/landing-page/`)
-- [README](../packages/landing-page/README.md) - Landing page overview
-- [DESIGN](../packages/landing-page/DESIGN.md) - Design guidelines
-- [EXPO-DESIGN](../packages/landing-page/EXPO-DESIGN.md) - Expo-specific design
-- [DARK-MODE](../packages/landing-page/DARK-MODE.md) - Dark mode implementation
-- [SETUP](../packages/landing-page/SETUP.md) - Development setup
-- [QUICK-START](../packages/landing-page/QUICK-START.md) - Quick start
-- [CLOUDFLARE_DEPLOY](../packages/landing-page/CLOUDFLARE_DEPLOY.md) - Cloudflare deployment
-- [ROADMAP](../packages/landing-page/ROADMAP.md) - Feature roadmap
-- [TESTING-CHECKLIST](../packages/landing-page/TESTING-CHECKLIST.md) - Testing checklist
-
-### Elixir Controller (`packages/controller_elixir/`)
-- [README](../packages/controller_elixir/README.md) - Elixir port overview
-- [ELIXIR_PORT](../packages/controller_elixir/ELIXIR_PORT.md) - Port details
-- [INTEGRATION](../packages/controller_elixir/INTEGRATION.md) - Integration guide
-- [AGENTS](../packages/controller_elixir/AGENTS.md) - Agent guidelines
-
-### VM Setup (`vm-setup/`)
-- [README](../vm-setup/README.md) - VM setup overview
-- [BOOTSTRAP-README](../vm-setup/BOOTSTRAP-README.md) - Bootstrap process
-- [FIRST-TIME-INSTALL](../vm-setup/FIRST-TIME-INSTALL.md) - First-time setup
-- [TART-SETUP](../vm-setup/TART-SETUP.md) - Tart VM setup
-- [VERIFY_NEW_IMAGE](../vm-setup/VERIFY_NEW_IMAGE.md) - Image verification
 
 ## Historical Documentation
 
@@ -146,6 +122,9 @@ Archived documentation, completion reports, and planning docs.
 
 For contributors and automated agents:
 
+- [Contributing Guide](./contributing/GUIDE.md) - Complete contributor guide
+- [Accessibility Guide](./contributing/accessibility.md) - Making documentation accessible
+- [Maintaining Documentation](./contributing/maintaining-docs.md) - Keeping docs up-to-date
 - [CLAUDE.md](../CLAUDE.md) - Agent rules and repo guardrails (MANDATORY reading)
 - [Agents](./architecture/agents.md) - Detailed agent behavior expectations
 
@@ -213,3 +192,19 @@ expo-free-agent/
 - **...contribute code** → [CLAUDE.md](../CLAUDE.md)
 - **...use the API** → [Controller ROUTES](../packages/controller/ROUTES.md)
 - **...debug issues** → [Testing](./testing/testing.md) + component READMEs
+
+---
+
+## Documentation Feedback
+
+**Was this helpful?** 👍 👎
+
+Help us improve the documentation:
+- [Report an issue](https://github.com/expo/expo-free-agent/issues/new?labels=documentation)
+- [Suggest improvements](https://github.com/expo/expo-free-agent/discussions)
+- [Edit any page](https://github.com/expo/expo-free-agent/tree/main/docs)
+
+**Can't find what you need?**
+- Search [GitHub Discussions](https://github.com/expo/expo-free-agent/discussions)
+- Check [Troubleshooting Guide](./operations/troubleshooting.md)
+- Ask in [GitHub Issues](https://github.com/expo/expo-free-agent/issues)
