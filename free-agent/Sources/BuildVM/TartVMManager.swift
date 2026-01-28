@@ -11,6 +11,7 @@ public class TartVMManager {
 
     private var vmName: String?
     private var vmIP: String?
+    private var resourceMonitor: VMResourceMonitor?
 
     // Timeouts from runbook
     private let ipTimeout: TimeInterval = 120
@@ -108,6 +109,21 @@ public class TartVMManager {
 
             try await executeCommand("screen", runArgs)
             logs += "✓ VM started with secure bootstrap env vars\n\n"
+
+            // 2.5) Start resource monitor if we have credentials
+            if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
+                logs += "Starting resource monitor...\n"
+                resourceMonitor = VMResourceMonitor(
+                    vmName: vmName!,
+                    buildId: buildId,
+                    workerId: workerId,
+                    controllerURL: controllerURL,
+                    apiKey: apiKey,
+                    tartPath: tartPath
+                )
+                await resourceMonitor?.start()
+                logs += "✓ Resource monitor started\n\n"
+            }
 
             // 3) Wait for bootstrap completion (password randomization + cert fetch)
             logs += "Waiting for VM bootstrap (password randomization + cert fetch)...\n"
@@ -282,6 +298,14 @@ public class TartVMManager {
 
     /// Cleanup VM (always called, even on error)
     private func cleanupVM(_ logs: inout String, created: Bool) async {
+        // Stop resource monitor
+        if let monitor = resourceMonitor {
+            logs += "\nStopping resource monitor...\n"
+            await monitor.stop()
+            resourceMonitor = nil
+            logs += "✓ Resource monitor stopped\n"
+        }
+
         guard created, let vm = vmName else { return }
 
         logs += "\nCleaning up VM...\n"

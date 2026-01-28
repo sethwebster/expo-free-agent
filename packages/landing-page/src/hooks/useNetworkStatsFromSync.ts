@@ -11,6 +11,8 @@ export interface NetworkStats {
   activeBuilds: number;
   buildsToday: number;
   totalBuilds: number;
+  totalBuildTimeMs: number;
+  totalCpuCycles: number;
 }
 
 // ============================================================================
@@ -40,12 +42,17 @@ function getBuildsToday(): number {
 
 function getMockStats(): NetworkStats {
   const buildsToday = getBuildsToday();
+  const totalBuilds = BASELINE_TOTAL + buildsToday;
+  const AVG_BUILD_TIME_MS = 300_000; // 5 minutes
+  const AVG_CPU_PERCENT = 40;
   return {
     nodesOnline: 0,
     buildsQueued: 82,
     activeBuilds: 0,
     buildsToday,
-    totalBuilds: BASELINE_TOTAL + buildsToday,
+    totalBuilds,
+    totalBuildTimeMs: totalBuilds * AVG_BUILD_TIME_MS,
+    totalCpuCycles: (totalBuilds * AVG_BUILD_TIME_MS / 1000) * (AVG_CPU_PERCENT / 100),
   };
 }
 
@@ -101,10 +108,15 @@ export function useNetworkStats(): {
         setStats((prev) => {
           const buildsToday = getBuildsToday();
           if (prev.buildsToday !== buildsToday) {
+            const totalBuilds = BASELINE_TOTAL + buildsToday;
+            const AVG_BUILD_TIME_MS = 300_000;
+            const AVG_CPU_PERCENT = 40;
             return {
               ...prev,
               buildsToday,
-              totalBuilds: BASELINE_TOTAL + buildsToday,
+              totalBuilds,
+              totalBuildTimeMs: totalBuilds * AVG_BUILD_TIME_MS,
+              totalCpuCycles: (totalBuilds * AVG_BUILD_TIME_MS / 1000) * (AVG_CPU_PERCENT / 100),
             };
           }
           return prev;
