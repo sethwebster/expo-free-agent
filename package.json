@@ -1,6 +1,6 @@
 {
   "name": "expo-free-agent",
-  "version": "0.1.15",
+  "version": "0.1.22",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -16,6 +16,7 @@
     "test:controller": "bun test packages/controller/src/__tests__",
     "test:cli": "bun test cli/src/__tests__",
     "test:e2e": "./test-e2e.sh",
+    "test:versions": "bun run scripts/check-versions.ts",
     "test:all": "bun test && ./test-e2e.sh"
   },
   "devDependencies": {

@@ -136,39 +136,46 @@ public actor TemplateVMCheck: DiagnosticCheck {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
-        var allOutput = ""
-
-        // Set up async reading for both stdout and stderr
         let outputHandle = outputPipe.fileHandleForReading
         let errorHandle = errorPipe.fileHandleForReading
 
         try process.run()
 
-        // Read output asynchronously
-        Task {
+        // Read output asynchronously with proper task management
+        let outputTask = Task {
+            var lines: [String] = []
             do {
                 for try await line in outputHandle.bytes.lines {
-                    allOutput += line + "\n"
+                    lines.append(line)
                     parseProgressLine(line)
                 }
             } catch {
-                print("Error reading output: \(error)")
+                print("Error reading stdout: \(error)")
             }
+            return lines.joined(separator: "\n")
         }
 
-        Task {
+        let errorTask = Task {
+            var lines: [String] = []
             do {
                 for try await line in errorHandle.bytes.lines {
-                    allOutput += line + "\n"
+                    lines.append(line)
                     parseProgressLine(line)
                 }
             } catch {
-                print("Error reading error output: \(error)")
+                print("Error reading stderr: \(error)")
             }
+            return lines.joined(separator: "\n")
         }
 
+        // Wait for process to complete
         process.waitUntilExit()
 
+        // Wait for all output to be read
+        let stdout = await outputTask.value
+        let stderr = await errorTask.value
+
+        let allOutput = [stdout, stderr].filter { !$0.isEmpty }.joined(separator: "\n")
         return (process.terminationStatus, allOutput)
     }
 

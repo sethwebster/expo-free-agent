@@ -139,6 +139,45 @@ Versions are passed as arguments to `release.sh`:
 ./release.sh 1.0.0  # Major release
 ```
 
+### Base VM Image Versioning
+
+The worker app uses a base VM image that must be versioned alongside app releases.
+
+**Image naming**: `ghcr.io/sethwebster/expo-free-agent-base:VERSION`
+
+**When to push a new base image**:
+- Major/minor releases (0.1.x → 0.2.0, 0.2.x → 1.0.0)
+- When VM dependencies change (Xcode, Expo SDK, system packages)
+- Not needed for patch releases unless VM changed
+
+**Push versioned base image**:
+
+```bash
+# Set auth (use gh token with write:packages scope)
+export TART_REGISTRY_USERNAME=sethwebster
+export TART_REGISTRY_PASSWORD="$(gh auth token)"
+
+# Push with version tag AND :latest
+/opt/homebrew/bin/tart push expo-free-agent-tahoe-26.2-xcode-expo-54 \
+  ghcr.io/sethwebster/expo-free-agent-base:0.1.16 \
+  ghcr.io/sethwebster/expo-free-agent-base:latest
+```
+
+**Then update code to reference versioned image**:
+
+1. `free-agent/Sources/FreeAgent/main.swift:24`
+2. `free-agent/Sources/FreeAgent/SettingsView.swift:47`
+3. `free-agent/Sources/BuildVM/TartVMManager.swift:19`
+4. `free-agent/Sources/WorkerCore/WorkerService.swift:220`
+5. `packages/controller/.env.example:10`
+6. `packages/controller/src/domain/Config.ts`
+
+**Verify image is public and pullable**:
+
+```bash
+/opt/homebrew/bin/tart pull ghcr.io/sethwebster/expo-free-agent-base:0.1.16
+```
+
 ## Verification
 
 After release, verify the build works:

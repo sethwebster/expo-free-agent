@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS builds (
   started_at INTEGER,
   completed_at INTEGER,
   error_message TEXT,
+  access_token TEXT NOT NULL, -- unique token for build submitter access
   FOREIGN KEY (worker_id) REFERENCES workers(id)
 );
 
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS diagnostics (
 
 CREATE INDEX IF NOT EXISTS idx_builds_status ON builds(status);
 CREATE INDEX IF NOT EXISTS idx_builds_worker ON builds(worker_id);
+CREATE INDEX IF NOT EXISTS idx_builds_access_token ON builds(access_token);
 CREATE INDEX IF NOT EXISTS idx_logs_build ON build_logs(build_id);
 CREATE INDEX IF NOT EXISTS idx_diagnostics_worker ON diagnostics(worker_id);
 CREATE INDEX IF NOT EXISTS idx_diagnostics_run_at ON diagnostics(run_at);

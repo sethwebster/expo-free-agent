@@ -29,6 +29,7 @@ export interface Build {
   started_at: number | null;
   completed_at: number | null;
   error_message: string | null;
+  access_token: string;
 }
 
 export interface BuildLog {
@@ -119,8 +120,8 @@ export class DatabaseService {
   // Builds
   createBuild(build: Omit<Build, 'worker_id' | 'started_at' | 'completed_at' | 'error_message' | 'result_path'>) {
     const stmt = this.db.prepare(`
-      INSERT INTO builds (id, status, platform, source_path, certs_path, submitted_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO builds (id, status, platform, source_path, certs_path, submitted_at, access_token)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       build.id,
@@ -128,13 +129,23 @@ export class DatabaseService {
       build.platform,
       build.source_path,
       build.certs_path,
-      build.submitted_at
+      build.submitted_at,
+      build.access_token
     );
   }
 
   getBuild(id: string): Build | undefined {
     const stmt = this.db.prepare('SELECT * FROM builds WHERE id = ?');
     return stmt.get(id) as Build | undefined;
+  }
+
+  /**
+   * Verify build access token
+   * Returns build if token is valid, undefined otherwise
+   */
+  verifyBuildToken(buildId: string, token: string): Build | undefined {
+    const stmt = this.db.prepare('SELECT * FROM builds WHERE id = ? AND access_token = ?');
+    return stmt.get(buildId, token) as Build | undefined;
   }
 
   getAllBuilds(): Build[] {

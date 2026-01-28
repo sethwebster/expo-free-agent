@@ -65,12 +65,12 @@ function displayBuildStatus(status: any): void {
 
   if (status.status === 'completed') {
     console.log(chalk.green('Build completed successfully!'));
-    console.log('Download:', chalk.cyan(`expo-controller download ${status.id}`));
+    console.log('Download:', chalk.cyan(`expo-free-agent download ${status.id}`));
   } else if (status.status === 'failed') {
     console.log(chalk.red('Build failed'));
   } else {
     console.log(chalk.yellow('Build in progress...'));
-    console.log('Watch progress:', chalk.cyan(`expo-controller status ${status.id} --watch`));
+    console.log('Watch progress:', chalk.cyan(`expo-free-agent status ${status.id} --watch`));
   }
 
   console.log();
@@ -104,7 +104,7 @@ async function watchBuildStatus(buildId: string, client: APIClient = apiClient):
       console.log();
       console.log(chalk.red('Watch timeout exceeded (30 minutes)'));
       console.log('Build may still be running. Check status manually:');
-      console.log(chalk.cyan(`expo-controller status ${buildId}`));
+      console.log(chalk.cyan(`expo-free-agent status ${buildId}`));
       console.log();
       process.exit(1);
     }
@@ -134,7 +134,7 @@ async function watchBuildStatus(buildId: string, client: APIClient = apiClient):
         console.log();
         console.log(chalk.green('Build completed successfully!'));
         console.log(chalk.bold('Duration:'), formatDuration(duration));
-        console.log('Download:', chalk.cyan(`expo-controller download ${buildId}`));
+        console.log('Download:', chalk.cyan(`expo-free-agent download ${buildId}`));
         console.log();
         break;
       } else if (status.status === 'failed') {
@@ -162,7 +162,7 @@ async function watchBuildStatus(buildId: string, client: APIClient = apiClient):
         console.log(chalk.red('Too many consecutive errors (5). Stopping watch.'));
         console.error(chalk.red(error instanceof Error ? error.message : String(error)));
         console.log();
-        console.log('Try again:', chalk.cyan(`expo-controller status ${buildId} --watch`));
+        console.log('Try again:', chalk.cyan(`expo-free-agent status ${buildId} --watch`));
         console.log();
         process.exit(1);
       }

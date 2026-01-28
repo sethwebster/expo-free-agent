@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, createWriteStream, createReadStream, unlinkSync, readFileSync } from 'fs';
+import { mkdirSync, existsSync, createWriteStream, createReadStream, unlinkSync, readFileSync, copyFileSync } from 'fs';
 import { join, resolve } from 'path';
 import type { Readable } from 'stream';
 import AdmZip from 'adm-zip';
@@ -175,6 +175,65 @@ export class FileStorage {
     }
 
     return readFileSync(normalized);
+  }
+
+  /**
+   * Check if a file exists
+   */
+  exists(filePath: string): boolean {
+    const normalized = resolve(filePath);
+    const storageRoot = resolve(this.storagePath);
+
+    // Prevent path traversal
+    if (!normalized.startsWith(storageRoot)) {
+      return false;
+    }
+
+    return existsSync(normalized);
+  }
+
+  /**
+   * Copy build source to new build ID
+   */
+  async copyBuildSource(sourcePath: string, newBuildId: string): Promise<string> {
+    const normalized = resolve(sourcePath);
+    const storageRoot = resolve(this.storagePath);
+
+    // Prevent path traversal
+    if (!normalized.startsWith(storageRoot)) {
+      throw new Error('Path traversal attempt blocked: file must be inside storage directory');
+    }
+
+    if (!existsSync(normalized)) {
+      throw new Error('Source file not found');
+    }
+
+    const newPath = join(this.storagePath, 'builds', `${newBuildId}.zip`);
+    copyFileSync(normalized, newPath);
+
+    return newPath;
+  }
+
+  /**
+   * Copy build certs to new build ID
+   */
+  async copyBuildCerts(certsPath: string, newBuildId: string): Promise<string> {
+    const normalized = resolve(certsPath);
+    const storageRoot = resolve(this.storagePath);
+
+    // Prevent path traversal
+    if (!normalized.startsWith(storageRoot)) {
+      throw new Error('Path traversal attempt blocked: file must be inside storage directory');
+    }
+
+    if (!existsSync(normalized)) {
+      throw new Error('Certs file not found');
+    }
+
+    const newPath = join(this.storagePath, 'certs', `${newBuildId}.zip`);
+    copyFileSync(normalized, newPath);
+
+    return newPath;
   }
 }
 

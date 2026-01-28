@@ -223,7 +223,14 @@ async function installWorker(options: InstallOptions): Promise<void> {
     }
 
     // Continue with reinstall
+    const wasRunning = isAppRunning();
+    if (wasRunning) {
+      console.log(chalk.yellow('  Worker is currently running and will be restarted after update\n'));
+    }
+
     options.forceReinstall = true;
+    // Store flag to skip launch prompts and auto-restart
+    (options as any).autoRestart = wasRunning;
   }
 
   // Run pre-flight checks
@@ -400,55 +407,76 @@ async function installWorker(options: InstallOptions): Promise<void> {
   // Launch app
   console.log();
 
-  if (!options.skipLaunch) {
-    const { shouldLaunch } = await prompts({
-      type: 'confirm',
-      name: 'shouldLaunch',
-      message: 'Launch Free Agent Worker now?',
-      initial: true
-    });
+  const autoRestart = (options as any).autoRestart;
 
-    if (shouldLaunch) {
-      const launchSpinner = ora('Launching app...').start();
+  if (!options.skipLaunch) {
+    // Auto-restart if this was an update and the app was running
+    if (autoRestart) {
+      const launchSpinner = ora('Restarting Free Agent Worker...').start();
 
       try {
         launchApp();
-        launchSpinner.succeed('App launched (look for icon in menu bar)');
+        launchSpinner.succeed('Worker restarted (look for icon in menu bar)');
       } catch (error) {
-        launchSpinner.fail('Failed to launch');
+        launchSpinner.fail('Failed to restart');
         console.log(chalk.yellow('You can launch manually from /Applications/FreeAgent.app\n'));
       }
-    }
-
-    // Login items
-    if (!isInLoginItems()) {
-      const { addToLogin } = await prompts({
+    } else {
+      // Normal install flow - prompt user
+      const { shouldLaunch } = await prompts({
         type: 'confirm',
-        name: 'addToLogin',
-        message: 'Add to Login Items (start automatically on boot)?',
+        name: 'shouldLaunch',
+        message: 'Launch Free Agent Worker now?',
         initial: true
       });
 
-      if (addToLogin) {
-        const loginSpinner = ora('Adding to Login Items...').start();
+      if (shouldLaunch) {
+        const launchSpinner = ora('Launching app...').start();
 
-        if (addToLoginItems()) {
-          loginSpinner.succeed('Added to Login Items');
-        } else {
-          loginSpinner.warn('Could not add to Login Items automatically');
-          console.log(chalk.dim('  You can add it manually in System Settings > General > Login Items\n'));
+        try {
+          launchApp();
+          launchSpinner.succeed('App launched (look for icon in menu bar)');
+        } catch (error) {
+          launchSpinner.fail('Failed to launch');
+          console.log(chalk.yellow('You can launch manually from /Applications/FreeAgent.app\n'));
+        }
+      }
+
+      // Login items (only for fresh installs, not updates)
+      if (!isInLoginItems()) {
+        const { addToLogin } = await prompts({
+          type: 'confirm',
+          name: 'addToLogin',
+          message: 'Add to Login Items (start automatically on boot)?',
+          initial: true
+        });
+
+        if (addToLogin) {
+          const loginSpinner = ora('Adding to Login Items...').start();
+
+          if (addToLoginItems()) {
+            loginSpinner.succeed('Added to Login Items');
+          } else {
+            loginSpinner.warn('Could not add to Login Items automatically');
+            console.log(chalk.dim('  You can add it manually in System Settings > General > Login Items\n'));
+          }
         }
       }
     }
   }
 
   // Success message
-  console.log(chalk.green.bold('\n✓ Installation complete!\n'));
+  if (autoRestart) {
+    console.log(chalk.green.bold('\n✓ Update complete!\n'));
+    console.log(chalk.dim('The worker has been updated and restarted.\n'));
+  } else {
+    console.log(chalk.green.bold('\n✓ Installation complete!\n'));
 
-  console.log(chalk.bold('Next steps:'));
-  console.log('  1. Click the Free Agent icon in your menu bar');
-  console.log('  2. Click "Start Worker" to begin accepting builds');
-  console.log('  3. Monitor build activity in the app interface\n');
+    console.log(chalk.bold('Next steps:'));
+    console.log('  1. Click the Free Agent icon in your menu bar');
+    console.log('  2. Click "Start Worker" to begin accepting builds');
+    console.log('  3. Monitor build activity in the app interface\n');
+  }
 
   console.log(chalk.dim('Configuration: ' + getConfigPath()));
   console.log(chalk.dim('Documentation: https://docs.expo.dev/free-agent/\n'));

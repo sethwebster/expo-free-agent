@@ -1,12 +1,14 @@
 import fs from 'fs';
 import { createWriteStream } from 'fs';
 import { getControllerUrl, getApiKey } from './config.js';
+import { getBuildToken } from './build-tokens.js';
 import { z } from 'zod';
 
 // Validation schemas
 const BuildSubmissionResponseSchema = z.object({
   id: z.string(),
-}).transform((data) => ({ buildId: data.id }));
+  access_token: z.string(),
+}).transform((data) => ({ buildId: data.id, accessToken: data.access_token }));
 
 const BuildStatusSchema = z.object({
   id: z.string(),
@@ -212,7 +214,17 @@ export class APIClient {
       throw new Error('Build ID is required');
     }
 
-    const response = await this.fetchWithTimeout(`${this.baseUrl}/api/builds/${buildId}/status`);
+    // Try to get build token for this build
+    const buildToken = await getBuildToken(buildId);
+    const headers: Record<string, string> = {};
+    if (buildToken) {
+      headers['X-Build-Token'] = buildToken;
+    }
+
+    const response = await this.fetchWithTimeout(
+      `${this.baseUrl}/api/builds/${buildId}/status`,
+      { headers }
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to get build status: ${response.statusText}`);
@@ -232,7 +244,17 @@ export class APIClient {
     // Validate output path to prevent path traversal
     const resolvedPath = validateOutputPath(outputPath);
 
-    const response = await this.fetchWithTimeout(`${this.baseUrl}/api/builds/${buildId}/download`);
+    // Try to get build token for this build
+    const buildToken = await getBuildToken(buildId);
+    const headers: Record<string, string> = {};
+    if (buildToken) {
+      headers['X-Build-Token'] = buildToken;
+    }
+
+    const response = await this.fetchWithTimeout(
+      `${this.baseUrl}/api/builds/${buildId}/download`,
+      { headers }
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to download build: ${response.statusText}`);

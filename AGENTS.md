@@ -1,345 +1,170 @@
-Below is a polished, internally consistent, React-correct, DDD-safe rewrite of your AGENTS.md.
-Tone is tightened, redundancies removed, contradictions resolved (notably the direct DB query vs DDD rule conflict), and language made more enforceable without losing urgency.
-
-⸻
-
-BuiltIn — Agent Behavior & Requirements
-
-This document defines mandatory operating rules for all automated agents (ChatGPT, Claude, codegen agents, internal tools, etc.) when generating code, documentation, designs, or architectural decisions for BuiltIn.
-
-Failure to comply with this document is considered invalid output.
-
-⸻
-
-Required Reading (MANDATORY)
-
-Agents must read and comply with ALL documents below before producing ANY output:
-	1.	docs/VISION-MISSION-STRATEGY-GOALS.md
-Product vision, mission, and long-term strategy
-	2.	docs/PRINCIPLES.md
-Engineering philosophy, UX principles, and non-negotiables
-	3.	docs/ROADMAP.md
-Active development phases and priorities
-	4.	Plan file:
-/Users/sethwebster/.claude/plans/toasty-nibbling-stearns.md
-Domain-Driven Design (DDD) architecture and data abstraction layer
-
-These documents govern product intent, engineering rules, UX decisions, and architectural constraints.
-If there is a conflict, these documents override all agent assumptions.
-
-⸻
-
-Core Requirements
-
-Architecture & Tech Stack
-	•	Mobile-first, RSC-first
-	•	Design for mobile before desktop
-	•	Optimize for Server Components and streaming by default
-	•	Server Components by default
-	•	Client Components ONLY for interactivity (forms, messaging, realtime UI)
-	•	Push "use client" as far to the leaves as possible
-	•	Tech Stack (Non-Negotiable)
-	•	Runtime: Bun
-	•	Framework: Next.js 16 (RSC-first)
-	•	Styling: Tailwind CSS v4 (token-driven)
-	•	Database: Postgres
-	•	ORM: Drizzle
-	•	Cross-platform ready
-	•	APIs and domain logic must support future native iOS / Android clients
-	•	No web-only architectural shortcuts
-
-⸻
-
-Design System Rules
-	•	NO hard borders
-	•	❌ border, border-2, etc.
-	•	✅ shadows, soft backgrounds, subtle separators
-	•	Design tokens everywhere
-	•	No hard-coded colors, spacing, or radii
-	•	Use CSS variables only (var(--background), var(--primary), etc.)
-	•	Theme-aware
-	•	Must support dynamic theming
-	•	Use @media (prefers-color-scheme: dark) for system switching
-	•	Visual language
-	•	Light, airy, warm, community-focused
-	•	Avoid harsh contrast or heavy UI density
-	•	shadcn/ui usage
-	•	Always add components via:
-
-bunx shadcn@latest add <component>
-
-
-	•	❌ Never manually create or edit shadcn component files
-
-⸻
-
-Code Quality Rules
-	•	NO direct useEffect in components
-	•	Always wrap logic in custom hooks
-	•	Hooks must be DRY and reusable
-	•	React best practices
-	•	Clear component boundaries
-	•	Predictable state ownership
-	•	Proper prop typing and composition
-	•	DDD is MANDATORY
-	•	ALL data access goes through use cases and repositories
-	•	❌ Never call db.query directly from:
-	•	Pages
-	•	Layouts
-	•	Components (Server or Client)
-	•	Error handling
-	•	❌ Do NOT throw "NOT_FOUND" errors manually
-	•	✅ Use notFound() from next/navigation
-	•	URL-based UI state (Preferred)
-	•	When secure and appropriate, store UI state in URL search params
-	•	Enables:
-	•	Shareable links
-	•	Back/forward navigation
-	•	Refresh persistence
-	•	Deep linking
-Examples:
-	•	Modal open state
-	•	Selected items
-	•	Filters
-	•	Pagination
-	•	Lightbox index
-Implementation:
-	•	useSearchParams()
-	•	router.push(..., { scroll: false })
+# Expo Free Agent — Agent Rules & Repo Guardrails
 
-⸻
-
-Component Patterns
+This repository is a **distributed build mesh for Expo apps**:
 
-Page Structure & Suspense
-
-Async pages are allowed. Unbounded async is the problem.
+- **Controller** (`packages/controller`): Bun + Express + SQLite + local filesystem storage + small Web UI
+- **Worker app** (`free-agent`): macOS Swift menu bar app that executes builds in macOS VMs
+- **Worker installer** (`packages/worker-installer`): TypeScript CLI that downloads/verifies/installs `FreeAgent.app`
+- **Submit CLI** (`cli`): TypeScript CLI for submitting builds and downloading artifacts
+- **Landing page** (`packages/landing-page`): Vite + React + Tailwind v4 marketing site
 
-Suspension is controlled by Suspense boundaries, not by whether a page is async.
+This document defines **mandatory** rules for automated agents changing code/docs in this repo.
 
-✅ Correct Patterns
+---
 
-// Async page with scoped suspension
-export default async function Page() {
-  const critical = await getCriticalData() // Fast, blocks initial render
+## Required reading (before meaningful changes)
 
-  return (
-    <div>
-      <Hero data={critical} />
-      <Suspense fallback={<Skeleton />}>
-        <SlowSection />
-      </Suspense>
-    </div>
-  )
-}
+- `README.md` (repo overview + key scripts)
+- `ARCHITECTURE.md` (system design + prototype constraints)
+- `TESTING.md` (how tests are structured/run)
+- `SETUP_LOCAL.md` / `SETUP_REMOTE.md` (how people actually run this)
+- `GATEKEEPER.md` (macOS distribution constraints; do not regress)
+- `RELEASE.md` (FreeAgent.app release process)
 
-// Cheap query, no Suspense needed
-export default async function Page() {
-  const data = await getCheapData()
-  return <Content data={data} />
-}
+If a change touches a component, also skim that component’s README:
+- `packages/controller/README.md`
+- `packages/worker-installer/README.md`
+- `cli/README.md`
+- `free-agent/README.md`
 
-// Parallel fetches
-export default async function Page() {
-  const [users, posts] = await Promise.all([
-    getUsers(),
-    getPosts(),
-  ])
+---
 
-  return <Dashboard users={users} posts={posts} />
-}
+## Golden rules (non-negotiable)
 
-❌ Anti-Pattern (Waterfall)
+### Use Bun, keep lockfiles clean
 
-export default async function Page() {
-  const a = await slowA()
-  const b = await slowB()
-  const c = await slowC()
-  return <Content a={a} b={b} c={c} />
-}
+- **Package manager/runtime**: use **Bun** (`bun install`, `bun test`, `bun run …`).
+- **Do not** introduce or update `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`.
+- **Do not** suggest commands that contradict repo scripts unless you also update docs/scripts accordingly.
 
-When to Use Suspense
-	•	Slow or expensive operations
-	•	Non-critical content
-	•	Streaming UX improvements
+### Version synchronization is enforced by pre-commit
 
-When to Just Await
-	•	Cheap queries (few ms)
-	•	Critical data
-	•	When skeletons harm UX more than a brief delay
+All versions must stay synchronized across:
 
-⸻
+- `package.json` (root)
+- `cli/package.json`
+- `packages/controller/package.json`
+- `packages/landing-page/package.json`
+- `packages/worker-installer/package.json`
+- `cli/src/index.ts` (Commander `.version("…")`)
+- `packages/worker-installer/src/download.ts` (`const VERSION = "…"` constant)
 
-Server Data Fetching (DDD-Correct)
+Checks:
 
-Server Components may fetch data — but ONLY via use cases and repositories.
+- **Local**: `bun run test:versions`
+- **Git hook**: `.githooks/pre-commit` runs the same check
 
-// Use case layer
-export async function getUserPosts(userId: string) {
-  const posts = await postRepository.findByAuthor(userId)
+If you bump a version, you must update **all** of the above in one change.
 
-  return posts.map(post => ({
-    ...post,
-    createdAt: post.createdAt.toISOString(),
-  }))
-}
+### macOS Gatekeeper / notarization safety (do not regress)
 
-// Server Component
-export default async function Page({ params }) {
-  const posts = await getUserPosts(params.userId)
-  return <PostList posts={posts} />
-}
+The worker installer must preserve the app bundle’s code signature and Gatekeeper validation.
 
+Hard rules:
 
-⸻
+- **Do not** use the npm `tar` package to extract `FreeAgent.app.tar.gz`.
+  - It can create AppleDouble (`._*`) files and **break signatures**.
+  - Use native `tar` (`packages/worker-installer/src/download.ts`).
+- **Do not** copy `.app` bundles with generic Node filesystem copying.
+  - Use `ditto` for installation (`packages/worker-installer/src/install.ts`).
+- **Do not** remove or “fix” quarantine attributes on notarized apps.
+  - Do **not** add `xattr -cr`, `xattr -d com.apple.quarantine`, `spctl --add`, `lsregister …` to “fix” installs.
 
-Client Component Props Pattern
-	•	Parents own state
-	•	Children notify via callbacks
+Expected verification commands (for debugging only; don’t bake risky hacks into code):
 
-interface SectionProps {
-  initialData: DataType
-  onUpdate: (data: Partial<DataType>) => void
-}
+- `codesign --verify --deep --strict /Applications/FreeAgent.app`
+- `spctl --assess --type execute --verbose /Applications/FreeAgent.app`
+- `find /Applications/FreeAgent.app -name "._*"` (should be empty)
 
-export function Section({ initialData, onUpdate }: SectionProps) {
-  const [localState, setLocalState] = useState(initialData)
+### Secrets & credentials never go in git
 
-  function handleChange(value) {
-    setLocalState(value)
-    onUpdate({ field: value })
-  }
+Never commit:
 
-  return <Card />
-}
+- API keys (`CONTROLLER_API_KEY`, `EXPO_CONTROLLER_API_KEY`)
+- Apple credentials (Apple ID, app-specific passwords)
+- certificates / `.p12` / provisioning profiles
+- controller databases / storage artifacts
 
+Preferred patterns:
 
-⸻
+- Read secrets from env vars (documented in `SETUP_LOCAL.md`, `SETUP_REMOTE.md`, `RELEASE.md`)
+- For CLI passwords: use env var (e.g. `EXPO_APPLE_PASSWORD`) or hidden interactive prompt (never CLI args)
 
-Data Serialization (MANDATORY)
+---
 
-Dates
-	•	❌ Never pass Date objects to Client Components
-	•	✅ Serialize immediately after fetching
+## Component-specific rules
 
-export async function getData() {
-  const items = await repository.findAll()
+### Controller (`packages/controller`)
 
-  return items.map(item => ({
-    ...item,
-    createdAt: item.createdAt.toISOString(),
-    updatedAt: item.updatedAt.toISOString(),
-  }))
-}
+- **Auth**: keep API key validation behavior consistent (health endpoints may be unauthenticated; API endpoints require key).
+- **Storage**: preserve storage layout and path-safety invariants.
+- **Backwards compatibility**: avoid breaking API shapes used by the CLI and mock worker unless you update both + tests.
+- **Performance**: prefer streaming and bounded memory use for uploads/downloads.
 
+Run:
 
-⸻
+- `bun controller` (from repo root)
+- `bun controller:dev` (auto-reload)
 
-Prohibited Behaviors
+### Submit CLI (`cli`)
 
-Agents must NOT:
-	•	Use hard borders
-	•	Hard-code colors or spacing
-	•	Use useEffect directly
-	•	Bypass the DDD layer
-	•	Use unstable_cache
-	•	Introduce web-only assumptions
-	•	Produce mobile-hostile UI
-	•	Suggest dark patterns, growth hacks, or addictive mechanics
-	•	Add SEO tricks that conflict with the community mission
-	•	Include ANY AI attribution anywhere
+- **Never** accept Apple passwords via CLI args (shell history leak). Keep env var/prompt behavior.
+- **Keep path traversal protections** for downloads (output must remain within the working directory).
+- **Keep timeouts/retries/backoff** conservative and documented (don’t accidentally DDOS the controller).
 
-⸻
+### Worker installer (`packages/worker-installer`)
 
-Database Migrations — MORAL IMPERATIVE
+- Treat `GATEKEEPER.md` as the source of truth for install/extract/copy behavior.
+- Prefer native macOS tools when interacting with `.app` bundles.
+- Log securely: **never** print API keys; redact aggressively.
 
-Breaking migrations breaks production. This is NOT negotiable.
+### Worker app (`free-agent`)
 
-Iron Rules
-	1.	EVERY schema change requires a migration
-	•	Modify schema.ts → immediately run:
+- Treat `free-agent/release.sh` + `RELEASE.md` as canonical for building/signing/notarizing.
+- Avoid changes that require sandbox entitlements unless you also update signing/notarization and docs.
+- When changing the worker-controller protocol, update the controller endpoints and the mock worker/tests.
 
-bun db:generate
+### Landing page (`packages/landing-page`)
 
+- Keep it fast: avoid heavy runtime dependencies and large client bundles.
+- Prefer accessible, responsive UI and simple build/deploy (Cloudflare Pages is documented in `README.md`).
 
-	2.	ABSOLUTELY NEVER use db:push
-	•	db:push has been REMOVED from package.json
-	•	If you need it, you're doing something wrong
-	•	Use db:migrate ALWAYS
-	3.	Correct Workflow
+---
 
-vim src/db/schema.ts
-bun db:generate
-bun db:migrate
-git add src/db/schema.ts apps/web/drizzle/
-git commit -m "Add X to schema"
+## Testing & verification (pick the smallest sufficient set)
 
+Repo-level:
 
-	4.	NEVER
-	•	Manually edit migration SQL
-	•	Touch drizzle/meta/_journal.json
-	•	Create migration files by hand
-	5.	Before pushing
-	•	Migration exists
-	•	Migration tested locally
-	•	Run: bun check:migrations
-	•	Files committed together
+- `bun run test:all` (unit/integration + e2e script)
+- `./smoketest.sh` (fast sanity)
+- `./test-e2e.sh` (full flow with mock worker)
 
-Migration Conflicts (Multiple Developers)
+Targeted:
 
-When two branches create migrations with the same numeric prefix:
-	•	Drizzle does NOT auto-resolve conflicts
-	•	The branch merged LATER must renumber its migration
-	•	Example: Two 0005_*.sql files → rename one to 0006_*.sql
-	•	Update _journal.json tag to match the new filename
-	•	NEVER rename a migration already applied to prod
+- Controller: `bun run test:controller`
+- CLI: `bun run test:cli`
+- Version sync: `bun run test:versions`
 
-Pre-commit Hook
-	•	Automatically checks for duplicate prefixes
-	•	Runs on any commit touching apps/web/drizzle/
-	•	Enabled via: git config core.hooksPath .githooks (runs on bun install)
+If you change an API contract, update tests to lock the behavior in.
 
-CI Check
-	•	GitHub Action validates migrations on every PR
-	•	Fails if duplicate prefixes detected
-	•	Fails if journal and files are out of sync
+---
 
-Red Flags — STOP IMMEDIATELY
-	•	Schema changed, no migration
-	•	Duplicate migration prefixes (e.g., two 0019_*.sql files)
-	•	Out-of-order migrations
-	•	Temptation to "just push"
-	•	Any drizzle error during deploy
-	•	Missing __drizzle_migrations table in database
+## Release workflow (FreeAgent.app + npm packages)
 
-⸻
+Worker app artifact:
 
-Security Notice (CRITICAL)
+- Local build/sign/notarize package: `free-agent/release.sh` (see `RELEASE.md`)
+- CI release: tag `vX.Y.Z` and push to trigger GitHub Actions release workflow
 
-AI attribution is FORBIDDEN.
+After releasing a new FreeAgent.app build:
 
-This includes:
-	•	Commit messages
-	•	PRs
-	•	Code comments
-	•	Docs
-	•	Any repository file
+- Update `packages/worker-installer/src/download.ts` if the download URL/version logic needs changes
+- Keep version synchronization intact (see “Version synchronization” above)
 
-Why: attribution introduces security risk and undermines trust.
+---
 
-⸻
+## Agent behavior expectations
 
-Agent Responsibilities
-
-Agents must:
-	•	State assumptions clearly
-	•	Flag conflicts with governing docs
-	•	Follow shared domain language
-	•	Self-correct deviations immediately
-
-⸻
-
-Versioning
-
-This document is version-controlled.
-Agents must verify they are using the latest version before generating output.
+- Make changes **small and reviewable**; don’t refactor unrelated code.
+- Prefer **boring, testable** implementations over cleverness.
+- When you introduce new behavior, also update the most relevant doc under the repo root (`README.md`, `TESTING.md`, `SETUP_*`, `RELEASE.md`, `GATEKEEPER.md`) if users will trip over it.
