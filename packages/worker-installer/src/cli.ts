@@ -510,7 +510,7 @@ async function main(): Promise<void> {
   program
     .name('expo-free-agent-worker')
     .description('Install and configure the Expo Free Agent Worker macOS app')
-    .version('0.1.5');
+    .version('0.1.10');
 
   // Default action (install/configure)
   program
