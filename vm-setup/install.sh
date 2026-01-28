@@ -143,9 +143,10 @@ log_info "✓ Scripts installed"
 
 # Install version file
 log_step "Installing version file..."
+INSTALLED_VERSION=$(cat "$TEMP_DIR/VERSION")
 sudo mkdir -p /usr/local/etc
 sudo cp "$TEMP_DIR/VERSION" "$VERSION_FILE"
-INSTALLED_VERSION=$(cat "$VERSION_FILE")
+sudo chmod 644 "$VERSION_FILE"
 log_info "✓ Version: $INSTALLED_VERSION"
 
 # Install LaunchDaemon
