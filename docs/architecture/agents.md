@@ -235,6 +235,23 @@ After releasing a new FreeAgent.app build:
 
 ## Agent behavior expectations
 
-- Make changes **small and reviewable**; don’t refactor unrelated code.
+- Make changes **small and reviewable**; don't refactor unrelated code.
 - Prefer **boring, testable** implementations over cleverness.
 - When you introduce new behavior, also update the most relevant doc (`README.md`, `docs/INDEX.md`, or appropriate docs under `docs/`) if users will trip over it.
+
+### Documentation updates with commits
+
+**Before committing code changes:**
+- Review what documentation might be affected (README, component docs, architecture docs)
+- Check if new features/APIs need documentation
+- Verify cross-references still work if files moved/renamed
+- Update `docs/INDEX.md` if new docs added or structure changed
+
+**Ask user before committing if:**
+- Significant new functionality added (needs docs/examples)
+- API contracts changed (ROUTES.md, component READMEs)
+- Architecture decisions made (architecture docs)
+- Security implications (security.md)
+- Breaking changes (migration guides)
+
+**Goal**: Keep documentation synchronized with code, not as an afterthought.
