@@ -27,11 +27,21 @@ function launchWorker(): void {
 async function startWorker(): Promise<void> {
   if (!isWorkerInstalled()) {
     console.log(chalk.yellow('⚠️  Free Agent Worker is not installed yet.\n'));
-    console.log(chalk.white('To start earning credits, you need to install the worker app.\n'));
-    console.log(chalk.bold('Install the worker:'));
-    console.log(chalk.cyan('  npx @sethwebster/expo-free-agent-worker\n'));
-    console.log(chalk.dim('The worker app runs in your menu bar and processes builds\nfrom other Expo developers in the network.\n'));
-    process.exit(1);
+    console.log(chalk.white('Installing the worker to start earning credits...\n'));
+
+    try {
+      execSync('npx @sethwebster/expo-free-agent-worker@latest', {
+        stdio: 'inherit'
+      });
+    } catch (error) {
+      console.error(chalk.red('\n❌ Installation failed'));
+      process.exit(1);
+    }
+
+    console.log(chalk.green('\n✓ Installation complete!'));
+    console.log(chalk.dim('\nLook for the Free Agent icon in your menu bar.'));
+    console.log(chalk.dim('Click "Start Worker" to begin earning credits.\n'));
+    return;
   }
 
   if (isWorkerRunning()) {

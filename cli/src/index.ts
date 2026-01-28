@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { createStartCommand } from './commands/start.js';
 import { createSubmitCommand } from './commands/submit.js';
 import { createStatusCommand } from './commands/status.js';
 import { createDownloadCommand } from './commands/download.js';
@@ -16,6 +17,7 @@ program
   .description('CLI for Expo Free Agent distributed build system')
   .version('0.1.2');
 
+program.addCommand(createStartCommand());
 program.addCommand(createWorkerCommand());
 program.addCommand(createSubmitCommand());
 program.addCommand(createStatusCommand());
