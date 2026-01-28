@@ -192,24 +192,51 @@ public class TartVMManager {
                 logs += "⚠️  signingCertsPath provided but ignored - VM fetches certs securely via bootstrap\n\n"
             }
 
-            // 11) Run build
-            logs += "=== Starting build ===\n"
-            let buildLogs = try await sshCommand(
-                ip: vmIP!,
-                command: "/usr/local/bin/free-agent-run-job --in ~/free-agent/in --out ~/free-agent/out",
-                timeout: buildTimeout
-            )
-            logs += buildLogs + "\n"
-            logs += "=== Build complete ===\n\n"
+            // 11) Pass credentials to build script for log streaming
+            if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
+                logs += "Setting up log streaming credentials...\n"
+                let credFile = "/tmp/build-creds-\(UUID().uuidString)"
+                let createCredsCmd = """
+                cat > '\(credFile)' << 'EOFCREDS'
+                export CONTROLLER_URL=\(controllerURL)
+                export BUILD_ID=\(buildId)
+                export WORKER_ID=\(workerId)
+                export API_KEY=\(apiKey)
+                EOFCREDS
+                chmod 600 '\(credFile)'
+                """
+                _ = try await sshCommand(ip: vmIP!, command: createCredsCmd)
+                logs += "✓ Credentials configured\n\n"
 
-            // 12) Stop build monitor
+                // 12) Run build with credentials sourced
+                logs += "=== Starting build ===\n"
+                let buildLogs = try await sshCommand(
+                    ip: vmIP!,
+                    command: "source '\(credFile)' && /usr/local/bin/free-agent-run-job --in ~/free-agent/in --out ~/free-agent/out; rm -f '\(credFile)'",
+                    timeout: buildTimeout
+                )
+                logs += buildLogs + "\n"
+                logs += "=== Build complete ===\n\n"
+            } else {
+                // Fallback: run without log streaming
+                logs += "=== Starting build (no log streaming) ===\n"
+                let buildLogs = try await sshCommand(
+                    ip: vmIP!,
+                    command: "/usr/local/bin/free-agent-run-job --in ~/free-agent/in --out ~/free-agent/out",
+                    timeout: buildTimeout
+                )
+                logs += buildLogs + "\n"
+                logs += "=== Build complete ===\n\n"
+            }
+
+            // 13) Stop build monitor
             if let pid = monitorPID {
                 logs += "Stopping build monitor...\n"
                 _ = try? await sshCommand(ip: vmIP!, command: "kill \(pid) 2>/dev/null || true")
                 logs += "✓ Monitor stopped\n\n"
             }
 
-            // 13) Download artifacts
+            // 14) Download artifacts
             logs += "Downloading artifacts...\n"
 
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("fa-\(jobID)")

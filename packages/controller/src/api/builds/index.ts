@@ -238,6 +238,82 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
   );
 
   /**
+   * POST /builds/:id/logs
+   * Stream build logs from worker
+   * Requires: X-Worker-Id header matching assigned worker
+   *
+   * Body can be:
+   * - Single log: { level: 'info', message: 'text' }
+   * - Batch: { logs: [{ level: 'info', message: 'text' }, ...] }
+   */
+  fastify.post<{
+    Params: BuildParams;
+    Body: { level?: string; message?: string; logs?: Array<{ level: string; message: string }> };
+  }>(
+    '/:id/logs',
+    {
+      preHandler: requireWorkerAccess(db),
+    },
+    async (request, reply) => {
+      const buildId = request.params.id;
+      const timestamp = Date.now();
+
+      try {
+        // Support both single log and batch logs
+        if (request.body.logs && Array.isArray(request.body.logs)) {
+          // Batch mode
+          for (const log of request.body.logs) {
+            if (!log.level || !log.message) {
+              continue; // Skip invalid entries
+            }
+
+            const level = log.level as 'info' | 'warn' | 'error';
+            if (!['info', 'warn', 'error'].includes(level)) {
+              continue; // Skip invalid levels
+            }
+
+            db.addBuildLog({
+              build_id: buildId,
+              timestamp,
+              level,
+              message: log.message,
+            });
+          }
+
+          return reply.send({
+            success: true,
+            count: request.body.logs.length
+          });
+        } else if (request.body.level && request.body.message) {
+          // Single log mode
+          const level = request.body.level as 'info' | 'warn' | 'error';
+          if (!['info', 'warn', 'error'].includes(level)) {
+            return reply.status(400).send({
+              error: 'Invalid log level. Must be: info, warn, or error'
+            });
+          }
+
+          db.addBuildLog({
+            build_id: buildId,
+            timestamp,
+            level,
+            message: request.body.message,
+          });
+
+          return reply.send({ success: true });
+        } else {
+          return reply.status(400).send({
+            error: 'Invalid body. Expected { level, message } or { logs: [...] }'
+          });
+        }
+      } catch (err) {
+        fastify.log.error('Failed to add build log:', err);
+        return reply.status(500).send({ error: 'Failed to add log' });
+      }
+    }
+  );
+
+  /**
    * GET /builds/:id/download
    * Download build result
    * Requires: X-API-Key (admin) OR X-Build-Token (build submitter)

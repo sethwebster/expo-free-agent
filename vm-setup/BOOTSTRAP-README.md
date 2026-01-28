@@ -12,9 +12,55 @@ These files enable secure certificate handling where VMs fetch signing certs dir
 - Random keychain password per build
 - Certificates deleted immediately after installation
 
+## Auto-Update System
+
+The VM agent scripts can automatically update themselves from the latest release when the VM boots. This ensures workers always run the latest version without manual intervention.
+
+**How it works:**
+1. LaunchDaemon calls `/usr/local/bin/free-agent-auto-update` at VM boot
+2. Auto-update script downloads latest `vm-scripts.tar.gz` from GitHub releases
+3. Compares version with `/usr/local/etc/free-agent-version`
+4. Updates scripts if newer version available
+5. Execs bootstrap script with updated version
+
+**Configuration:**
+- Default URL: `https://github.com/sethwebster/expo-free-agent/releases/latest/download/vm-scripts.tar.gz`
+- Override with env var: `FREE_AGENT_SCRIPTS_URL`
+
+**Update process:**
+1. Downloads scripts to temp directory
+2. Validates all required scripts present
+3. Backs up current scripts
+4. Installs new scripts
+5. Updates version file
+6. Execs bootstrap
+
+**Safety:**
+- Non-fatal: If update fails, continues with existing version
+- Automatic rollback on installation failure
+- Version tracking prevents redundant updates
+
 ## Files
 
-### 1. `free-agent-vm-bootstrap`
+### 1. `free-agent-auto-update`
+
+Launch wrapper that handles automatic script updates before bootstrap.
+
+**Responsibilities:**
+1. Downloads latest vm-scripts.tar.gz from GitHub
+2. Extracts and validates scripts
+3. Compares versions
+4. Updates scripts if newer
+5. Execs bootstrap script
+
+**Environment Variables:**
+- `FREE_AGENT_SCRIPTS_URL` (optional) - Override default download URL
+
+**Exit Codes:**
+- 0: Success (updated or already latest)
+- Errors are non-fatal - continues with existing version
+
+### 2. `free-agent-vm-bootstrap`
 
 Main bootstrap script that runs at VM boot via LaunchDaemon.
 
@@ -77,9 +123,32 @@ install-signing-certs --certs /tmp/certs-secure.json
 - 5: Profile installation failed
 - 6: Verification failed
 
-### 3. `com.expo.free-agent.bootstrap.plist`
+### 3. `free-agent-run-job`
 
-LaunchDaemon configuration that runs bootstrap script at VM boot.
+Main build execution script that runs inside the VM.
+
+**Responsibilities:**
+1. Extracts source code
+2. Installs dependencies
+3. Runs Expo prebuild
+4. Installs CocoaPods
+5. Builds with xcodebuild
+6. Exports IPA
+7. Copies artifact to output
+
+### 4. `vm-monitor.sh`
+
+Background monitor that sends heartbeats and telemetry to controller.
+
+**Responsibilities:**
+1. Sends periodic heartbeats
+2. Reports system metrics (CPU, memory, disk)
+3. Detects build stage from logs
+4. Securely loads credentials from file
+
+### 5. `com.expo.free-agent.bootstrap.plist`
+
+LaunchDaemon configuration that runs auto-update/bootstrap at VM boot.
 
 **Configuration:**
 - Runs at load (RunAtLoad: true)

@@ -178,6 +178,41 @@ export TART_REGISTRY_PASSWORD="$(gh auth token)"
 /opt/homebrew/bin/tart pull ghcr.io/sethwebster/expo-free-agent-base:0.1.16
 ```
 
+### VM Agent Scripts Distribution
+
+The VM agent scripts (bootstrap, run-job, monitor) have an auto-update system that downloads the latest version from GitHub releases.
+
+**When to release VM scripts**:
+- Every release (they auto-update, so always ship latest)
+- When any script in `vm-setup/` changes
+
+**Package and upload scripts**:
+
+```bash
+# Package scripts
+cd vm-setup
+./package-vm-scripts.sh
+
+# Upload to same release as FreeAgent.app
+gh release upload v0.1.22 vm-scripts.tar.gz
+```
+
+**How auto-update works**:
+1. VM boots and runs `/usr/local/bin/free-agent-auto-update`
+2. Script downloads `vm-scripts.tar.gz` from latest release
+3. Compares with `/usr/local/etc/free-agent-version`
+4. Updates scripts if newer
+5. Execs bootstrap script
+
+**Scripts included in package**:
+- `free-agent-vm-bootstrap` - Certificate fetching and security lockdown
+- `free-agent-run-job` - Build execution
+- `vm-monitor.sh` - Heartbeat and telemetry
+- `install-signing-certs` - Certificate installation
+- `VERSION` - Current version number
+
+**Note**: Auto-update is non-fatal. If it fails, VM continues with existing scripts.
+
 ## Verification
 
 After release, verify the build works:
@@ -274,9 +309,12 @@ gh release delete v0.1.1
 ## Summary
 
 **For each release**:
-1. `./release.sh X.Y.Z` (local build + test)
-2. `git tag vX.Y.Z && git push origin vX.Y.Z` (trigger CI)
-3. Verify GitHub Release created
-4. Test download and installation
+1. Update VERSION in `vm-setup/VERSION` to match release version
+2. `./release.sh X.Y.Z` (local build + test)
+3. `cd vm-setup && ./package-vm-scripts.sh` (package VM scripts)
+4. `git tag vX.Y.Z && git push origin vX.Y.Z` (trigger CI)
+5. Wait for GitHub Release to be created
+6. `gh release upload vX.Y.Z vm-scripts.tar.gz` (upload VM scripts)
+7. Test download and installation
 
 That's it! Fully repeatable, automated process.

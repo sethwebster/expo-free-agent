@@ -63,3 +63,4 @@ Thumbs.db
 *.crt
 secrets.*
 credentials.*
+vm-setup/vm-scripts.tar.gz
