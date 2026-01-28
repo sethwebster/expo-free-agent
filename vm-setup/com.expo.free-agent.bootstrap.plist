@@ -9,7 +9,7 @@
     <!-- Program Configuration -->
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/free-agent-vm-bootstrap</string>
+        <string>/usr/local/bin/free-agent-auto-update</string>
     </array>
 
     <!-- Execution Timing -->

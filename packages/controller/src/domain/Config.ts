@@ -35,7 +35,7 @@ export const DEFAULT_CONFIG: Omit<ControllerConfig, 'port' | 'dbPath' | 'storage
   apiKey: process.env.CONTROLLER_API_KEY || 'dev-insecure-key-change-in-production',
 
   // Worker configuration
-  baseImageId: process.env.BASE_IMAGE_ID || 'ghcr.io/sethwebster/expo-free-agent-base:0.1.16',
+  baseImageId: process.env.BASE_IMAGE_ID || 'ghcr.io/sethwebster/expo-free-agent-base:0.1.23',
 
   // Upload limits
   maxSourceFileSize: 500 * 1024 * 1024,   // 500MB

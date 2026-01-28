@@ -1,6 +1,6 @@
 {
   "name": "@expo-free-agent/landing-page",
-  "version": "0.1.18",
+  "version": "0.1.23",
   "type": "module",
   "private": true,
   "scripts": {

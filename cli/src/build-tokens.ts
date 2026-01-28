@@ -6,7 +6,7 @@ interface BuildTokens {
   [buildId: string]: string;
 }
 
-const CONFIG_DIR = path.join(os.homedir(), '.expo-controller');
+const CONFIG_DIR = path.join(os.homedir(), '.expo-free-agent');
 const TOKENS_FILE = path.join(CONFIG_DIR, 'build-tokens.json');
 
 /**

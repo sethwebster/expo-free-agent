@@ -76,11 +76,13 @@ log_info "✓ VM found and stopped"
 # Step 3: Verify required scripts exist
 log_step "Verifying script files..."
 REQUIRED_FILES=(
+    "free-agent-auto-update"
     "free-agent-vm-bootstrap"
     "install-signing-certs"
     "vm-monitor.sh"
     "free-agent-run-job"
     "com.expo.free-agent.bootstrap.plist"
+    "VERSION"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -129,6 +131,12 @@ log_info "✓ Dependencies installed"
 # Step 6: Copy scripts to VM
 log_step "Copying scripts to VM..."
 
+# Auto-update script
+tart exec "$VM_NAME" -- bash -c "cat > /tmp/free-agent-auto-update" < "$SCRIPT_DIR/free-agent-auto-update"
+tart exec "$VM_NAME" -- sudo mv /tmp/free-agent-auto-update /usr/local/bin/
+tart exec "$VM_NAME" -- sudo chmod +x /usr/local/bin/free-agent-auto-update
+log_info "✓ Installed free-agent-auto-update"
+
 # Bootstrap script
 tart exec "$VM_NAME" -- bash -c "cat > /tmp/free-agent-vm-bootstrap" < "$SCRIPT_DIR/free-agent-vm-bootstrap"
 tart exec "$VM_NAME" -- sudo mv /tmp/free-agent-vm-bootstrap /usr/local/bin/
@@ -153,6 +161,12 @@ tart exec "$VM_NAME" -- sudo mv /tmp/vm-monitor.sh /usr/local/bin/
 tart exec "$VM_NAME" -- sudo chmod +x /usr/local/bin/vm-monitor.sh
 log_info "✓ Installed vm-monitor.sh"
 
+# Version file
+tart exec "$VM_NAME" -- sudo mkdir -p /usr/local/etc
+tart exec "$VM_NAME" -- bash -c "cat > /tmp/free-agent-version" < "$SCRIPT_DIR/VERSION"
+tart exec "$VM_NAME" -- sudo mv /tmp/free-agent-version /usr/local/etc/free-agent-version
+log_info "✓ Installed VERSION file"
+
 # Step 7: Install LaunchDaemon
 log_step "Installing LaunchDaemon..."
 tart exec "$VM_NAME" -- bash -c "cat > /tmp/com.expo.free-agent.bootstrap.plist" < "$SCRIPT_DIR/com.expo.free-agent.bootstrap.plist"
@@ -173,12 +187,18 @@ log_step "Verifying installation..."
 VERIFICATION_FAILED=false
 
 # Check scripts exist with correct permissions
-for script in free-agent-vm-bootstrap install-signing-certs free-agent-run-job vm-monitor.sh; do
+for script in free-agent-auto-update free-agent-vm-bootstrap install-signing-certs free-agent-run-job vm-monitor.sh; do
     if ! tart exec "$VM_NAME" -- test -x "/usr/local/bin/$script"; then
         log_error "Script not executable: $script"
         VERIFICATION_FAILED=true
     fi
 done
+
+# Check version file
+if ! tart exec "$VM_NAME" -- test -f /usr/local/etc/free-agent-version; then
+    log_error "Version file not found"
+    VERIFICATION_FAILED=true
+fi
 
 # Check LaunchDaemon
 if ! tart exec "$VM_NAME" -- test -f /Library/LaunchDaemons/com.expo.free-agent.bootstrap.plist; then
@@ -202,6 +222,9 @@ echo "=== Bootstrap Verification ==="
 echo "Scripts installed:"
 ls -lh /usr/local/bin/free-agent* /usr/local/bin/vm-monitor.sh /usr/local/bin/install-signing-certs
 echo ""
+echo "Version:"
+cat /usr/local/etc/free-agent-version || echo "WARNING: Version file not found"
+echo ""
 echo "LaunchDaemon:"
 ls -lh /Library/LaunchDaemons/com.expo.free-agent.bootstrap.plist
 echo ""
@@ -210,7 +233,7 @@ which jq || echo "WARNING: jq not found"
 which curl || echo "ERROR: curl not found"
 which security || echo "ERROR: security not found"
 echo ""
-echo "✓ VM template ready for secure certificate handling"
+echo "✓ VM template ready for secure certificate handling with auto-update"
 EOF
 
 tart exec "$VM_NAME" -- bash -c "cat > /tmp/verify-bootstrap.sh" < /tmp/verify-bootstrap.sh

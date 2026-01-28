@@ -15,17 +15,87 @@ This document defines **mandatory** rules for automated agents changing code/doc
 ## Required reading (before meaningful changes)
 
 - `README.md` (repo overview + key scripts)
-- `ARCHITECTURE.md` (system design + prototype constraints)
-- `TESTING.md` (how tests are structured/run)
-- `SETUP_LOCAL.md` / `SETUP_REMOTE.md` (how people actually run this)
-- `GATEKEEPER.md` (macOS distribution constraints; do not regress)
-- `RELEASE.md` (FreeAgent.app release process)
+- `docs/INDEX.md` (documentation navigation)
+- `docs/architecture/architecture.md` (system design + prototype constraints)
+- `docs/testing/testing.md` (how tests are structured/run)
+- `docs/getting-started/setup-local.md` / `docs/getting-started/setup-remote.md` (how people actually run this)
+- `docs/operations/gatekeeper.md` (macOS distribution constraints; do not regress)
+- `docs/operations/release.md` (FreeAgent.app release process)
 
 If a change touches a component, also skim that component’s README:
 - `packages/controller/README.md`
 - `packages/worker-installer/README.md`
 - `cli/README.md`
 - `free-agent/README.md`
+
+---
+
+## Documentation structure and navigation
+
+### Documentation organization
+
+All repository documentation is organized under `docs/` with this structure:
+
+```
+docs/
+├── INDEX.md              # START HERE - central documentation index
+├── README.md            # Quick navigation guide
+├── getting-started/     # Setup, quickstart guides
+├── architecture/        # System design, decisions, agent rules
+├── operations/          # Deployment, release, operational procedures
+├── testing/            # Test strategies, procedures
+└── historical/         # Archived docs, old plans
+```
+
+Component-specific docs remain in component directories:
+- `packages/controller/` - Controller implementation docs
+- `cli/` - CLI implementation docs
+- `free-agent/` - Worker app docs
+- `packages/worker-installer/` - Installer docs
+- `packages/landing-page/` - Landing page docs
+
+### When updating documentation
+
+**For new docs:**
+- Place in appropriate `docs/` subdirectory (getting-started, architecture, operations, or testing)
+- Add entry to `docs/INDEX.md` in relevant section
+- Use lowercase-with-hyphens naming (e.g., `setup-guide.md`)
+
+**For doc updates:**
+- Update cross-references to use relative paths from `docs/` structure
+- Component docs: `../../component/file.md`
+- Other docs sections: `../section/file.md`
+- Never use absolute paths or root-relative paths
+
+**For code reviews:**
+- Write to `plans/code-review-<description>.md` (not under `docs/historical/`)
+- Active plans stay in repo root `plans/` directory
+- Only move to `docs/historical/plans/` when archived
+
+**Breaking old doc references:**
+- If removing/moving docs, update all internal references
+- Check component READMEs for cross-references
+- Update `CLAUDE.md` symlink target if needed
+
+### Common doc reference patterns
+
+From component docs to central docs:
+```markdown
+See [Architecture](../../docs/architecture/architecture.md) for system design.
+See [Setup Guide](../../docs/getting-started/setup-local.md) for local development.
+```
+
+From central docs to component docs:
+```markdown
+See [Controller README](../../packages/controller/README.md) for API details.
+See [CLI Implementation](../../cli/README.md) for command reference.
+```
+
+Within docs/ subdirectories:
+```markdown
+See [Testing Guide](../testing/testing.md) for test strategies.
+See [Release Process](../operations/release.md) for deployment.
+```
 
 ---
 
@@ -114,13 +184,13 @@ Run:
 
 ### Worker installer (`packages/worker-installer`)
 
-- Treat `GATEKEEPER.md` as the source of truth for install/extract/copy behavior.
+- Treat `docs/operations/gatekeeper.md` as the source of truth for install/extract/copy behavior.
 - Prefer native macOS tools when interacting with `.app` bundles.
 - Log securely: **never** print API keys; redact aggressively.
 
 ### Worker app (`free-agent`)
 
-- Treat `free-agent/release.sh` + `RELEASE.md` as canonical for building/signing/notarizing.
+- Treat `free-agent/release.sh` + `docs/operations/release.md` as canonical for building/signing/notarizing.
 - Avoid changes that require sandbox entitlements unless you also update signing/notarization and docs.
 - When changing the worker-controller protocol, update the controller endpoints and the mock worker/tests.
 
@@ -153,7 +223,7 @@ If you change an API contract, update tests to lock the behavior in.
 
 Worker app artifact:
 
-- Local build/sign/notarize package: `free-agent/release.sh` (see `RELEASE.md`)
+- Local build/sign/notarize package: `free-agent/release.sh` (see `docs/operations/release.md`)
 - CI release: tag `vX.Y.Z` and push to trigger GitHub Actions release workflow
 
 After releasing a new FreeAgent.app build:
@@ -167,4 +237,4 @@ After releasing a new FreeAgent.app build:
 
 - Make changes **small and reviewable**; don’t refactor unrelated code.
 - Prefer **boring, testable** implementations over cleverness.
-- When you introduce new behavior, also update the most relevant doc under the repo root (`README.md`, `TESTING.md`, `SETUP_*`, `RELEASE.md`, `GATEKEEPER.md`) if users will trip over it.
+- When you introduce new behavior, also update the most relevant doc (`README.md`, `docs/INDEX.md`, or appropriate docs under `docs/`) if users will trip over it.

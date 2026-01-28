@@ -238,6 +238,82 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
   );
 
   /**
+   * POST /builds/:id/logs
+   * Stream build logs from worker
+   * Requires: X-Worker-Id header matching assigned worker
+   *
+   * Body can be:
+   * - Single log: { level: 'info', message: 'text' }
+   * - Batch: { logs: [{ level: 'info', message: 'text' }, ...] }
+   */
+  fastify.post<{
+    Params: BuildParams;
+    Body: { level?: string; message?: string; logs?: Array<{ level: string; message: string }> };
+  }>(
+    '/:id/logs',
+    {
+      preHandler: requireWorkerAccess(db),
+    },
+    async (request, reply) => {
+      const buildId = request.params.id;
+      const timestamp = Date.now();
+
+      try {
+        // Support both single log and batch logs
+        if (request.body.logs && Array.isArray(request.body.logs)) {
+          // Batch mode
+          for (const log of request.body.logs) {
+            if (!log.level || !log.message) {
+              continue; // Skip invalid entries
+            }
+
+            const level = log.level as 'info' | 'warn' | 'error';
+            if (!['info', 'warn', 'error'].includes(level)) {
+              continue; // Skip invalid levels
+            }
+
+            db.addBuildLog({
+              build_id: buildId,
+              timestamp,
+              level,
+              message: log.message,
+            });
+          }
+
+          return reply.send({
+            success: true,
+            count: request.body.logs.length
+          });
+        } else if (request.body.level && request.body.message) {
+          // Single log mode
+          const level = request.body.level as 'info' | 'warn' | 'error';
+          if (!['info', 'warn', 'error'].includes(level)) {
+            return reply.status(400).send({
+              error: 'Invalid log level. Must be: info, warn, or error'
+            });
+          }
+
+          db.addBuildLog({
+            build_id: buildId,
+            timestamp,
+            level,
+            message: request.body.message,
+          });
+
+          return reply.send({ success: true });
+        } else {
+          return reply.status(400).send({
+            error: 'Invalid body. Expected { level, message } or { logs: [...] }'
+          });
+        }
+      } catch (err) {
+        fastify.log.error('Failed to add build log:', err);
+        return reply.status(500).send({ error: 'Failed to add log' });
+      }
+    }
+  );
+
+  /**
    * GET /builds/:id/download
    * Download build result
    * Requires: X-API-Key (admin) OR X-Build-Token (build submitter)
@@ -543,6 +619,94 @@ export const buildsRoutes: FastifyPluginAsync<BuildsPluginOptions> = async (
       return reply.status(500).send({ error: 'Cancel failed' });
     }
   });
+
+  /**
+   * POST /builds/:id/retry
+   * Retry a failed or completed build with same source/settings
+   * Requires: X-API-Key (admin) OR X-Build-Token (build submitter)
+   */
+  fastify.post<{ Params: BuildParams }>(
+    '/:id/retry',
+    {
+      preHandler: requireBuildAccess(config, db),
+    },
+    async (request, reply) => {
+      try {
+        const originalBuild = db.getBuild(request.params.id);
+
+        if (!originalBuild) {
+          return reply.status(404).send({ error: 'Build not found' });
+        }
+
+        // Check if source still exists
+        if (!originalBuild.source_path || !storage.exists(originalBuild.source_path)) {
+          return reply.status(400).send({
+            error: 'Original build source no longer available. Please submit a new build.'
+          });
+        }
+
+        const newBuildId = nanoid();
+        const timestamp = Date.now();
+        const accessToken = crypto.randomBytes(32).toString('base64url');
+
+        // Copy source to new build
+        const newSourcePath = await storage.copyBuildSource(
+          originalBuild.source_path,
+          newBuildId
+        );
+
+        // Copy certs if they exist
+        let newCertsPath: string | null = null;
+        if (originalBuild.certs_path && storage.exists(originalBuild.certs_path)) {
+          newCertsPath = await storage.copyBuildCerts(
+            originalBuild.certs_path,
+            newBuildId
+          );
+        }
+
+        // Create new build record
+        db.createBuild({
+          id: newBuildId,
+          status: 'pending',
+          platform: originalBuild.platform,
+          source_path: newSourcePath,
+          certs_path: newCertsPath,
+          submitted_at: timestamp,
+          access_token: accessToken,
+        });
+
+        // Add to queue
+        const newBuild = db.getBuild(newBuildId)!;
+        queue.enqueue(newBuild);
+
+        // Log both builds
+        db.addBuildLog({
+          build_id: newBuildId,
+          timestamp,
+          level: 'info',
+          message: `Build submitted (retry of ${request.params.id})`,
+        });
+
+        db.addBuildLog({
+          build_id: request.params.id,
+          timestamp,
+          level: 'info',
+          message: `Retried as build ${newBuildId}`,
+        });
+
+        return reply.send({
+          id: newBuildId,
+          status: 'pending',
+          submitted_at: timestamp,
+          access_token: accessToken,
+          original_build_id: request.params.id,
+        });
+      } catch (err) {
+        fastify.log.error('Retry error:', err);
+        return reply.status(500).send({ error: 'Retry failed' });
+      }
+    }
+  );
 };
 
 /**

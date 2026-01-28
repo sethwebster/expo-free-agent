@@ -22,6 +22,40 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
+# Stream logs to controller
+stream_log() {
+    local level="$1"
+    local message="$2"
+
+    # Only stream if we have controller credentials
+    if [ -n "$CONTROLLER_URL" ] && [ -n "$BUILD_ID" ] && [ -n "$WORKER_ID" ] && [ -n "$API_KEY" ]; then
+        # Send log to controller (async, don't block build)
+        curl -s -X POST \
+            "${CONTROLLER_URL}/api/builds/${BUILD_ID}/logs" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: ${API_KEY}" \
+            -H "X-Worker-Id: ${WORKER_ID}" \
+            -d "{\"level\":\"${level}\",\"message\":\"${message}\"}" \
+            > /dev/null 2>&1 &
+    fi
+}
+
+# Enhanced logging functions that stream to controller
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+    stream_log "info" "$1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+    stream_log "error" "$1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+    stream_log "warn" "$1"
+}
+
 # Parse arguments
 IN_DIR=""
 OUT_DIR=""
