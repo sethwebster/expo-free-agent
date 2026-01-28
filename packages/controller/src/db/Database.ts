@@ -50,6 +50,14 @@ export interface DiagnosticReport {
   checks: string; // JSON array
 }
 
+export interface CpuSnapshot {
+  id: number;
+  build_id: string;
+  timestamp: number;
+  cpu_percent: number;
+  memory_mb: number;
+}
+
 export class DatabaseService {
   private db: BunDatabase;
 
@@ -313,6 +321,83 @@ export class DatabaseService {
       LIMIT 1
     `);
     return stmt.get(workerId) as DiagnosticReport | undefined;
+  }
+
+  // CPU Snapshots
+  addCpuSnapshot(snapshot: Omit<CpuSnapshot, 'id'>) {
+    const stmt = this.db.prepare(`
+      INSERT INTO cpu_snapshots (build_id, timestamp, cpu_percent, memory_mb)
+      VALUES (?, ?, ?, ?)
+    `);
+    stmt.run(
+      snapshot.build_id,
+      snapshot.timestamp,
+      snapshot.cpu_percent,
+      snapshot.memory_mb
+    );
+  }
+
+  getCpuSnapshots(buildId: string): CpuSnapshot[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM cpu_snapshots
+      WHERE build_id = ?
+      ORDER BY timestamp ASC
+    `);
+    return stmt.all(buildId) as CpuSnapshot[];
+  }
+
+  getTotalBuildTimeMs(): number {
+    const stmt = this.db.prepare(`
+      SELECT SUM(completed_at - started_at) as total_ms
+      FROM builds
+      WHERE status IN ('completed', 'failed')
+      AND started_at IS NOT NULL
+      AND completed_at IS NOT NULL
+    `);
+    const result = stmt.get() as { total_ms: number | null };
+    return result.total_ms || 0;
+  }
+
+  getTotalCpuCycles(): number {
+    // Calculate total CPU cycles as sum of (cpu_percent * duration_between_snapshots)
+    // Approximation: avg CPU % across all snapshots * total build time
+    // NOTE: This performs a full table scan on cpu_snapshots (O(n)).
+    // Consider pre-computed aggregates if table exceeds 1M rows.
+    const stmt = this.db.prepare(`
+      SELECT AVG(cpu_percent) as avg_cpu, COUNT(*) as snapshot_count
+      FROM cpu_snapshots
+    `);
+    const result = stmt.get() as { avg_cpu: number | null; snapshot_count: number };
+
+    if (!result.avg_cpu || result.snapshot_count === 0) {
+      return 0;
+    }
+
+    // Total CPU cycles = avg CPU % * total build time in seconds
+    const totalBuildTimeMs = this.getTotalBuildTimeMs();
+    const totalBuildTimeSec = totalBuildTimeMs / 1000;
+    return (result.avg_cpu / 100) * totalBuildTimeSec;
+  }
+
+  /**
+   * Delete CPU snapshots older than specified days
+   * Should be called periodically to prevent unbounded growth
+   * @returns Number of snapshots deleted
+   */
+  purgeCpuSnapshotsOlderThan(daysOld: number): number {
+    const cutoff = Date.now() - (daysOld * 24 * 60 * 60 * 1000);
+    const stmt = this.db.prepare('DELETE FROM cpu_snapshots WHERE timestamp < ?');
+    const result = stmt.run(cutoff);
+    return result.changes;
+  }
+
+  /**
+   * Get count of CPU snapshots for monitoring storage growth
+   */
+  getCpuSnapshotCount(): number {
+    const stmt = this.db.prepare('SELECT COUNT(*) as count FROM cpu_snapshots');
+    const result = stmt.get() as { count: number };
+    return result.count;
   }
 
   close() {

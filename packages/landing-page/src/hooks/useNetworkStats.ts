@@ -6,6 +6,8 @@ export interface NetworkStats {
   activeBuilds: number;
   buildsToday: number;
   totalBuilds: number;
+  totalBuildTimeMs: number;
+  totalCpuCycles: number;
 }
 
 const DAILY_BUILDS = 36768;
@@ -16,7 +18,7 @@ const BASELINE_TOTAL = DAYS_LAUNCHED * DAILY_BUILDS;
 
 export function useNetworkStats() {
   const [stats, setStats] = useState<NetworkStats>(() => {
-    // Calculate initial logic synchronously to avoid hydration mismatch if possible, 
+    // Calculate initial logic synchronously to avoid hydration mismatch if possible,
     // or at least have a good starting value.
     const now = new Date();
     const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -28,13 +30,18 @@ export function useNetworkStats() {
       Rate = 36768 / 86400000 approx 0.0004255 builds/ms
     */
     const calculatedBuildsToday = Math.floor((msSinceMidnight / 86400000) * DAILY_BUILDS);
+    const totalBuilds = BASELINE_TOTAL + calculatedBuildsToday;
+    const AVG_BUILD_TIME_MS = 300_000; // 5 minutes
+    const AVG_CPU_PERCENT = 40;
 
     return {
       nodesOnline: 154,
       buildsQueued: 82,
       activeBuilds: 60,
       buildsToday: calculatedBuildsToday,
-      totalBuilds: BASELINE_TOTAL + calculatedBuildsToday,
+      totalBuilds,
+      totalBuildTimeMs: totalBuilds * AVG_BUILD_TIME_MS,
+      totalCpuCycles: (totalBuilds * AVG_BUILD_TIME_MS / 1000) * (AVG_CPU_PERCENT / 100),
     };
   });
 
@@ -64,6 +71,10 @@ export function useNetworkStats() {
         if (next.buildsToday !== targetBuildsToday) {
           next.buildsToday = targetBuildsToday;
           next.totalBuilds = targetTotalBuilds;
+          const AVG_BUILD_TIME_MS = 300_000;
+          const AVG_CPU_PERCENT = 40;
+          next.totalBuildTimeMs = targetTotalBuilds * AVG_BUILD_TIME_MS;
+          next.totalCpuCycles = (targetTotalBuilds * AVG_BUILD_TIME_MS / 1000) * (AVG_CPU_PERCENT / 100);
           changed = true;
         }
 

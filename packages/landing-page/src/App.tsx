@@ -5,6 +5,42 @@ import { NetworkGlobe } from "./components/NetworkGlobe";
 import { NetworkProvider, useNetworkContext } from "./contexts/NetworkContext";
 import { useState, useEffect } from "react";
 
+function formatBuildTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const years = Math.floor(days / 365);
+
+  if (years > 0) {
+    return `${years.toLocaleString()}y ${(days % 365).toLocaleString()}d`;
+  } else if (days > 0) {
+    return `${days.toLocaleString()}d ${(hours % 24).toLocaleString()}h`;
+  } else if (hours > 0) {
+    return `${hours.toLocaleString()}h ${(minutes % 60).toLocaleString()}m`;
+  } else if (minutes > 0) {
+    return `${minutes.toLocaleString()}m`;
+  } else {
+    return `${seconds.toLocaleString()}s`;
+  }
+}
+
+function formatCpuCycles(cycles: number): string {
+  const billion = 1_000_000_000;
+  const million = 1_000_000;
+  const thousand = 1_000;
+
+  if (cycles >= billion) {
+    return `${(cycles / billion).toFixed(2)}B`;
+  } else if (cycles >= million) {
+    return `${(cycles / million).toFixed(2)}M`;
+  } else if (cycles >= thousand) {
+    return `${(cycles / thousand).toFixed(2)}K`;
+  } else {
+    return cycles.toFixed(0);
+  }
+}
+
 export default function App() {
   return (
     <NetworkProvider>
@@ -245,9 +281,15 @@ function BentoGrid() {
         <p className="text-xl text-zinc-500 text-center max-w-2xl mx-auto mb-2">
           A decentralized architecture designed for privacy, speed, and fairness.
         </p>
-        <p className="text-lg text-zinc-400 dark:text-zinc-600 text-center mb-16">
-          <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">{stats.totalBuilds.toLocaleString()}</span> builds handled by the Expo community.
-        </p>
+        <div className="text-center mb-16 space-y-2">
+          <p className="text-lg text-zinc-400 dark:text-zinc-600">
+            <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">{stats.totalBuilds.toLocaleString()}</span> builds handled by the Expo community.
+          </p>
+          <p className="text-sm text-zinc-400 dark:text-zinc-600">
+            Total Time Building: <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">{formatBuildTime(stats.totalBuildTimeMs)}</span> •
+            Total CPU Cycles: <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">{formatCpuCycles(stats.totalCpuCycles)}</span>
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[400px]">
           {/* Card 1: CPU (Large) */}

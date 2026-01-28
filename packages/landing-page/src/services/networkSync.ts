@@ -10,6 +10,8 @@ export interface ControllerStats {
   activeBuilds: number;
   buildsToday: number;
   totalBuilds: number;
+  totalBuildTimeMs: number;
+  totalCpuCycles: number;
 }
 
 export interface NetworkSyncConfig {
@@ -77,12 +79,18 @@ export class NetworkSyncService {
     // Simulate active builds (20-40% of active nodes have builds)
     const mockActiveBuilds = Math.floor(activeNodeCount * (0.2 + Math.random() * 0.2));
 
+    const totalBuilds = BASELINE_TOTAL + buildsToday;
+    const AVG_BUILD_TIME_MS = 300_000; // 5 minutes
+    const AVG_CPU_PERCENT = 40;
+
     return {
       nodesOnline: activeNodeCount,
       buildsQueued: 82,
       activeBuilds: mockActiveBuilds,
       buildsToday,
-      totalBuilds: BASELINE_TOTAL + buildsToday,
+      totalBuilds,
+      totalBuildTimeMs: totalBuilds * AVG_BUILD_TIME_MS,
+      totalCpuCycles: (totalBuilds * AVG_BUILD_TIME_MS / 1000) * (AVG_CPU_PERCENT / 100),
     };
   }
 

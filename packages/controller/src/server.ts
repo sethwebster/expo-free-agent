@@ -41,6 +41,7 @@ export class ControllerServer {
     this.setupRoutes();
     this.setupQueueListeners();
     this.restoreQueueState();
+    this.performStartupMaintenance();
   }
 
   /**
@@ -53,6 +54,22 @@ export class ControllerServer {
     const workers = new Map(this.db.getAllWorkers().map(w => [w.id, w]));
 
     this.queue.restoreFromDatabase(pendingBuilds, assignedBuilds, workers);
+  }
+
+  /**
+   * Perform maintenance tasks on startup
+   * - Purge old CPU snapshots (>90 days) to prevent unbounded growth
+   */
+  private performStartupMaintenance() {
+    try {
+      const snapshotsBefore = this.db.getCpuSnapshotCount();
+      const deleted = this.db.purgeCpuSnapshotsOlderThan(90);
+      if (deleted > 0) {
+        console.log(`[Maintenance] Purged ${deleted} CPU snapshots older than 90 days (${snapshotsBefore} → ${snapshotsBefore - deleted})`);
+      }
+    } catch (err) {
+      console.error('[Maintenance] Failed to purge old CPU snapshots:', err);
+    }
   }
 
   private setupMiddleware() {

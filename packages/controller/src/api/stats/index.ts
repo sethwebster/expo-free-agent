@@ -11,6 +11,8 @@ interface NetworkStats {
   activeBuilds: number;
   buildsToday: number;
   totalBuilds: number;
+  totalBuildTimeMs: number;
+  totalCpuCycles: number;
 }
 
 // Simple in-memory cache
@@ -94,12 +96,17 @@ function computeNetworkStats(db: DatabaseService): NetworkStats {
     `);
     const buildsToday = (buildsTodayQuery.get(startOfTodayUTC) as { count: number }).count;
 
+    const totalBuildTimeMs = db.getTotalBuildTimeMs();
+    const totalCpuCycles = db.getTotalCpuCycles();
+
     return {
       nodesOnline,
       buildsQueued,
       activeBuilds,
       buildsToday,
       totalBuilds: realTotalBuilds,
+      totalBuildTimeMs,
+      totalCpuCycles,
     };
   }
 
@@ -132,12 +139,21 @@ function computeNetworkStats(db: DatabaseService): NetworkStats {
   const BASELINE_TOTAL = 80_000_000;
   const totalBuilds = BASELINE_TOTAL + buildsToday;
 
+  // Demo stats for build time and CPU cycles
+  // Assume avg build time of 5 minutes (300,000ms) and avg 40% CPU usage
+  const AVG_BUILD_TIME_MS = 300_000;
+  const AVG_CPU_PERCENT = 40;
+  const totalBuildTimeMs = totalBuilds * AVG_BUILD_TIME_MS;
+  const totalCpuCycles = (totalBuilds * AVG_BUILD_TIME_MS / 1000) * (AVG_CPU_PERCENT / 100);
+
   return {
     nodesOnline,
     buildsQueued,
     activeBuilds,
     buildsToday,
     totalBuilds,
+    totalBuildTimeMs,
+    totalCpuCycles,
   };
 }
 

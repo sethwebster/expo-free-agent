@@ -7,6 +7,8 @@ export interface NetworkStats {
   activeBuilds: number;
   buildsToday: number;
   totalBuilds: number;
+  totalBuildTimeMs: number;
+  totalCpuCycles: number;
 }
 
 interface NetworkContextValue {
