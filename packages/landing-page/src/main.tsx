@@ -2,6 +2,7 @@ import { StrictMode, useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { HeroGlobePage } from "./pages/HeroGlobePage";
+import { CLILoginPage } from "./pages/CLILoginPage";
 import { ThemeProvider } from "./hooks/useTheme";
 import "./styles/globals.css";
 
@@ -29,6 +30,10 @@ function Router() {
   // Route matching
   if (route === "#/hero-globe") {
     return <HeroGlobePage />;
+  }
+
+  if (route.startsWith("#/cli/login")) {
+    return <CLILoginPage />;
   }
 
   return <App />;

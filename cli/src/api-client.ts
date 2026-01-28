@@ -66,6 +66,14 @@ export class APIClient {
     }
     if (!this.apiKey) {
       this.apiKey = await getApiKey();
+
+      // If still no API key, show helpful message
+      if (!this.apiKey) {
+        throw new Error(
+          'API key not found. Run `expo-free-agent login` to authenticate.\n' +
+          'Alternatively, set the EXPO_CONTROLLER_API_KEY environment variable.'
+        );
+      }
     }
   }
 
@@ -79,7 +87,7 @@ export class APIClient {
 
     // Add API key header if available
     // Handle both plain objects (from form.getHeaders()) and Headers instances
-    let headers: HeadersInit;
+    let headers: RequestInit['headers'];
     if (this.apiKey) {
       if (options.headers && typeof options.headers === 'object' && !(options.headers instanceof Headers)) {
         // Plain object (e.g., from form.getHeaders())
@@ -93,7 +101,7 @@ export class APIClient {
         (headers as Headers).set('X-API-Key', this.apiKey);
       }
     } else {
-      headers = options.headers || {};
+      headers = options.headers;
     }
 
     try {
