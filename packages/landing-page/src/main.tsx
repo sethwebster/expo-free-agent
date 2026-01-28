@@ -2,6 +2,7 @@ import { StrictMode, useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { HeroGlobePage } from "./pages/HeroGlobePage";
+import { CLILoginPage } from "./pages/CLILoginPage";
 import { ThemeProvider } from "./hooks/useTheme";
 import "./styles/globals.css";
 
@@ -16,8 +17,8 @@ console.log(
   "color: #71717a; font-size: 12px;"
 );
 
-// Simple hash-based router
-function Router() {
+// Custom hook for hash-based routing
+function useHashRoute() {
   const [route, setRoute] = useState(window.location.hash);
 
   useEffect(() => {
@@ -26,9 +27,20 @@ function Router() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
+  return route;
+}
+
+// Simple hash-based router
+function Router() {
+  const route = useHashRoute();
+
   // Route matching
   if (route === "#/hero-globe") {
     return <HeroGlobePage />;
+  }
+
+  if (route.startsWith("#/cli/login")) {
+    return <CLILoginPage />;
   }
 
   return <App />;
