@@ -15,7 +15,7 @@ const program = new Command();
 program
   .name('expo-free-agent')
   .description('CLI for Expo Free Agent distributed build system')
-  .version('0.1.4');
+  .version('0.1.5');
 
 program.addCommand(createStartCommand());
 program.addCommand(createWorkerCommand());

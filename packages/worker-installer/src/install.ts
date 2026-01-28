@@ -58,11 +58,13 @@ export function installApp(sourcePath: string, force: boolean = false): void {
   // Copy to /Applications
   cpSync(sourcePath, destPath, { recursive: true });
 
-  // Remove quarantine attribute (prevents "damaged app" error)
+  // Remove ALL quarantine attributes (prevents "damaged app" error)
   try {
     execSync(`xattr -cr "${destPath}"`, { stdio: 'ignore' });
+    // Also specifically remove quarantine attribute
+    execSync(`xattr -d com.apple.quarantine "${destPath}" 2>/dev/null || true`, { stdio: 'ignore' });
   } catch (error) {
-    console.warn('Warning: Could not remove quarantine attribute:', error);
+    // Ignore errors - attribute may not exist
   }
 
   // Ensure executable permissions
@@ -73,6 +75,13 @@ export function installApp(sourcePath: string, force: boolean = false): void {
     }
   } catch (error) {
     console.warn('Warning: Could not set executable permissions:', error);
+  }
+
+  // Reset Launch Services database for this app to clear Gatekeeper cache
+  try {
+    execSync(`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "${destPath}"`, { stdio: 'ignore' });
+  } catch (error) {
+    // Ignore errors - not critical
   }
 }
 

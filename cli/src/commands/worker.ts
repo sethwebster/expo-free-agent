@@ -62,11 +62,14 @@ export function createWorkerCommand(): Command {
           return;
         }
 
-        // Remove quarantine attribute to prevent "damaged app" error
+        // Remove ALL quarantine attributes and reset Gatekeeper cache
         try {
           execSync(`xattr -cr "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
+          execSync(`xattr -d com.apple.quarantine "${WORKER_APP_PATH}" 2>/dev/null || true`, { stdio: 'pipe' });
+          // Reset Launch Services database entry
+          execSync(`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
         } catch {
-          // Ignore if xattr fails
+          // Ignore if commands fail
         }
 
         execSync(`open -a "${WORKER_APP_PATH}"`, { stdio: 'pipe' });
