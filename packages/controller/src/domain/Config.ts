@@ -1,4 +1,9 @@
 /**
+ * Distributed controller mode
+ */
+export type ControllerMode = 'standalone' | 'distributed';
+
+/**
  * Configuration value object for controller settings
  *
  * Security model: localhost-only prototype with shared API key
@@ -24,6 +29,15 @@ export interface ControllerConfig {
   maxSourceFileSize: number;  // Default: 500MB (large iOS apps)
   maxCertsFileSize: number;   // Default: 10MB (certs are small)
   maxResultFileSize: number;  // Default: 1GB (built IPAs can be large)
+
+  // Distributed controller settings
+  mode: ControllerMode;              // standalone or distributed
+  controllerId: string;              // unique controller ID (UUID)
+  controllerName: string;            // human-readable name
+  parentControllerUrl?: string;      // parent controller to register with
+  registrationTtl: number;           // milliseconds, default 5 minutes
+  heartbeatInterval: number;         // milliseconds, default 2 minutes
+  expirationCheckInterval: number;   // milliseconds, default 1 minute
 }
 
 /**
@@ -41,6 +55,15 @@ export const DEFAULT_CONFIG: Omit<ControllerConfig, 'port' | 'dbPath' | 'storage
   maxSourceFileSize: 500 * 1024 * 1024,   // 500MB
   maxCertsFileSize: 10 * 1024 * 1024,      // 10MB
   maxResultFileSize: 1024 * 1024 * 1024,   // 1GB
+
+  // Distributed controller defaults
+  mode: (process.env.CONTROLLER_MODE as ControllerMode) || 'standalone',
+  controllerId: process.env.CONTROLLER_ID || crypto.randomUUID(),
+  controllerName: process.env.CONTROLLER_NAME || os.hostname(),
+  parentControllerUrl: process.env.PARENT_CONTROLLER_URL,
+  registrationTtl: 5 * 60 * 1000,         // 5 minutes
+  heartbeatInterval: 2 * 60 * 1000,       // 2 minutes
+  expirationCheckInterval: 60 * 1000,     // 1 minute
 };
 
 /**
