@@ -206,6 +206,7 @@ Centralized service registry that all nodes connect to.
 - Peer list propagates via gossip (converges in seconds)
 - No single point of failure
 - New nodes bootstrap from any seed
+- **Peer list persisted to database** - nodes remember previous connections across restarts
 
 ### Database Schema
 
@@ -216,13 +217,21 @@ CREATE TABLE peers (
   name TEXT NOT NULL,
   discovered_at INTEGER NOT NULL,
   last_seen_at INTEGER NOT NULL,
-  status TEXT NOT NULL,  -- active, suspected, down
+  last_successful_connect INTEGER,  -- Track successful connections
+  status TEXT NOT NULL,              -- active, suspected, down
   failure_count INTEGER DEFAULT 0,
-  metadata TEXT          -- JSON
+  successful_connects INTEGER DEFAULT 0,  -- Connection history
+  metadata TEXT                       -- JSON
 );
 
 CREATE INDEX idx_peers_status ON peers(status, last_seen_at);
+CREATE INDEX idx_peers_reconnect ON peers(last_successful_connect DESC);  -- Fast restart
 ```
+
+**Schema Notes:**
+- `last_successful_connect`: Timestamp of last successful gossip exchange
+- `successful_connects`: Total successful connections (prefer reliable peers)
+- `idx_peers_reconnect`: Index for fast "reconnect to previous peers" query
 
 ### Configuration
 
@@ -255,6 +264,85 @@ POST /api/peers/:id/status
 Body: { status: 'active' | 'suspected' | 'down' }
 ```
 
+### Reconnection Logic (Fast Restart)
+
+```typescript
+class PeerDiscovery {
+  /**
+   * Attempt to reconnect to previously known peers
+   * Called on startup before falling back to seeds
+   */
+  async reconnectToPreviousPeers(): Promise<boolean> {
+    // Get previous peers ordered by reliability
+    const previousPeers = await this.db.prepare<PeerInfo>(
+      `SELECT * FROM peers
+       WHERE last_successful_connect IS NOT NULL
+       ORDER BY last_successful_connect DESC, successful_connects DESC
+       LIMIT 10`
+    ).all();
+
+    if (previousPeers.length === 0) {
+      return false; // No previous peers, need to bootstrap
+    }
+
+    console.log(`Attempting to reconnect to ${previousPeers.length} previous peers...`);
+
+    let successfulReconnects = 0;
+
+    // Try to reconnect to each previous peer
+    for (const peer of previousPeers) {
+      try {
+        // Attempt gossip exchange
+        const response = await fetch(`${peer.url}/api/peers/gossip`, {
+          method: 'POST',
+          headers: { 'X-API-Key': this.config.apiKey },
+          body: JSON.stringify({ peers: [] }),
+          signal: AbortSignal.timeout(5000), // 5s timeout
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // Success! Update peer status
+          await this.db.prepare(
+            `UPDATE peers
+             SET last_seen_at = ?,
+                 last_successful_connect = ?,
+                 successful_connects = successful_connects + 1,
+                 failure_count = 0,
+                 status = 'active'
+             WHERE id = ?`
+          ).run(Date.now(), Date.now(), peer.id);
+
+          // Merge their peer list
+          await this.mergePeerList(data.peers);
+
+          successfulReconnects++;
+
+          console.log(`✅ Reconnected to ${peer.name} (${peer.url})`);
+
+          // Stop after 3 successful reconnections (enough to rejoin network)
+          if (successfulReconnects >= 3) {
+            break;
+          }
+        }
+      } catch (err) {
+        // Peer unreachable, try next one
+        console.log(`⏭️  ${peer.name} unreachable, trying next peer...`);
+      }
+    }
+
+    if (successfulReconnects > 0) {
+      console.log(`🎉 Rejoined network via ${successfulReconnects} previous peers`);
+      return true;
+    }
+
+    console.log(`❌ All previous peers unreachable, falling back to seed bootstrap`);
+    return false;
+  }
+}
+```
+
 ### Gossip Algorithm
 
 ```typescript
@@ -280,8 +368,16 @@ class GossipService {
         // 3. Merge their peer list into ours
         this.mergePeerList(response.peers);
 
-        // 4. Mark peer as active
-        await this.updatePeerStatus(peer.id, 'active');
+        // 4. Mark peer as active and update success tracking
+        await this.db.prepare(
+          `UPDATE peers
+           SET status = 'active',
+               last_seen_at = ?,
+               last_successful_connect = ?,
+               successful_connects = successful_connects + 1,
+               failure_count = 0
+           WHERE id = ?`
+        ).run(Date.now(), Date.now(), peer.id);
       } catch (err) {
         // 5. Handle failure
         await this.handleGossipFailure(peer.id);
@@ -330,13 +426,19 @@ class GossipService {
 
 ```
 New Controller Startup:
-1. Load seed URLs from config
-2. Contact seed 1: GET /api/peers → receive peer list
-3. If seed 1 fails, try seed 2, 3, etc.
-4. Merge peer list into local registry
-5. Register self with all active peers
-6. Start gossip timer (every 30s)
-7. Start broadcasting own events
+1. Load previously known peers from database (if restarting)
+2. Try to reconnect to previous peers first (priority order by last_seen)
+   - Significantly faster than seed bootstrap
+   - Maintains network locality
+   - Only falls back to seeds if all previous peers fail
+3. If new node OR all previous peers unreachable:
+   a. Load seed URLs from config
+   b. Contact seed 1: GET /api/peers → receive peer list
+   c. If seed 1 fails, try seed 2, 3, etc.
+   d. Merge peer list into local registry
+4. Register self with all active peers
+5. Start gossip timer (every 30s)
+6. Start broadcasting own events
 
 Gossip Round (every 30s):
 1. Select 3 random active peers
@@ -344,11 +446,21 @@ Gossip Round (every 30s):
    a. Send POST /api/peers/gossip with our peer list
    b. Receive their peer list
    c. Merge their peers into our registry
+   d. Persist peer updates to database
 3. Mark responsive peers as 'active'
 4. Increment failure counter for unresponsive peers
 5. Mark peers as 'suspected' after 3 failures
 6. Mark peers as 'down' after 5 failures
+7. Persist all status changes to database
 ```
+
+**Why Persist Peers?**
+
+1. **Fast Restart**: Node restarts in seconds (reconnect to known peers vs. seed bootstrap)
+2. **Network Stability**: Maintains existing connections and network topology
+3. **Locality Preservation**: Keeps nodes connected to geographically/logically close peers
+4. **Resilience**: Seeds can be offline; node still rejoins via previous peers
+5. **Reduced Load**: Doesn't hammer seeds on every restart
 
 ### Failure Scenarios
 
@@ -396,6 +508,33 @@ Event log:
 - controller:recovered (A)
 ```
 
+#### Scenario 4: Node Restart with Peer Memory (Fast Reconnect)
+
+```
+Node C restarts (previously knew Nodes A, B, D)
+
+Without Peer Memory (Old Way):
+1. Contact Seed1 → timeout (5s)
+2. Contact Seed2 → timeout (5s)
+3. Contact Seed3 → success (2s)
+4. Download peer list (1s)
+5. Total: 13 seconds to rejoin
+
+With Peer Memory (New Way):
+1. Load previous peers from DB (10ms)
+2. Try to reconnect to Node A → success (200ms)
+3. Node A shares peer list (including B, D)
+4. Total: 210ms to rejoin
+
+Benefit: 60x faster rejoining network
+```
+
+**Why This Matters:**
+- **Rolling Restarts**: In production, nodes restart for updates/maintenance
+- **Network Stability**: Fast reconnects prevent cascade failures
+- **Reduced Seed Load**: Seeds aren't hammered on every restart
+- **Better UX**: Builds don't queue up waiting for network to form
+
 ### Configuration Examples
 
 **Production (3 seed nodes):**
@@ -423,9 +562,10 @@ bun controller --mode distributed --port 3002 --seeds http://localhost:3000
 ## Implementation Plan
 
 ### Phase 1: Peer Storage
-- [ ] Add `peers` table to schema
+- [ ] Add `peers` table to schema (with reconnection fields)
 - [ ] Create `PeerInfo` domain model
 - [ ] Add peer CRUD methods to `ControllerRegistry`
+- [ ] Add reconnection query (ORDER BY last_successful_connect DESC)
 
 ### Phase 2: Gossip Protocol
 - [ ] Implement `GossipService`
@@ -433,10 +573,12 @@ bun controller --mode distributed --port 3002 --seeds http://localhost:3000
 - [ ] Add `GET /api/peers` endpoint
 - [ ] Wire gossip timer into server
 
-### Phase 3: Bootstrap
+### Phase 3: Bootstrap & Reconnection
 - [ ] Add `--seeds` CLI flag (comma-separated URLs)
-- [ ] Implement bootstrap logic (contact seeds)
+- [ ] Implement `reconnectToPreviousPeers()` (fast path)
+- [ ] Implement bootstrap logic (fallback to seeds)
 - [ ] Fall back to standalone if no seeds available
+- [ ] Update all gossip success handlers to persist to DB
 
 ### Phase 4: Failure Detection
 - [ ] Track failure counts in peer records
