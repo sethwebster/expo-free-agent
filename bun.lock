@@ -10,7 +10,7 @@
     },
     "packages/controller": {
       "name": "@expo-free-agent/controller",
-      "version": "0.1.0",
+      "version": "0.1.15",
       "bin": {
         "expo-controller": "./dist/cli.js",
       },
@@ -33,6 +33,7 @@
     },
     "packages/landing-page": {
       "name": "@expo-free-agent/landing-page",
+      "version": "0.1.15",
       "dependencies": {
         "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.5.0",
@@ -63,10 +64,10 @@
       },
     },
     "packages/worker-installer": {
-      "name": "expo-free-agent",
-      "version": "0.1.0",
+      "name": "@sethwebster/expo-free-agent-worker",
+      "version": "0.1.15",
       "bin": {
-        "expo-free-agent": "./dist/cli.js",
+        "expo-free-agent-worker": "./dist/cli.js",
       },
       "dependencies": {
         "chalk": "^5.4.1",
@@ -364,6 +365,8 @@
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.56.0", "", { "os": "win32", "cpu": "x64" }, "sha512-H8AE9Ur/t0+1VXujj90w0HrSOuv0Nq9r1vSZF2t5km20NTfosQsGGUXDaKdQZzwuLts7IyL1fYT4hM95TI9c4g=="],
 
+    "@sethwebster/expo-free-agent-worker": ["@sethwebster/expo-free-agent-worker@workspace:packages/worker-installer"],
+
     "@sindresorhus/is": ["@sindresorhus/is@7.2.0", "", {}, "sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw=="],
 
     "@speed-highlight/core": ["@speed-highlight/core@1.2.14", "", {}, "sha512-G4ewlBNhUtlLvrJTb88d2mdy2KRijzs4UhnlrOSRT4bmjh/IqNElZa3zkrZ+TC47TwtlDWzVLFADljF1Ijp5hA=="],
@@ -573,8 +576,6 @@
     "events": ["events@3.3.0", "", {}, "sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q=="],
 
     "events-universal": ["events-universal@1.0.1", "", { "dependencies": { "bare-events": "^2.7.0" } }, "sha512-LUd5euvbMLpwOF8m6ivPCbhQeSiYVNb8Vs0fQ8QjXo0JTkEHpz8pxdQf0gStltaPpw0Cca8b39KxvK9cfKRiAw=="],
-
-    "expo-free-agent": ["expo-free-agent@workspace:packages/worker-installer"],
 
     "fast-content-type-parse": ["fast-content-type-parse@1.1.0", "", {}, "sha512-fBHHqSTFLVnR61C+gltJuE5GkVQMV0S2nqUO8TJ+5Z3qAKG8vAx4FKai1s5jq/inV1+sREynIWSuQ6HgoSXpDQ=="],
 

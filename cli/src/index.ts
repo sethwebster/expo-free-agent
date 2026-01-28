@@ -9,6 +9,7 @@ import { createConfigCommand } from './commands/config.js';
 import { createCancelCommand } from './commands/cancel.js';
 import { createDoctorCommand } from './commands/doctor.js';
 import { createWorkerCommand } from './commands/worker.js';
+import { createLoginCommand } from './commands/login.js';
 import { createLogsCommand } from './commands/logs.js';
 import { createRetryCommand } from './commands/retry.js';
 
@@ -19,6 +20,7 @@ program
   .description('CLI for Expo Free Agent distributed build system')
   .version('0.1.23');
 
+program.addCommand(createLoginCommand());
 program.addCommand(createStartCommand());
 program.addCommand(createWorkerCommand());
 program.addCommand(createSubmitCommand());

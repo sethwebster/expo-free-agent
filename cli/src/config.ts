@@ -109,3 +109,14 @@ export async function getApiKey(): Promise<string | undefined> {
   const config = await loadConfig();
   return config.apiKey;
 }
+
+export function getAuthBaseUrl(): string {
+  // Prefer environment variable
+  const envUrl = process.env.AUTH_BASE_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+
+  // Default to localhost for development
+  return 'http://localhost:5173';
+}
