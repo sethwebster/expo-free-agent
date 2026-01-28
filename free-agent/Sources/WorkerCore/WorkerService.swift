@@ -217,7 +217,7 @@ public actor WorkerService {
             )
 
             // Use baseImageId from controller (fallback to default if not provided)
-            let templateImage = job.baseImageId ?? "ghcr.io/sethwebster/expo-free-agent-base:latest"
+            let templateImage = job.baseImageId ?? "ghcr.io/sethwebster/expo-free-agent-base:0.1.16"
             vmManager = TartVMManager(configuration: vmConfig, templateImage: templateImage)
             print("✓ Tart VM Manager created with template: \(templateImage)")
 

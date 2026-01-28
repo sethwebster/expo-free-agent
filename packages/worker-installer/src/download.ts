@@ -6,7 +6,7 @@ import { join } from 'path';
 const APP_NAME = 'FreeAgent.app';
 // Direct download URL - update this when you publish new versions
 const DOWNLOAD_URL = process.env.FREEAGENT_DOWNLOAD_URL || 'https://github.com/sethwebster/expo-free-agent/releases/latest/download/FreeAgent.app.tar.gz';
-const VERSION = '0.1.15';
+const VERSION = '0.1.16';
 
 export interface DownloadProgress {
   percent: number;

@@ -125,8 +125,8 @@ export function createSubmitCommand(): Command {
         console.log();
         console.log(chalk.bold('Build ID:'), buildId);
         console.log();
-        console.log('Track status:', chalk.cyan(`expo-controller status ${buildId}`));
-        console.log('Download when ready:', chalk.cyan(`expo-controller download ${buildId}`));
+        console.log('Track status:', chalk.cyan(`expo-free-agent status ${buildId}`));
+        console.log('Download when ready:', chalk.cyan(`expo-free-agent download ${buildId}`));
         console.log();
 
         // Cleanup
