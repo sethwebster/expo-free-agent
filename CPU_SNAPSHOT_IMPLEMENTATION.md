@@ -76,6 +76,26 @@ func sendTelemetry(buildId: String, type: String, data: [String: Any]) {
 }
 ```
 
+### Status: ✅ IMPLEMENTED
+
+The FreeAgent.app worker now includes complete CPU/memory monitoring via `VMResourceMonitor`.
+
+**Location**: `free-agent/Sources/BuildVM/VMResourceMonitor.swift`
+
+**Features**:
+- Monitors the Tart VM process specifically (finds PID via `ps` command)
+- Collects CPU% and memory usage every 5 seconds using `ps -p <pid> -o %cpu,rss`
+- Sends snapshots to controller via `/api/builds/:id/telemetry` endpoint
+- Runs as async actor for thread-safe operation
+- Automatically starts when VM launches and stops on cleanup
+
+**Integration**: `free-agent/Sources/BuildVM/TartVMManager.swift`
+- Monitor starts immediately after VM launch
+- Monitor stops during VM cleanup
+- Only runs when build has controller credentials
+
+The monitor tracks only the `tart run <vmName>` process, capturing the actual VM resource consumption.
+
 ### Testing CPU Snapshots
 
 1. Submit a build:

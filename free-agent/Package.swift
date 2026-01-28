@@ -34,10 +34,6 @@ let package = Package(
             name: "DiagnosticsCore",
             dependencies: [],
             path: "Sources/DiagnosticsCore"
-        ),
-        .testTarget(
-            name: "FreeAgentTests",
-            dependencies: ["FreeAgent", "BuildVM", "WorkerCore"]
         )
     ]
 )
