@@ -2,7 +2,7 @@ import "./styles/globals.css";
 import { HeroVisualization } from "./components/HeroVisualization";
 import { NetworkHUD } from "./components/NetworkHUD";
 import { NetworkGlobe } from "./components/NetworkGlobe";
-import { NetworkProvider } from "./contexts/NetworkContext";
+import { NetworkProvider, useNetworkContext } from "./contexts/NetworkContext";
 import { useState, useEffect } from "react";
 
 export default function App() {
@@ -234,14 +234,19 @@ function Hero() {
 }
 
 function BentoGrid() {
+  const { stats } = useNetworkContext();
+
   return (
     <section id="features" className="pt-32 pb-32 bg-white dark:bg-black relative z-10">
       <div className="max-w-[1200px] mx-auto px-6">
         <h2 className="text-4xl md:text-6xl font-semibold tracking-tighter mb-4 text-center">
           Power in numbers.
         </h2>
-        <p className="text-xl text-zinc-500 text-center max-w-2xl mx-auto mb-16">
+        <p className="text-xl text-zinc-500 text-center max-w-2xl mx-auto mb-2">
           A decentralized architecture designed for privacy, speed, and fairness.
+        </p>
+        <p className="text-lg text-zinc-400 dark:text-zinc-600 text-center mb-16">
+          <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">{stats.totalBuilds.toLocaleString()}</span> builds handled by the Expo community.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[400px]">

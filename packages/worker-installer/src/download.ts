@@ -1,9 +1,7 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { createWriteStream, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { pipeline } from 'stream/promises';
-import * as tar from 'tar';
 
 const APP_NAME = 'FreeAgent.app';
 // Direct download URL - update this when you publish new versions
@@ -151,9 +149,12 @@ export async function extractApp(tarballPath: string, destination: string): Prom
   const extractDir = join(tmpdir(), `expo-free-agent-extract-${Date.now()}`);
   mkdirSync(extractDir, { recursive: true });
 
-  await tar.x({
-    file: tarballPath,
-    cwd: extractDir
+  // CRITICAL: Use native tar instead of npm tar package.
+  // The npm tar package creates AppleDouble (._*) files that corrupt
+  // the code signature and break Gatekeeper validation.
+  // Native tar preserves the bundle integrity correctly.
+  execFileSync('tar', ['-xzf', tarballPath, '-C', extractDir], {
+    stdio: 'pipe'
   });
 
   return join(extractDir, APP_NAME);
@@ -161,7 +162,7 @@ export async function extractApp(tarballPath: string, destination: string): Prom
 
 export function verifyCodeSignature(appPath: string): boolean {
   try {
-    execSync(`codesign --verify --deep --strict "${appPath}"`, {
+    execFileSync('codesign', ['--verify', '--deep', '--strict', appPath], {
       stdio: 'pipe'
     });
     return true;
@@ -172,11 +173,16 @@ export function verifyCodeSignature(appPath: string): boolean {
 
 export function getSigningInfo(appPath: string): string | null {
   try {
-    const output = execSync(`codesign -dv "${appPath}" 2>&1`, {
-      encoding: 'utf-8'
+    const output = execFileSync('codesign', ['-dv', appPath], {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
     });
     return output;
-  } catch {
+  } catch (error: unknown) {
+    // codesign -dv outputs to stderr, capture it from the error
+    if (error && typeof error === 'object' && 'stderr' in error) {
+      return (error as { stderr: string }).stderr;
+    }
     return null;
   }
 }

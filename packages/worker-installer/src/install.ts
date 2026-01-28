@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync, rmSync, cpSync, chmodSync } from 'fs';
 import { join } from 'path';
 
@@ -55,41 +55,26 @@ export function installApp(sourcePath: string, force: boolean = false): void {
     rmSync(destPath, { recursive: true, force: true });
   }
 
-  // Copy to /Applications
-  cpSync(sourcePath, destPath, { recursive: true });
+  // CRITICAL: Use ditto instead of cpSync to preserve code signature and xattrs.
+  // Node's cpSync may not correctly preserve macOS-specific metadata required
+  // for Gatekeeper validation of notarized apps.
+  execFileSync('ditto', [sourcePath, destPath], { stdio: 'pipe' });
 
-  // Remove ALL quarantine attributes (prevents "damaged app" error)
+  // Verify code signature is intact after copy
   try {
-    execSync(`xattr -cr "${destPath}"`, { stdio: 'ignore' });
-    // Also specifically remove quarantine attribute
-    execSync(`xattr -d com.apple.quarantine "${destPath}" 2>/dev/null || true`, { stdio: 'ignore' });
+    execFileSync('codesign', ['--verify', '--deep', '--strict', destPath], {
+      stdio: 'pipe'
+    });
   } catch (error) {
-    // Ignore errors - attribute may not exist
+    throw new Error(
+      `Code signature verification failed after installation. The app bundle may be corrupted.`
+    );
   }
 
-  // Ensure executable permissions
-  try {
-    const executablePath = join(destPath, 'Contents', 'MacOS', 'FreeAgent');
-    if (existsSync(executablePath)) {
-      chmodSync(executablePath, 0o755);
-    }
-  } catch (error) {
-    console.warn('Warning: Could not set executable permissions:', error);
-  }
-
-  // Add to Gatekeeper's allowlist to bypass quarantine checks
-  try {
-    execSync(`spctl --add "${destPath}"`, { stdio: 'ignore' });
-  } catch (error) {
-    // Ignore errors - may require user approval or sudo
-  }
-
-  // Reset Launch Services database for this app
-  try {
-    execSync(`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "${destPath}"`, { stdio: 'ignore' });
-  } catch (error) {
-    // Ignore errors - not critical
-  }
+  // DO NOT remove quarantine attributes - Gatekeeper needs them to validate notarization.
+  // DO NOT run spctl --add - it's for unsigned apps, not notarized ones.
+  // DO NOT run lsregister - it's unrelated to Gatekeeper.
+  // The app is properly notarized; macOS will handle first-launch validation automatically.
 }
 
 export function uninstallApp(): void {
