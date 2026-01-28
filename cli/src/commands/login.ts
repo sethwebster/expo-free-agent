@@ -6,6 +6,46 @@ import getPort from 'get-port';
 import open from 'open';
 import { saveConfig, getAuthBaseUrl } from '../config.js';
 
+const SUCCESS_HTML = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Authentication Successful</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        background: #f5f5f5;
+      }
+      .container {
+        text-align: center;
+        padding: 2rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      h1 {
+        color: #000091;
+        margin: 0 0 1rem 0;
+      }
+      p {
+        color: #666;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>All set!</h1>
+      <p>You can close this window.</p>
+    </div>
+  </body>
+</html>`;
+
 export function createLoginCommand(): Command {
   const command = new Command('login');
 
@@ -39,7 +79,15 @@ async function loginCommand(options: { browser: boolean }): Promise<void> {
     rejectAuth = reject;
   });
 
+  // Guard against race condition: multiple callbacks resolving promise
+  let authCompleted = false;
+
   // Create HTTP server for callback
+  // SECURITY NOTE: This callback server accepts connections from any local process.
+  // This is acceptable because:
+  // 1. Only localhost can connect (OS network isolation)
+  // 2. The token comes from our auth page, not from the callback request
+  // 3. An attacker with local access has bigger problems
   const server = http.createServer((req, res) => {
     if (!req.url) {
       res.writeHead(400, { 'Content-Type': 'text/plain' });
@@ -50,12 +98,10 @@ async function loginCommand(options: { browser: boolean }): Promise<void> {
     const url = new URL(req.url, `http://localhost:${port}`);
 
     if (url.pathname === '/auth/callback') {
-      // Validate callback host (security check)
-      const host = url.hostname;
-      if (host !== 'localhost' && host !== '127.0.0.1') {
-        res.writeHead(403, { 'Content-Type': 'text/plain' });
-        res.end('Forbidden: Invalid callback host');
-        rejectAuth(new Error('Invalid callback host'));
+      // Prevent multiple callbacks from resolving
+      if (authCompleted) {
+        res.writeHead(409, { 'Content-Type': 'text/plain' });
+        res.end('Authentication already completed');
         return;
       }
 
@@ -71,55 +117,21 @@ async function loginCommand(options: { browser: boolean }): Promise<void> {
         // Decode base64 token
         const apiKey = Buffer.from(token, 'base64').toString('utf-8');
 
+        // Mark as completed before resolving
+        authCompleted = true;
+
         // Send success response
         res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <title>Authentication Successful</title>
-              <style>
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                  display: flex;
-                  justify-content: center;
-                  align-items: center;
-                  min-height: 100vh;
-                  margin: 0;
-                  background: #f5f5f5;
-                }
-                .container {
-                  text-align: center;
-                  padding: 2rem;
-                  background: white;
-                  border-radius: 8px;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                }
-                h1 {
-                  color: #000091;
-                  margin: 0 0 1rem 0;
-                }
-                p {
-                  color: #666;
-                  margin: 0;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <h1>All set!</h1>
-                <p>You can close this window.</p>
-              </div>
-            </body>
-          </html>
-        `);
+        res.end(SUCCESS_HTML);
 
         resolveAuth(apiKey);
-      } catch (error) {
+      } catch (decodeError) {
+        const message = decodeError instanceof Error
+          ? `Invalid authentication token: ${decodeError.message}`
+          : 'Invalid authentication token: failed to decode';
         res.writeHead(400, { 'Content-Type': 'text/html' });
         res.end('<h1>Error</h1><p>Invalid authentication token.</p>');
-        rejectAuth(new Error('Invalid authentication token'));
+        rejectAuth(new Error(message));
       }
     } else {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -159,6 +171,7 @@ async function loginCommand(options: { browser: boolean }): Promise<void> {
 
     console.log(chalk.green('✓ Successfully authenticated!'));
   } catch (error) {
+    clearTimeout(timeout);
     throw error;
   } finally {
     server.close();

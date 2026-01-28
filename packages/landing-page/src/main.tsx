@@ -17,8 +17,8 @@ console.log(
   "color: #71717a; font-size: 12px;"
 );
 
-// Simple hash-based router
-function Router() {
+// Custom hook for hash-based routing
+function useHashRoute() {
   const [route, setRoute] = useState(window.location.hash);
 
   useEffect(() => {
@@ -26,6 +26,13 @@ function Router() {
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
+
+  return route;
+}
+
+// Simple hash-based router
+function Router() {
+  const route = useHashRoute();
 
   // Route matching
   if (route === "#/hero-globe") {

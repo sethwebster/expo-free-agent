@@ -20,8 +20,20 @@ export function CLILoginPage() {
     const callback = params.get('callback');
 
     if (callback) {
-      // Redirect to callback with token
-      window.location.href = `${callback}?token=${token}`;
+      // SECURITY: Validate callback URL to prevent open redirect attacks
+      try {
+        const url = new URL(callback);
+        if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+          alert('Invalid callback URL: must be localhost');
+          setIsLoading(false);
+          return;
+        }
+        // Redirect to validated callback with token
+        window.location.href = `${callback}?token=${token}`;
+      } catch {
+        alert('Invalid callback URL');
+        setIsLoading(false);
+      }
     } else {
       // Fallback: show error
       alert('No callback URL provided');

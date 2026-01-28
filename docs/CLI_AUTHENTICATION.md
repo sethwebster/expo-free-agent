@@ -12,7 +12,7 @@ The Expo Free Agent CLI now uses a web-based authentication flow instead of manu
 2. Browser opens to the login page at the landing site
 3. Enter any credentials (demo mode - any credentials work)
 4. Browser shows "All set!" - close the window
-5. API key is automatically saved to `~/.expo-controller/config.json`
+5. API key is automatically saved to `~/.expo-free-agent/config.json`
 6. Use other CLI commands without needing to provide API key again
 
 ### No-Browser Mode

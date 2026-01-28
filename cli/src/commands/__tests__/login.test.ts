@@ -1,7 +1,5 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { createLoginCommand } from '../login';
-import * as config from '../../config';
-import http from 'http';
+import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { createLoginCommand } from '../login.js';
 
 // Mock dependencies
 const mockSaveConfig = mock(() => Promise.resolve());
@@ -42,20 +40,6 @@ describe('login command', () => {
     expect(actual).toBe(expectedBase64);
   });
 
-  test('rejects non-localhost callback hosts', async () => {
-    const port = 9999;
-    const maliciousHost = 'evil.com';
-
-    // Simulate callback from non-localhost host
-    const response = await fetch(
-      `http://localhost:${port}/auth/callback?token=dGVzdA==`,
-      { headers: { Host: maliciousHost } }
-    ).catch(() => null);
-
-    // Should be rejected (but in real implementation would need server running)
-    expect(response).toBeNull();
-  });
-
   test('command is registered with correct name', () => {
     const command = createLoginCommand();
     expect(command.name()).toBe('login');
@@ -70,7 +54,9 @@ describe('login command', () => {
   });
 });
 
-describe('callback URL validation', () => {
+describe('callback URL validation (client-side)', () => {
+  // These tests validate the logic used in CLILoginPage.tsx
+
   test('localhost is allowed', () => {
     const url = new URL('http://localhost:3456/auth/callback?token=test');
     const host = url.hostname;
@@ -90,5 +76,20 @@ describe('callback URL validation', () => {
     const host = url.hostname;
 
     expect(host === 'localhost' || host === '127.0.0.1').toBe(false);
+  });
+
+  test('subdomain of localhost is rejected', () => {
+    const url = new URL('http://foo.localhost:3456/auth/callback?token=test');
+    const host = url.hostname;
+
+    expect(host === 'localhost' || host === '127.0.0.1').toBe(false);
+  });
+
+  test('localhost with path traversal attempt is safe', () => {
+    const url = new URL('http://localhost:3456/../../../etc/passwd?token=test');
+    const host = url.hostname;
+
+    // URL parsing normalizes the path, hostname stays localhost
+    expect(host === 'localhost').toBe(true);
   });
 });
