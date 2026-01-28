@@ -56,6 +56,40 @@ CREATE TABLE IF NOT EXISTS cpu_snapshots (
   FOREIGN KEY (build_id) REFERENCES builds(id)
 );
 
+-- Distributed controller tables
+CREATE TABLE IF NOT EXISTS controller_nodes (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  name TEXT NOT NULL,
+  registered_at INTEGER NOT NULL,
+  last_heartbeat_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  is_active INTEGER DEFAULT 1,
+  metadata TEXT
+);
+
+CREATE TABLE IF NOT EXISTS event_log (
+  id TEXT PRIMARY KEY,
+  sequence INTEGER NOT NULL,
+  timestamp INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  source_controller_id TEXT NOT NULL,
+  previous_hash TEXT,
+  event_hash TEXT NOT NULL,
+  UNIQUE(sequence)
+);
+
+CREATE TABLE IF NOT EXISTS event_propagation (
+  event_id TEXT NOT NULL,
+  controller_id TEXT NOT NULL,
+  propagated_at INTEGER NOT NULL,
+  PRIMARY KEY (event_id, controller_id)
+);
+
+-- Indexes
 CREATE INDEX IF NOT EXISTS idx_builds_status ON builds(status);
 CREATE INDEX IF NOT EXISTS idx_builds_worker ON builds(worker_id);
 CREATE INDEX IF NOT EXISTS idx_builds_access_token ON builds(access_token);
@@ -64,3 +98,8 @@ CREATE INDEX IF NOT EXISTS idx_diagnostics_worker ON diagnostics(worker_id);
 CREATE INDEX IF NOT EXISTS idx_diagnostics_run_at ON diagnostics(run_at);
 CREATE INDEX IF NOT EXISTS idx_cpu_snapshots_build ON cpu_snapshots(build_id);
 CREATE INDEX IF NOT EXISTS idx_cpu_snapshots_timestamp ON cpu_snapshots(timestamp);
+CREATE INDEX IF NOT EXISTS idx_controller_nodes_active ON controller_nodes(is_active, expires_at);
+CREATE INDEX IF NOT EXISTS idx_event_log_sequence ON event_log(sequence);
+CREATE INDEX IF NOT EXISTS idx_event_log_entity ON event_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_event_log_source ON event_log(source_controller_id);
+CREATE INDEX IF NOT EXISTS idx_event_propagation_event ON event_propagation(event_id);

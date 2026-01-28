@@ -400,6 +400,14 @@ export class DatabaseService {
     return result.count;
   }
 
+  /**
+   * Expose prepare method for direct SQL access
+   * Used by EventLog and other services that need custom queries
+   */
+  prepare<T = any>(sql: string) {
+    return this.db.prepare<T, unknown[]>(sql);
+  }
+
   close() {
     this.db.close();
   }
