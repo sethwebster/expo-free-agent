@@ -21,6 +21,7 @@ defmodule ExpoControllerWeb.Plugs.Auth do
   """
   def call(conn, :require_api_key), do: require_api_key(conn)
   def call(conn, :require_worker_access), do: require_worker_access(conn)
+  def call(conn, :require_worker_token), do: require_worker_token(conn)
 
   @doc """
   Validates the API key from the X-API-Key header.
@@ -38,6 +39,31 @@ defmodule ExpoControllerWeb.Plugs.Auth do
       |> put_view(json: ExpoControllerWeb.ErrorJSON)
       |> render(:"403", message: "Invalid API key")
       |> halt()
+    end
+  end
+
+  @doc """
+  Validates worker access token from X-Worker-Token header.
+  Verifies that the token matches the stored token for the worker.
+  """
+  defp require_worker_token(conn) do
+    token = get_req_header(conn, "x-worker-token") |> List.first()
+
+    cond do
+      is_nil(token) ->
+        unauthorized(conn, "Missing X-Worker-Token header")
+
+      true ->
+        # Find worker by access token
+        case Workers.get_worker_by_token(token) do
+          nil ->
+            unauthorized(conn, "Invalid worker token")
+
+          worker ->
+            conn
+            |> assign(:worker, worker)
+            |> assign(:worker_id, worker.id)
+        end
     end
   end
 

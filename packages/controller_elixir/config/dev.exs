@@ -67,3 +67,6 @@ config :swoosh, :api_client, false
 
 # Configure storage path for build artifacts
 config :expo_controller, :storage_path, "./storage"
+
+# Configure API key for development
+config :expo_controller, :api_key, "test-api-key-demo-1234567890"

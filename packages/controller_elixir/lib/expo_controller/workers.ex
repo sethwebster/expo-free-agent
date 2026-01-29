@@ -26,6 +26,20 @@ defmodule ExpoController.Workers do
   def get_worker!(id), do: Repo.get!(Worker, id)
 
   @doc """
+  Gets a worker by access token.
+  Returns nil if token is invalid or expired.
+  """
+  def get_worker_by_token(token) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    from(w in Worker,
+      where: w.access_token == ^token,
+      where: w.access_token_expires_at > ^now
+    )
+    |> Repo.one()
+  end
+
+  @doc """
   Registers a new worker.
   """
   def register_worker(attrs \\ %{}) do

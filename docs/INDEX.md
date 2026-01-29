@@ -28,10 +28,36 @@ System design, component structure, and technical decisions.
 - [Architecture](./architecture/architecture.md) - Overall system design and prototype plan
 - [Diagrams](./architecture/diagrams.md) - Visual architecture diagrams and flows
 - [Security](./architecture/security.md) - Security model, threat mitigation, and isolation
+- [Build Pickup Flow](./architecture/build-pickup-flow.md) - Complete build assignment transaction lifecycle
 - [Agents](./architecture/agents.md) - Agent rules and guardrails for code changes
 - [CLI Implementation](./architecture/cli-implementation.md) - Submit CLI design
 - [VM Implementation](./architecture/vm-implementation.md) - VM execution architecture
 - [TS Compatibility Routes](./architecture/ts-compatibility-routes.md) - Elixir controller route aliases for TS API compatibility
+
+## Architecture Decision Records
+
+Lightweight documents capturing key architectural decisions made throughout the project.
+
+- [ADR Index](./adr/README.md) - Overview, format guide, and full index
+
+### Core Architecture
+- [ADR-0001: SQLite + Filesystem Storage](./adr/0001-sqlite-filesystem-storage.md) - Prototype storage strategy
+- [ADR-0002: Tart for VM Management](./adr/0002-tart-vm-management.md) - VM isolation approach
+- [ADR-0009: Migrate to Elixir Controller](./adr/0009-migrate-controller-to-elixir.md) - Controller technology migration
+
+### Security & Distribution
+- [ADR-0003: Native tar/ditto for Code Signing](./adr/0003-native-tar-ditto-for-code-signing.md) - macOS signature preservation
+- [ADR-0004: Never Manipulate Quarantine Attributes](./adr/0004-never-manipulate-quarantine-attributes.md) - Gatekeeper compliance
+- [ADR-0006: Build-Specific Access Tokens](./adr/0006-build-specific-access-tokens.md) - Multi-tenant authentication
+- [ADR-0010: Worker Token Rotation](./adr/0010-worker-token-rotation.md) - Short-lived worker credentials
+
+### Operations & Communication
+- [ADR-0005: Version Synchronization](./adr/0005-enforce-version-synchronization.md) - Monorepo version management
+- [ADR-0007: Polling-Based Protocol](./adr/0007-polling-based-worker-protocol.md) - Worker-controller communication
+- [ADR-0008: VM Auto-Update System](./adr/0008-vm-auto-update-system.md) - Script distribution and hotfixes
+
+### Documentation
+- [ADR-0011: Documentation Reorganization](./adr/0011-documentation-structure-reorganization.md) - Docs structure and navigation
 
 ## Operations
 
@@ -154,6 +180,7 @@ expo-free-agent/
 │   ├── INDEX.md             # This file
 │   ├── getting-started/     # Setup and quickstart guides
 │   ├── architecture/        # System design and decisions
+│   ├── adr/                 # Architecture Decision Records
 │   ├── operations/          # Deployment and release procedures
 │   ├── testing/            # Testing documentation
 │   ├── reference/          # Reference materials (future)
@@ -186,6 +213,7 @@ expo-free-agent/
 - **...set up my local environment** → [Setup Local](./getting-started/setup-local.md)
 - **...understand the architecture** → [Architecture](./architecture/architecture.md)
 - **...understand security** → [Security](./architecture/security.md)
+- **...understand build assignment** → [Build Pickup Flow](./architecture/build-pickup-flow.md)
 - **...release a new version** → [Release](./operations/release.md)
 - **...run tests** → [Testing](./testing/testing.md)
 - **...deploy to production** → [Setup Remote](./getting-started/setup-remote.md)

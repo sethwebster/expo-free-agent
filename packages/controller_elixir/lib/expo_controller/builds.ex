@@ -105,6 +105,24 @@ defmodule ExpoController.Builds do
   end
 
   @doc """
+  Reassigns all active builds from a worker back to pending status.
+  Called when a worker gracefully shuts down.
+  Returns count of reassigned builds.
+  """
+  def reassign_worker_builds(worker_id) do
+    from(b in Build,
+      where: b.worker_id == ^worker_id,
+      where: b.status in [:assigned, :building]
+    )
+    |> Repo.update_all(set: [
+      status: :pending,
+      worker_id: nil,
+      assigned_at: nil,
+      updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    ])
+  end
+
+  @doc """
   Records a heartbeat for a build.
   """
   def record_heartbeat(build_id) do
@@ -367,7 +385,7 @@ defmodule ExpoController.Builds do
   defp validate_source_exists(build) do
     alias ExpoController.Storage.FileStorage
 
-    if build.source_path && FileStorage.exists?(build.source_path) do
+    if build.source_path && FileStorage.file_exists?(build.source_path) do
       {:ok, build}
     else
       {:error, :source_not_found}
@@ -398,7 +416,7 @@ defmodule ExpoController.Builds do
   defp copy_certs_if_exists(certs_path, new_build_id) do
     alias ExpoController.Storage.FileStorage
 
-    if FileStorage.exists?(certs_path) do
+    if FileStorage.file_exists?(certs_path) do
       FileStorage.copy_certs(certs_path, new_build_id)
     else
       {:ok, nil}

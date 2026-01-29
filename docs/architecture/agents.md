@@ -42,6 +42,7 @@ docs/
 ├── README.md            # Quick navigation guide
 ├── getting-started/     # Setup, quickstart guides
 ├── architecture/        # System design, decisions, agent rules
+├── adr/                 # Architecture Decision Records (numbered)
 ├── operations/          # Deployment, release, operational procedures
 ├── testing/            # Test strategies, procedures
 └── historical/         # Archived docs, old plans
@@ -57,9 +58,10 @@ Component-specific docs remain in component directories:
 ### When updating documentation
 
 **For new docs:**
-- Place in appropriate `docs/` subdirectory (getting-started, architecture, operations, or testing)
+- Place in appropriate `docs/` subdirectory (getting-started, architecture, operations, testing, or adr)
 - Add entry to `docs/INDEX.md` in relevant section
 - Use lowercase-with-hyphens naming (e.g., `setup-guide.md`)
+- For ADRs: use numbered naming (e.g., `0001-use-sqlite-for-storage.md`)
 
 **For doc updates:**
 - Update cross-references to use relative paths from `docs/` structure
@@ -96,6 +98,67 @@ Within docs/ subdirectories:
 See [Testing Guide](../testing/testing.md) for test strategies.
 See [Release Process](../operations/release.md) for deployment.
 ```
+
+### Architecture Decision Records (ADRs)
+
+**When to create an ADR:**
+
+Create an ADR when making architectural decisions that:
+- Change system boundaries or component responsibilities
+- Introduce new technologies, frameworks, or dependencies
+- Alter data models, API contracts, or storage patterns
+- Impact security, performance, or scalability
+- Solve non-trivial problems with multiple viable approaches
+- Establish patterns that other code should follow
+
+**Do NOT create ADRs for:**
+- Bug fixes or refactoring existing patterns
+- Documentation improvements
+- Test additions
+- Minor UI tweaks
+
+**Structure:**
+
+ADRs live in `docs/adr/` and follow this naming: `NNNN-title-with-hyphens.md`
+
+```markdown
+# ADR-NNNN: Title
+
+**Status:** Accepted | Proposed | Superseded by ADR-XXXX
+
+**Date:** YYYY-MM-DD
+
+## Context
+
+What problem are we solving? What constraints exist?
+
+## Decision
+
+What did we decide? Be specific.
+
+## Consequences
+
+**Positive:**
+- Benefit 1
+- Benefit 2
+
+**Negative:**
+- Cost/limitation 1
+- Cost/limitation 2
+
+**Neutral:**
+- Trade-off 1
+```
+
+**Numbering:**
+- Use next sequential number (0001, 0002, etc.)
+- Never reuse numbers
+- Add entry to `docs/INDEX.md` under "Architecture Decision Records"
+
+**Examples of ADR-worthy decisions:**
+- "ADR-0001: Use SQLite + filesystem instead of S3 for prototype"
+- "ADR-0002: Worker uses native tar extraction for code signing preservation"
+- "ADR-0003: Controller auth via API key header instead of JWT"
 
 ---
 
@@ -250,7 +313,7 @@ After releasing a new FreeAgent.app build:
 **Ask user before committing if:**
 - Significant new functionality added (needs docs/examples)
 - API contracts changed (ROUTES.md, component READMEs)
-- Architecture decisions made (architecture docs)
+- Architecture decisions made (create ADR in `docs/adr/`)
 - Security implications (security.md)
 - Breaking changes (migration guides)
 

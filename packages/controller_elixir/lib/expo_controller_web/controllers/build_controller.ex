@@ -162,7 +162,7 @@ defmodule ExpoControllerWeb.BuildController do
   POST /api/builds/:id/cancel
   Cancel a pending or assigned build.
   """
-  def cancel(conn, %{"id" => id}) do
+  def cancel(conn, %{"build_id" => id}) do
     case Builds.cancel_build(id) do
       {:ok, build} ->
         json(conn, %{
@@ -304,7 +304,7 @@ defmodule ExpoControllerWeb.BuildController do
   POST /api/builds/:id/retry
   Retry a build by copying source and certs to new build.
   """
-  def retry(conn, %{"id" => id}) do
+  def retry(conn, %{"build_id" => id}) do
     case Builds.retry_build(id) do
       {:ok, new_build} ->
         json(conn, %{

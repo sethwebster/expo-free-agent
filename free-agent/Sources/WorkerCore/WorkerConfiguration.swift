@@ -23,6 +23,7 @@ public struct WorkerConfiguration: Codable, Sendable, Equatable {
 
     // Worker identity (generated on first run)
     public var workerID: String?
+    public var accessToken: String?  // Short-lived token for worker authentication
     public var publicIdentifier: String?  // Unique identifier safe for public display (no PII)
     public var deviceName: String?
 
@@ -40,6 +41,7 @@ public struct WorkerConfiguration: Codable, Sendable, Equatable {
         onlyWhenIdle: true,
         buildTimeoutMinutes: 120,
         workerID: nil,
+        accessToken: nil,
         publicIdentifier: nil,
         deviceName: nil
     )

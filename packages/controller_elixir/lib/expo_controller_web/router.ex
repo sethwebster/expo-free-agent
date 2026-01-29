@@ -49,7 +49,7 @@ defmodule ExpoControllerWeb.Router do
 
     # Worker endpoints
     post "/workers/register", WorkerController, :register
-    post "/workers/:id/unregister", WorkerController, :unregister
+    post "/workers/unregister", WorkerController, :unregister
     get "/workers/poll", WorkerController, :poll
     post "/workers/result", WorkerController, :upload_result
     post "/workers/upload", WorkerController, :upload_result  # TS compatibility alias

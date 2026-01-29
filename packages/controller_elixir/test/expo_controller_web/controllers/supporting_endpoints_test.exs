@@ -202,17 +202,17 @@ defmodule ExpoControllerWeb.SupportingEndpointsTest do
       # Create original build with source file
       {:ok, original} = Builds.create_build(%{platform: :ios})
 
-      # Create fake source file
-      source_path = Path.join([
-        Application.get_env(:expo_controller, :storage_path, "./storage"),
-        "builds",
-        original.id,
-        "source.tar.gz"
-      ])
-      File.mkdir_p!(Path.dirname(source_path))
-      File.write!(source_path, "fake source content")
+      # Create fake source file (relative path for database)
+      relative_path = "builds/#{original.id}/source.tar.gz"
+      full_path = Path.join(
+        Application.get_env(:expo_controller, :storage_root, "./storage"),
+        relative_path
+      )
+      File.mkdir_p!(Path.dirname(full_path))
+      File.write!(full_path, "fake source content")
 
-      original = Repo.update!(Ecto.Changeset.change(original, source_path: source_path))
+      # Store relative path in database
+      original = Repo.update!(Ecto.Changeset.change(original, source_path: relative_path))
 
       {:ok, conn: conn, original: original}
     end
@@ -260,29 +260,29 @@ defmodule ExpoControllerWeb.SupportingEndpointsTest do
 
       new_build = Builds.get_build(response["id"])
       assert new_build.source_path
-      assert FileStorage.exists?(new_build.source_path)
+      assert FileStorage.file_exists?(new_build.source_path)
       assert new_build.source_path != original.source_path
     end
 
     test "copies certs if present", %{conn: conn, original: original} do
-      # Create fake certs file
-      certs_path = Path.join([
-        Application.get_env(:expo_controller, :storage_path, "./storage"),
-        "certs",
-        original.id,
-        "certs.zip"
-      ])
-      File.mkdir_p!(Path.dirname(certs_path))
-      File.write!(certs_path, "fake certs content")
+      # Create fake certs file (relative path for database)
+      relative_path = "builds/#{original.id}/certs.zip"
+      full_path = Path.join(
+        Application.get_env(:expo_controller, :storage_root, "./storage"),
+        relative_path
+      )
+      File.mkdir_p!(Path.dirname(full_path))
+      File.write!(full_path, "fake certs content")
 
-      original = Repo.update!(Ecto.Changeset.change(original, certs_path: certs_path))
+      # Store relative path in database
+      original = Repo.update!(Ecto.Changeset.change(original, certs_path: relative_path))
 
       conn = post(conn, ~p"/api/builds/#{original.id}/retry")
       response = json_response(conn, 200)
 
       new_build = Builds.get_build(response["id"])
       assert new_build.certs_path
-      assert FileStorage.exists?(new_build.certs_path)
+      assert FileStorage.file_exists?(new_build.certs_path)
     end
 
     test "generates new access_token", %{conn: conn, original: original} do
