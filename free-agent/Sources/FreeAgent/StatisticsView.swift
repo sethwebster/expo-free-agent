@@ -23,134 +23,30 @@ struct StatisticsView: View {
     let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header with logo
-            VStack(spacing: 16) {
-                if let logoURL = Bundle.resources.url(forResource: "expo-free-agent-logo-white", withExtension: "png"),
-                   let nsImage = NSImage(contentsOf: logoURL) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(height: 80)
-                } else {
-                    Text("Free Agent")
-                        .font(.system(size: 32, weight: .bold))
-                }
-
-                Text("Build Worker Statistics")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-
-                if let lastUpdated = lastUpdated {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text("Live • Updated \(timeAgo(from: lastUpdated))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .padding(.top, 32)
-            .padding(.bottom, 24)
-
-            Divider()
-
-            // Statistics content
-            if isLoading {
-                VStack(spacing: 16) {
-                    ProgressView()
-                    Text("Loading statistics...")
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error = error {
-                VStack(spacing: 16) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 48))
-                        .foregroundColor(.orange)
-                    Text("Failed to load statistics")
-                        .font(.headline)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let stats = stats {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Worker Info
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 8) {
-                                StatRow(label: "Name", value: stats.workerName)
-                                StatRow(
-                                    label: "Status",
-                                    value: stats.status.capitalized,
-                                    valueColor: statusColor(for: stats.status)
-                                )
-                                StatRow(label: "Uptime", value: liveUptime())
-                            }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 16)
-                        } label: {
-                            Label("Worker Information", systemImage: "desktopcomputer")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-
-                        // Build Statistics
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 8) {
-                                StatRow(label: "Total Builds", value: "\(stats.totalBuilds)")
-                                StatRow(label: "Successful", value: "\(stats.successfulBuilds)", valueColor: .green)
-                                StatRow(label: "Failed", value: "\(stats.failedBuilds)", valueColor: stats.failedBuilds > 0 ? .red : .secondary)
-
-                                if stats.totalBuilds > 0 {
-                                    Divider()
-                                        .padding(.vertical, 4)
-                                    let successRate = Double(stats.successfulBuilds) / Double(stats.totalBuilds) * 100
-                                    StatRow(label: "Success Rate", value: String(format: "%.1f%%", successRate))
-                                }
-                            }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 16)
-                        } label: {
-                            Label("Build Statistics", systemImage: "hammer")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-
-                        // Configuration
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 8) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Controller URL")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-                                    Text(configuration.controllerURL)
-                                        .font(.system(size: 12, design: .monospaced))
-                                        .foregroundColor(.primary)
-                                        .lineLimit(2)
-                                }
-                                .padding(.vertical, 2)
-
-                                Divider()
-                                    .padding(.vertical, 4)
-
-                                StatRow(label: "Max Concurrent Builds", value: "\(configuration.maxConcurrentBuilds)")
-                                StatRow(label: "Auto-start", value: configuration.autoStart ? "Enabled" : "Disabled")
-                            }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 16)
-                        } label: {
-                            Label("Configuration", systemImage: "gearshape")
-                                .font(.system(size: 14, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 24) {
+                        headerView
+                        
+                        if isLoading {
+                            loadingView
+                        } else if let error = error {
+                            errorView(error)
+                        } else if let stats = stats {
+                            statsContent(stats)
                         }
                     }
                     .padding(24)
                 }
+                
+                footerView
             }
         }
-        .frame(width: 500, height: 600)
+        .frame(width: 500, height: 650)
         .onAppear {
             Task {
                 await loadStatistics()
@@ -166,12 +62,157 @@ struct StatisticsView: View {
         }
     }
 
+    private var headerView: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.blue.gradient)
+                    .frame(width: 48, height: 48)
+                
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Worker Statistics")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                if let lastUpdated = lastUpdated {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("Live • Updated \(timeAgo(from: lastUpdated))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    Text("Fetching latest data...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.bottom, 8)
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Analyzing performance...")
+                .font(.headline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 400)
+    }
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(.orange)
+            
+            VStack(spacing: 8) {
+                Text("Connection Issue")
+                    .font(.headline)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Button("Retry Connection") {
+                Task { await loadStatistics() }
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, minHeight: 400)
+        .padding()
+    }
+
+    private func statsContent(_ stats: WorkerStats) -> some View {
+        VStack(spacing: 20) {
+            PremiumSectionCard(title: "Worker Identity", icon: "desktopcomputer", color: .blue) {
+                StatRow(label: "Name", value: stats.workerName)
+                StatRow(
+                    label: "Current Status",
+                    value: stats.status.capitalized,
+                    valueColor: statusColor(for: stats.status)
+                )
+                StatRow(label: "Uptime", value: liveUptime())
+            }
+
+            PremiumSectionCard(title: "Build Performance", icon: "hammer.fill", color: .purple) {
+                StatRow(label: "Total Builds", value: "\(stats.totalBuilds)")
+                StatRow(label: "Successful", value: "\(stats.successfulBuilds)", valueColor: .green)
+                StatRow(label: "Failed", value: "\(stats.failedBuilds)", valueColor: stats.failedBuilds > 0 ? .red : .secondary)
+                
+                if stats.totalBuilds > 0 {
+                    Divider().padding(.vertical, 8)
+                    let successRate = Double(stats.successfulBuilds) / Double(stats.totalBuilds) * 100
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Success Rate")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(String(format: "%.1f%%", successRate))
+                                .font(.headline.monospacedDigit())
+                        }
+                        
+                        ProgressView(value: successRate, total: 100)
+                            .tint(successRate > 90 ? .green : (successRate > 70 ? .blue : .orange))
+                    }
+                }
+            }
+
+            PremiumSectionCard(title: "Active Configuration", icon: "gearshape.fill", color: .gray) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Controller Endpoint")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                    Text(configuration.controllerURL)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.03))
+                        .cornerRadius(6)
+                }
+                
+                Divider().padding(.vertical, 8)
+                
+                StatRow(label: "Parallel Build Slots", value: "\(configuration.maxConcurrentBuilds)")
+                StatRow(label: "Auto-start", value: configuration.autoStart ? "Enabled" : "Disabled")
+            }
+        }
+    }
+
+    private var footerView: some View {
+        HStack {
+            Spacer()
+            Button("Dismiss") {
+                NSApp.keyWindow?.close()
+            }
+            .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
+        }
+        .padding(16)
+        .background(.ultraThinMaterial)
+    }
+
     private func loadStatistics() async {
         isLoading = true
         error = nil
 
         do {
-            // Fetch worker stats from controller
             guard let workerId = configuration.workerID else {
                 throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Worker not registered"])
             }
@@ -188,7 +229,6 @@ struct StatisticsView: View {
             }
 
             if httpResponse.statusCode == 404 {
-                // Endpoint doesn't exist yet - show placeholder data
                 stats = WorkerStats(
                     totalBuilds: 0,
                     successfulBuilds: 0,
@@ -201,7 +241,6 @@ struct StatisticsView: View {
                 let newStats = try JSONDecoder().decode(WorkerStats.self, from: data)
                 stats = newStats
 
-                // Calculate start time from uptime
                 if let uptime = newStats.uptime, let elapsed = parseUptime(uptime) {
                     startTime = Date().addingTimeInterval(-elapsed)
                 }
@@ -218,11 +257,8 @@ struct StatisticsView: View {
     }
 
     private func refreshStatistics() async {
-        // Silently refresh without showing loading state
         do {
-            guard let workerId = configuration.workerID else {
-                return
-            }
+            guard let workerId = configuration.workerID else { return }
 
             let url = URL(string: "\(configuration.controllerURL)/api/workers/\(workerId)/stats")!
             var request = URLRequest(url: url)
@@ -230,72 +266,43 @@ struct StatisticsView: View {
             request.timeoutInterval = 10.0
 
             let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                return
-            }
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else { return }
 
             let newStats = try JSONDecoder().decode(WorkerStats.self, from: data)
             stats = newStats
 
-            // Recalculate start time from uptime
             if let uptime = newStats.uptime, let elapsed = parseUptime(uptime) {
                 startTime = Date().addingTimeInterval(-elapsed)
             }
 
             lastUpdated = Date()
             error = nil
-        } catch {
-            // Silently fail - keep showing last known good stats
-        }
+        } catch {}
     }
 
     private func timeAgo(from date: Date) -> String {
         let seconds = Int(currentTime.timeIntervalSince(date))
-        if seconds < 5 {
-            return "just now"
-        } else if seconds < 60 {
-            return "\(seconds)s ago"
-        } else if seconds < 3600 {
-            let minutes = seconds / 60
-            return "\(minutes)m ago"
-        } else {
-            let hours = seconds / 3600
-            return "\(hours)h ago"
-        }
+        if seconds < 5 { return "just now" }
+        if seconds < 60 { return "\(seconds)s ago" }
+        if seconds < 3600 { return "\(seconds / 60)m ago" }
+        return "\(seconds / 3600)h ago"
     }
 
     private func parseUptime(_ uptime: String) -> TimeInterval? {
-        // Parse uptime strings like "1m 23s", "38s", "2h 15m"
         let components = uptime.split(separator: " ")
         var totalSeconds: TimeInterval = 0
-
         for component in components {
             let str = String(component)
-            if str.hasSuffix("d") {
-                let days = Double(str.dropLast()) ?? 0
-                totalSeconds += days * 86400
-            } else if str.hasSuffix("h") {
-                let hours = Double(str.dropLast()) ?? 0
-                totalSeconds += hours * 3600
-            } else if str.hasSuffix("m") {
-                let minutes = Double(str.dropLast()) ?? 0
-                totalSeconds += minutes * 60
-            } else if str.hasSuffix("s") {
-                let seconds = Double(str.dropLast()) ?? 0
-                totalSeconds += seconds
-            }
+            if str.hasSuffix("d") { totalSeconds += (Double(str.dropLast()) ?? 0) * 86400 }
+            else if str.hasSuffix("h") { totalSeconds += (Double(str.dropLast()) ?? 0) * 3600 }
+            else if str.hasSuffix("m") { totalSeconds += (Double(str.dropLast()) ?? 0) * 60 }
+            else if str.hasSuffix("s") { totalSeconds += (Double(str.dropLast()) ?? 0) }
         }
-
         return totalSeconds > 0 ? totalSeconds : nil
     }
 
     private func liveUptime() -> String {
-        guard let start = startTime else {
-            return stats?.uptime ?? "—"
-        }
-
+        guard let start = startTime else { return stats?.uptime ?? "—" }
         let elapsed = currentTime.timeIntervalSince(start)
         return formatDuration(elapsed)
     }
@@ -306,16 +313,10 @@ struct StatisticsView: View {
         let hours = (s % 86400) / 3600
         let minutes = (s % 3600) / 60
         let secs = s % 60
-
-        if days > 0 {
-            return String(format: "%dd %dh %dm", days, hours, minutes)
-        } else if hours > 0 {
-            return String(format: "%dh %dm %ds", hours, minutes, secs)
-        } else if minutes > 0 {
-            return String(format: "%dm %ds", minutes, secs)
-        } else {
-            return String(format: "%ds", secs)
-        }
+        if days > 0 { return String(format: "%dd %dh %dm", days, hours, minutes) }
+        if hours > 0 { return String(format: "%dh %dm %ds", hours, minutes, secs) }
+        if minutes > 0 { return String(format: "%dm %ds", minutes, secs) }
+        return String(format: "%ds", secs)
     }
 
     private func statusColor(for status: String) -> Color {
@@ -328,7 +329,7 @@ struct StatisticsView: View {
     }
 }
 
-struct StatRow: View {
+private struct StatRow: View {
     let label: String
     let value: String
     var valueColor: Color = .primary
@@ -336,17 +337,17 @@ struct StatRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
-                .font(.system(size: 13))
+                .font(.subheadline)
                 .foregroundColor(.secondary)
             Spacer()
             Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.subheadline.monospacedDigit())
+                .fontWeight(.semibold)
                 .foregroundColor(valueColor)
         }
-        .padding(.vertical, 2)
     }
 }
 
 #Preview {
-    StatisticsView(configuration: WorkerConfiguration.load())
+    StatisticsView(configuration: .default)
 }

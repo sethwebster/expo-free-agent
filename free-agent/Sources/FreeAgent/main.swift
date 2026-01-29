@@ -84,9 +84,10 @@ enum ConnectionState: Equatable {
 }
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableObject {
     private var statusItem: NSStatusItem?
     private var workerService: WorkerService?
+    private var vmSyncService: VMSyncService?
     private var settingsWindow: NSWindow?
     private var statisticsWindow: NSWindow?
     private var statusUpdateTimer: Timer?
@@ -96,8 +97,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var connectionState: ConnectionState = .connecting
     private var animationFrame = 0
     private var downloadProgress: Double = 0.0
+    @Published var currentVMDownloadProgress: DownloadProgress? = nil
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Set activation policy for menu bar app with windows
+        NSApp.setActivationPolicy(.accessory)
+
         // Create menu bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
@@ -113,9 +118,46 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Start animation for connecting dots
         startAnimation()
 
+        // Initialize VM sync service
+        vmSyncService = VMSyncService()
+        vmSyncService?.setProgressHandler { [weak self] progress in
+            guard let self = self else { return }
+
+            // Store current download progress for Preferences window
+            self.currentVMDownloadProgress = progress
+
+            // Update connection state based on download progress
+            switch progress.status {
+            case .downloading, .extracting:
+                let percent = progress.percentComplete ?? 0.0
+                self.connectionState = .downloading(percent: percent)
+                self.updateIconForCurrentState()
+            case .complete, .failed:
+                // VM template ready or failed, proceed to worker initialization
+                Task {
+                    await self.initializeWorker()
+                }
+            case .idle:
+                break
+            }
+        }
+
+        // Start VM template sync in background
+        Task {
+            await vmSyncService?.ensureTemplateExists()
+        }
+    }
+
+    private func initializeWorker() async {
         // Initialize worker service
         let config = WorkerConfiguration.load()
         workerService = WorkerService(configuration: config)
+
+        // Set VM verification handler to ensure fresh verification before accepting builds
+        await workerService?.setVMVerificationHandler { [weak self] () async -> Bool in
+            guard let self = self else { return false }
+            return await self.vmSyncService?.ensureFreshVerification() ?? false
+        }
 
         // Auto-start worker if configured
         if config.autoStart {
@@ -297,8 +339,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Settings
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
+        // Preferences
+        let settingsItem = NSMenuItem(title: "Preferences...", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
 
@@ -542,52 +584,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showSettings() {
-        if settingsWindow == nil {
-            let settingsView = SettingsView(
-                configuration: WorkerConfiguration.load(),
-                onSave: { [weak self] config in
-                    Task { @MainActor in
-                        // Stop old service before replacing
-                        await self?.workerService?.stop()
-                        config.save()
-                        self?.workerService = WorkerService(configuration: config)
-                    }
-                },
-                onProgressUpdate: { [weak self] progress in
-                    Task { @MainActor in
-                        guard let self = self else { return }
-
-                        // Update connection state based on download progress
-                        switch progress.status {
-                        case .downloading, .extracting:
-                            let percent = progress.percentComplete ?? 0.0
-                            self.connectionState = .downloading(percent: percent)
-                            self.updateIconForCurrentState()
-                        case .complete, .failed:
-                            // Restore previous state
-                            if await self.workerService?.isRunning == true {
-                                self.connectionState = .online
-                            } else {
-                                self.connectionState = .offline
-                            }
-                            self.updateIconForCurrentState()
-                        case .idle:
-                            break
-                        }
-                    }
-                }
-            )
-
-            let hostingController = NSHostingController(rootView: settingsView)
-            settingsWindow = NSWindow(contentViewController: hostingController)
-            settingsWindow?.title = "Free Agent Settings"
-            settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
-            settingsWindow?.setContentSize(NSSize(width: 500, height: 600))
-            settingsWindow?.center()
-        }
-
-        settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        // Always recreate window to ensure it comes to front
+        settingsWindow?.close()
+        settingsWindow = nil
+
+        let progressBinding = Binding<DownloadProgress?>(
+            get: { [weak self] in self?.currentVMDownloadProgress },
+            set: { [weak self] newValue in self?.currentVMDownloadProgress = newValue }
+        )
+
+        let preferencesView = PreferencesView(
+            configuration: WorkerConfiguration.load(),
+            downloadProgress: progressBinding,
+            onSave: { [weak self] config in
+                Task { @MainActor in
+                    // Stop old service before replacing
+                    await self?.workerService?.stop()
+                    config.save()
+                    let newService = WorkerService(configuration: config)
+
+                    // Set VM verification handler for new service
+                    await newService.setVMVerificationHandler { [weak self] () async -> Bool in
+                        guard let self = self else { return false }
+                        return await self.vmSyncService?.ensureFreshVerification() ?? false
+                    }
+
+                    self?.workerService = newService
+                }
+            }
+        )
+
+        let hostingController = NSHostingController(rootView: preferencesView)
+        settingsWindow = NSWindow(contentViewController: hostingController)
+        settingsWindow?.title = "Free Agent Preferences"
+        settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
+        settingsWindow?.level = .floating
+        settingsWindow?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        settingsWindow?.setContentSize(NSSize(width: 500, height: 600))
+        settingsWindow?.center()
+
+        settingsWindow?.orderFrontRegardless()
+        settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func showStatistics() {

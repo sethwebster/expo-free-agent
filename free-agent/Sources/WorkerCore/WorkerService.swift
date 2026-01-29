@@ -7,11 +7,17 @@ public actor WorkerService {
     private var isActive = false
     private var pollingTask: Task<Void, Never>?
     private var activeBuilds: [String: Task<Void, Never>] = [:]
+    private var vmVerificationHandler: (@Sendable () async -> Bool)?
 
     public var isRunning: Bool { isActive }
 
     public init(configuration: WorkerConfiguration) {
         self.configuration = configuration
+    }
+
+    /// Set a handler to verify VM template freshness before accepting builds
+    public func setVMVerificationHandler(_ handler: @escaping @Sendable () async -> Bool) {
+        self.vmVerificationHandler = handler
     }
 
     public func start() async {
@@ -60,6 +66,16 @@ public actor WorkerService {
             do {
                 // Check if we can accept more builds
                 if activeBuilds.count < configuration.maxConcurrentBuilds {
+                    // Verify VM template is fresh (< 5 min old) before accepting builds
+                    if let verificationHandler = vmVerificationHandler {
+                        let isVMFresh = await verificationHandler()
+                        if !isVMFresh {
+                            print("VM template verification stale or failed, skipping poll")
+                            try await Task.sleep(for: .seconds(configuration.pollIntervalSeconds))
+                            continue
+                        }
+                    }
+
                     if let job = try await pollForJob() {
                         await executeJob(job)
                     }

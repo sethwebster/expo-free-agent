@@ -186,14 +186,19 @@ public actor TemplateVMCheck: DiagnosticCheck {
 
         if line.contains("downloading") || line.contains("Downloading") {
             // Try to extract percentage if available
-            if let percentMatch = line.range(of: #"\((\d+(?:\.\d+)?)\%\)"#, options: .regularExpression) {
-                let percentString = line[percentMatch].replacingOccurrences(of: "(", with: "")
-                    .replacingOccurrences(of: "%)", with: "")
-                if let percent = Double(percentString) {
-                    let message = line.trimmingCharacters(in: .whitespaces)
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+
+            // Look for percentage pattern like (37.5%) or (100%)
+            if let _ = trimmedLine.range(of: #"\((\d+(?:\.\d+)?)\s*%\)"#, options: .regularExpression),
+               let regex = try? NSRegularExpression(pattern: #"\((\d+(?:\.\d+)?)\s*%\)"#),
+               let match = regex.firstMatch(in: trimmedLine, range: NSRange(trimmedLine.startIndex..., in: trimmedLine)),
+               match.numberOfRanges > 1 {
+                let percentRange = Range(match.range(at: 1), in: trimmedLine)
+                if let percentRange = percentRange,
+                   let percent = Double(trimmedLine[percentRange]) {
                     progressHandler?(DownloadProgress(
                         status: .downloading,
-                        message: message,
+                        message: trimmedLine,
                         percentComplete: percent
                     ))
                     return
@@ -203,7 +208,7 @@ public actor TemplateVMCheck: DiagnosticCheck {
             // No percentage found, just report downloading
             progressHandler?(DownloadProgress(
                 status: .downloading,
-                message: line.trimmingCharacters(in: .whitespaces)
+                message: trimmedLine
             ))
         } else if line.contains("extracting") || line.contains("Extracting") {
             progressHandler?(DownloadProgress(
