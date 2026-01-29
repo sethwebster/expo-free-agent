@@ -34,6 +34,14 @@ defmodule ExpoControllerWeb.Router do
     pipe_through :api
 
     get "/stats", PublicController, :stats
+    get "/health", HealthController, :index  # Health check at /api/health
+  end
+
+  # Health check (no auth required)
+  scope "/", ExpoControllerWeb do
+    pipe_through :api
+
+    get "/health", HealthController, :index
   end
 
   scope "/api", ExpoControllerWeb do
@@ -41,18 +49,36 @@ defmodule ExpoControllerWeb.Router do
 
     # Worker endpoints
     post "/workers/register", WorkerController, :register
+    post "/workers/:id/unregister", WorkerController, :unregister
     get "/workers/poll", WorkerController, :poll
     post "/workers/result", WorkerController, :upload_result
+    post "/workers/upload", WorkerController, :upload_result  # TS compatibility alias
     post "/workers/fail", WorkerController, :report_failure
     post "/workers/heartbeat", WorkerController, :heartbeat
+    get "/workers/:id/stats", WorkerController, :stats
 
     # Build endpoints
     get "/builds/statistics", BuildController, :statistics
+    get "/builds/active", BuildController, :active
+    post "/builds/submit", BuildController, :create  # TS compatibility alias
 
     resources "/builds", BuildController, only: [:index, :show, :create] do
+      get "/status", BuildController, :status  # TS compatibility endpoint
       get "/logs", BuildController, :logs
       get "/download/:type", BuildController, :download
+      get "/download", BuildController, :download_default  # TS compatibility (defaults to result)
       post "/cancel", BuildController, :cancel
+      post "/retry", BuildController, :retry
+    end
+
+    # Worker-authenticated build endpoints
+    scope "/builds/:id" do
+      post "/logs", BuildController, :stream_logs
+      post "/heartbeat", BuildController, :heartbeat
+      post "/telemetry", BuildController, :telemetry
+      get "/source", BuildController, :download_source
+      get "/certs", BuildController, :download_certs_worker
+      get "/certs-secure", BuildController, :download_certs_secure
     end
   end
 

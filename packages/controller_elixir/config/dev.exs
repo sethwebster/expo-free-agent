@@ -2,8 +2,8 @@ import Config
 
 # Configure your database
 config :expo_controller, ExpoController.Repo,
-  username: "postgres",
-  password: "postgres",
+  username: "expo",
+  password: "expo_dev",
   hostname: "localhost",
   database: "expo_controller_dev",
   stacktrace: true,
@@ -19,7 +19,7 @@ config :expo_controller, ExpoController.Repo,
 config :expo_controller, ExpoControllerWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}],
+  http: [ip: {127, 0, 0, 1}, port: 4444],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
@@ -64,3 +64,6 @@ config :phoenix, :plug_init_mode, :runtime
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# Configure storage path for build artifacts
+config :expo_controller, :storage_path, "./storage"

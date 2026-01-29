@@ -45,13 +45,22 @@ public class TartVMManager {
         controllerURL: String?,
         apiKey: String?
     ) async throws -> BuildResult {
+        print("TartVMManager.executeBuild() started")
+        print("  sourceCodePath: \(sourceCodePath.path)")
+        print("  buildTimeout: \(buildTimeout)s")
+        print("  buildId: \(buildId ?? "nil")")
+        print("  workerId: \(workerId ?? "nil")")
+        print("  controllerURL: \(controllerURL ?? "nil")")
+
         var logs = ""
         var created = false
         var monitorPID: Int32?
 
         // Validate inputs to prevent command injection
+        print("Validating inputs...")
         if let buildId = buildId {
             guard buildId.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil else {
+                print("✗ Invalid buildId: \(buildId)")
                 throw VMError.invalidInput("buildId contains invalid characters")
             }
         }
@@ -73,6 +82,7 @@ public class TartVMManager {
 
         do {
             // 1) Clone template into ephemeral job VM
+            print("Step 1: Cloning VM template...")
             let jobID = UUID().uuidString.prefix(8)
             vmName = "fa-\(jobID)"
 
@@ -81,11 +91,14 @@ public class TartVMManager {
             logs += "VM: \(vmName!)\n\n"
 
             logs += "Cloning template...\n"
+            print("Executing: \(tartPath) clone \(templateImage) \(vmName!)")
             try await executeCommand(tartPath, ["clone", templateImage, vmName!])
             created = true
             logs += "✓ VM cloned\n\n"
+            print("✓ VM cloned successfully")
 
             // 2) Run headless, detached (using screen) with env vars for bootstrap
+            print("Step 2: Starting VM with screen...")
             logs += "Starting VM headless with secure bootstrap...\n"
             var runArgs = ["-d", "-m", tartPath, "run", vmName!, "--no-graphics"]
 
@@ -107,10 +120,13 @@ public class TartVMManager {
                 runArgs.append("API_KEY=\(apiKey)")
             }
 
+            print("Executing: screen \(runArgs.joined(separator: " "))")
             try await executeCommand("screen", runArgs)
             logs += "✓ VM started with secure bootstrap env vars\n\n"
+            print("✓ Screen command executed successfully")
 
             // 2.5) Start resource monitor if we have credentials
+            print("Step 2.5: Starting resource monitor...")
             if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
                 logs += "Starting resource monitor...\n"
                 resourceMonitor = VMResourceMonitor(
@@ -123,12 +139,15 @@ public class TartVMManager {
                 )
                 await resourceMonitor?.start()
                 logs += "✓ Resource monitor started\n\n"
+                print("✓ Resource monitor started")
             }
 
             // 3) Wait for bootstrap completion (password randomization + cert fetch)
+            print("Step 3: Waiting for VM bootstrap (timeout: 180s)...")
             logs += "Waiting for VM bootstrap (password randomization + cert fetch)...\n"
             try await waitForBootstrapComplete(vmName!, timeout: 180)
             logs += "✓ Bootstrap complete - certs installed, SSH blocked\n\n"
+            print("✓ Bootstrap complete")
 
             // 4) Wait for IP
             logs += "Waiting for IP address...\n"
@@ -444,11 +463,29 @@ public class TartVMManager {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [command] + arguments
 
+        // Capture output for debugging
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
         try process.run()
         process.waitUntilExit()
 
         guard process.terminationStatus == 0 else {
-            throw VMError.commandFailed("\(command) failed with exit code \(process.terminationStatus)")
+            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: outputData, encoding: .utf8) ?? ""
+            let error = String(data: errorData, encoding: .utf8) ?? ""
+            let combined = (output + error).trimmingCharacters(in: .whitespacesAndNewlines)
+
+            print("✗ Command failed: \(command) \(arguments.joined(separator: " "))")
+            print("✗ Exit code: \(process.terminationStatus)")
+            if !combined.isEmpty {
+                print("✗ Output: \(combined)")
+            }
+
+            throw VMError.commandFailed("\(command) failed with exit code \(process.terminationStatus): \(combined)")
         }
     }
 

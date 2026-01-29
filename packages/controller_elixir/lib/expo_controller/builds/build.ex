@@ -16,6 +16,7 @@ defmodule ExpoController.Builds.Build do
     field :certs_path, :string
     field :result_path, :string
     field :error_message, :string
+    field :access_token, :string
     field :last_heartbeat_at, :utc_datetime
 
     belongs_to :worker, ExpoController.Workers.Worker, type: :string, foreign_key: :worker_id
@@ -35,10 +36,11 @@ defmodule ExpoController.Builds.Build do
       :certs_path,
       :result_path,
       :error_message,
+      :access_token,
       :worker_id,
       :last_heartbeat_at
     ])
-    |> validate_required([:id, :platform, :status])
+    |> validate_required([:id, :platform])
     |> validate_inclusion(:platform, [:ios, :android])
     |> validate_inclusion(:status, [:pending, :assigned, :building, :completed, :failed, :cancelled])
     |> unique_constraint(:id, name: :builds_pkey)
@@ -46,12 +48,27 @@ defmodule ExpoController.Builds.Build do
 
   @doc """
   Changeset for creating a new build.
+  Generates access_token if not provided.
   """
   def create_changeset(attrs) do
-    %__MODULE__{}
+    changeset = %__MODULE__{}
     |> changeset(attrs)
     |> put_change(:status, :pending)
-    |> validate_required([:id, :platform])
+    |> validate_required([:id, :platform, :status])
+
+    # Generate access_token if not provided
+    if get_field(changeset, :access_token) do
+      changeset
+    else
+      put_change(changeset, :access_token, generate_access_token())
+    end
+  end
+
+  @doc """
+  Generates a secure random access token (32 bytes, base64url encoded).
+  """
+  def generate_access_token do
+    :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
   end
 
   @doc """
@@ -67,7 +84,7 @@ defmodule ExpoController.Builds.Build do
   Changeset for updating heartbeat.
   """
   def heartbeat_changeset(build) do
-    change(build, last_heartbeat_at: DateTime.utc_now())
+    change(build, last_heartbeat_at: DateTime.utc_now() |> DateTime.truncate(:second))
   end
 
   @doc """

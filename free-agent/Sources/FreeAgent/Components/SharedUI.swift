@@ -14,32 +14,63 @@ struct PremiumSectionCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label {
-                Text(title)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-            } icon: {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 12) {
                 Image(systemName: icon)
                     .foregroundColor(color)
-                    .font(.headline)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 content
             }
-            .padding(.leading, 4)
         }
-        .padding(20)
+        .padding(24)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.5))
-                .background(.ultraThinMaterial)
+            ZStack {
+                // Glass Base
+                VisualEffectView(material: .hudWindow, blendingMode: .withinWindow)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                
+                // Subtle Dark Tint
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.black.opacity(0.15))
+            }
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.15), .white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
+        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+    }
+}
+
+// Helper for NSVisualEffectView in SwiftUI
+struct VisualEffectView: NSViewRepresentable {
+    var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
     }
 }
 
@@ -52,64 +83,80 @@ struct PremiumSlider: View {
     var icon: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 if let icon = icon {
                     Image(systemName: icon)
                         .foregroundColor(.secondary)
-                        .font(.caption)
+                        .font(.system(size: 14))
                 }
                 Text(label)
-                    .font(.subheadline)
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
                 Spacer()
                 Text("\(Int(value))\(unit)")
-                    .font(.subheadline.monospacedDigit())
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
             }
 
             Slider(value: $value, in: range, step: step)
+                .tint(Color(red: 0.5, green: 0.5, blue: 1.0)) // Slightly brighter indigo
                 .controlSize(.small)
         }
     }
 }
 
-struct PremiumTextField: View {
+struct PremiumTextField<Accessory: View>: View {
     let label: String
     @Binding var text: String
     var placeholder: String = ""
     var isSecure: Bool = false
+    var accessory: Accessory?
+
+    init(label: String, text: Binding<String>, placeholder: String = "", isSecure: Bool = false, @ViewBuilder accessory: () -> Accessory? = { nil }) {
+        self.label = label
+        self._text = text
+        self.placeholder = placeholder
+        self.isSecure = isSecure
+        self.accessory = accessory()
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white.opacity(0.5))
 
-            if isSecure {
-                SecureField(placeholder, text: $text)
-                    .textFieldStyle(.plain)
-                    .padding(8)
-                    .background(Color.primary.opacity(0.03))
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                    )
-            } else {
-                TextField(placeholder, text: $text)
-                    .textFieldStyle(.plain)
-                    .padding(8)
-                    .background(Color.primary.opacity(0.03))
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                    )
+            HStack(spacing: 8) {
+                Group {
+                    if isSecure {
+                        SecureField(placeholder, text: $text)
+                    } else {
+                        TextField(placeholder, text: $text)
+                    }
+                }
+                .textFieldStyle(.plain)
+                
+                if let accessory = accessory {
+                    accessory
+                }
             }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(Color.black.opacity(0.2))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
         }
+    }
+}
+
+// Extension to allow simpler init when no accessory is needed
+extension PremiumTextField where Accessory == EmptyView {
+    init(label: String, text: Binding<String>, placeholder: String = "", isSecure: Bool = false) {
+        self.init(label: label, text: text, placeholder: placeholder, isSecure: isSecure) { nil as EmptyView? }
     }
 }
 
@@ -119,20 +166,22 @@ struct PremiumToggle: View {
     var description: String? = nil
 
     var body: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.subheadline)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
                 if let description = description {
                     Text(description)
-                        .font(.caption)
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
             }
             Spacer()
             Toggle("", isOn: $isOn)
                 .toggleStyle(.switch)
-                .controlSize(.small)
+                .controlSize(.mini)
+                .tint(Color(red: 0.5, green: 0.5, blue: 1.0))
         }
     }
 }

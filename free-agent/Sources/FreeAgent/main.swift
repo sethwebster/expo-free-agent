@@ -105,15 +105,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
 
         // Create menu bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        print("✓ Created status item: \(statusItem != nil)")
 
         if let button = statusItem?.button {
             // Start with connecting state
             connectionState = .connecting
-            button.image = createIconForState(.connecting)
+            let icon = createIconForState(.connecting)
+            button.image = icon
             button.image?.isTemplate = true
+            print("✓ Set status item icon")
+        } else {
+            print("✗ Failed to get status item button!")
         }
 
         setupMenu()
+        print("✓ Menu setup complete")
 
         // Start animation for connecting dots
         startAnimation()
@@ -344,11 +350,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
         settingsItem.target = self
         menu.addItem(settingsItem)
 
-        // Statistics
-        let statsItem = NSMenuItem(title: "Statistics", action: #selector(showStatistics), keyEquivalent: "i")
-        statsItem.target = self
-        menu.addItem(statsItem)
-
         menu.addItem(NSMenuItem.separator())
 
         // Quit
@@ -451,50 +452,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     }
 
     private func createOnlineIcon() -> NSImage {
-        let size = NSSize(width: 22, height: 18)
-        let image = NSImage(size: size, flipped: false) { rect in
-            // Draw base logo in black (will adapt to menu bar)
-            NSColor.black.setFill()
-
-            // Load and draw SVG or fallback pattern
-            if let svgURL = Bundle.resources.url(forResource: "free-agent-logo", withExtension: "svg"),
-               let svgImage = NSImage(contentsOf: svgURL) {
-                svgImage.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
-            } else {
-                // Fallback block pattern
-                let blockSize: CGFloat = 4.5
-                let topBlock = NSRect(x: 6.75, y: 9, width: blockSize, height: blockSize)
-                NSBezierPath(rect: topBlock).fill()
-
-                let bottomY: CGFloat = 4
-                NSBezierPath(rect: NSRect(x: 2.25, y: bottomY, width: blockSize, height: blockSize)).fill()
-                NSBezierPath(rect: NSRect(x: 6.75, y: bottomY, width: blockSize, height: blockSize)).fill()
-                NSBezierPath(rect: NSRect(x: 11.25, y: bottomY, width: blockSize, height: blockSize)).fill()
-            }
-
-            // Draw bright green checkmark badge in top-right
-            let checkX: CGFloat = 14.5
-            let checkY: CGFloat = 10.5
-            let circleSize: CGFloat = 7.5
-
-            // White circle background
-            let circleRect = NSRect(x: checkX - 0.5, y: checkY - 1, width: circleSize, height: circleSize)
-            NSColor.white.setFill()
-            NSBezierPath(ovalIn: circleRect).fill()
-
-            // Bright green checkmark
-            NSColor(calibratedRed: 0.0, green: 1.0, blue: 0.0, alpha: 1.0).setStroke()
-            let checkPath = NSBezierPath()
-            checkPath.lineWidth = 2.0
-            checkPath.move(to: NSPoint(x: checkX + 0.5, y: checkY + 1.5))
-            checkPath.line(to: NSPoint(x: checkX + 2.0, y: checkY - 0.5))
-            checkPath.line(to: NSPoint(x: checkX + 5.5, y: checkY + 3.5))
-            checkPath.stroke()
-
-            return true
-        }
-        image.isTemplate = false  // Preserve colors
-        return image
+        // Just use the same icon as offline - simple template icon with no badge
+        return createTrayIcon()
     }
 
     private func createBuildingIcon() -> NSImage {
@@ -586,7 +545,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     @objc private func showSettings() {
         NSApp.activate(ignoringOtherApps: true)
 
-        // Always recreate window to ensure it comes to front
         settingsWindow?.close()
         settingsWindow = nil
 
@@ -600,53 +558,68 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
             downloadProgress: progressBinding,
             onSave: { [weak self] config in
                 Task { @MainActor in
-                    // Stop old service before replacing
                     await self?.workerService?.stop()
-                    config.save()
-                    let newService = WorkerService(configuration: config)
-
-                    // Set VM verification handler for new service
-                    await newService.setVMVerificationHandler { [weak self] () async -> Bool in
-                        guard let self = self else { return false }
-                        return await self.vmSyncService?.ensureFreshVerification() ?? false
+                    do {
+                        try config.save()
+                        let newService = WorkerService(configuration: config)
+                        await newService.setVMVerificationHandler { [weak self] () async -> Bool in
+                            guard let self = self else { return false }
+                            return await self.vmSyncService?.ensureFreshVerification() ?? false
+                        }
+                        self?.workerService = newService
+                    } catch {
+                        print("Failed to save configuration: \(error)")
+                        // TODO: Show error alert to user
                     }
-
-                    self?.workerService = newService
                 }
             }
         )
 
         let hostingController = NSHostingController(rootView: preferencesView)
-        settingsWindow = NSWindow(contentViewController: hostingController)
-        settingsWindow?.title = "Free Agent Preferences"
-        settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
-        settingsWindow?.level = .floating
-        settingsWindow?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        settingsWindow?.setContentSize(NSSize(width: 500, height: 600))
-        settingsWindow?.center()
+        
+        // Ensure the underlying NSView is transparent
+        hostingController.view.layer?.backgroundColor = .clear
+        
+        let window = NSWindow(contentViewController: hostingController)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.setContentSize(NSSize(width: 800, height: 600))
+        window.center()
 
-        settingsWindow?.orderFrontRegardless()
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        self.settingsWindow = window
+        window.makeKeyAndOrderFront(nil)
     }
 
     @objc private func showStatistics() {
-        // Activate app first to ensure window comes to front
         NSApp.activate(ignoringOtherApps: true)
 
         if statisticsWindow == nil {
             let statsView = StatisticsView(configuration: WorkerConfiguration.load())
-
             let hostingController = NSHostingController(rootView: statsView)
-            statisticsWindow = NSWindow(contentViewController: hostingController)
-            statisticsWindow?.title = "Free Agent Statistics"
-            statisticsWindow?.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            statisticsWindow?.setContentSize(NSSize(width: 500, height: 600))
-            statisticsWindow?.center()
-            statisticsWindow?.level = .floating  // Keep window on top
-            statisticsWindow?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            
+            // Ensure the underlying NSView is transparent
+            hostingController.view.layer?.backgroundColor = .clear
+            
+            let window = NSWindow(contentViewController: hostingController)
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.setContentSize(NSSize(width: 580, height: 720))
+            window.center()
+            window.level = .floating
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            
+            self.statisticsWindow = window
         }
 
-        statisticsWindow?.orderFrontRegardless()
         statisticsWindow?.makeKeyAndOrderFront(nil)
     }
 

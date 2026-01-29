@@ -21,7 +21,16 @@ if System.get_env("PHX_SERVER") do
 end
 
 config :expo_controller, ExpoControllerWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+  http: [port: String.to_integer(System.get_env("PORT") || "4444")]
+
+# Configure API key (required, must be at least 32 characters)
+if api_key = System.get_env("CONTROLLER_API_KEY") do
+  config :expo_controller, :api_key, api_key
+end
+
+# Configure storage path (can be overridden via STORAGE_PATH env var)
+config :expo_controller, :storage_path,
+  System.get_env("STORAGE_PATH") || "./storage"
 
 if config_env() == :prod do
   database_url =

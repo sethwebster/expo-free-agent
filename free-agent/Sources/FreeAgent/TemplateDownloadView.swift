@@ -7,35 +7,40 @@ struct TemplateDownloadView: View {
 
     var body: some View {
         ZStack {
-            Color(nsColor: .windowBackgroundColor)
+            // Background Glass
+            VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
+                .ignoresSafeArea()
+            
+            // Dark Tint
+            Color.black.opacity(0.3)
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 ScrollView {
-                    VStack(spacing: 32) {
+                    VStack(spacing: 40) {
                         VStack(spacing: 16) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color.orange.gradient.opacity(0.1))
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(Color.orange.gradient.opacity(0.15))
                                     .frame(width: 80, height: 80)
                                 
                                 Image(systemName: "box.panel.fill")
-                                    .font(.system(size: 32, weight: .semibold))
+                                    .font(.system(size: 32, weight: .bold))
                                     .foregroundColor(.orange)
                             }
                             
                             VStack(spacing: 4) {
-                                Text("Virtual Machine Setup")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                Text("Preparing your build environment")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                                Text("Building Environment")
+                                    .font(.system(size: 28, weight: .bold))
+                                    .foregroundColor(.white)
+                                Text("Preparing your dedicated build virtual machine")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.5))
                             }
                         }
                         .padding(.top, 24)
 
-                        // Progress indicator
+                        // Glassy Progress Area
                         if let percent = progress.percentComplete {
                             circularProgress(percent: percent)
                         } else {
@@ -43,52 +48,52 @@ struct TemplateDownloadView: View {
                                 ProgressView()
                                     .controlSize(.large)
                                 Text("Initializing connection...")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.4))
                             }
                             .frame(height: 160)
                         }
 
-                        // Status Card
-                        PremiumSectionCard(title: "Current Status", icon: "terminal.fill", color: .gray) {
-                            VStack(alignment: .leading, spacing: 8) {
+                        // Detailed Status Panel
+                        PremiumSectionCard(title: "Installation Status", icon: "terminal.fill", color: .gray) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 Text(progress.message)
                                     .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(.primary)
-                                    .padding(12)
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .padding(14)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color.primary.opacity(0.04))
-                                    .cornerRadius(8)
+                                    .background(Color.black.opacity(0.3))
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    )
                                 
                                 if progress.status == .downloading || progress.status == .extracting {
-                                    HStack {
-                                        Image(systemName: "info.circle")
-                                            .foregroundColor(.secondary)
-                                        Text("This only happens on the first run")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    .padding(.top, 4)
+                                    Label("First-time setup only", systemImage: "info.circle")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .padding(.top, 4)
                                 }
                             }
                         }
                     }
-                    .padding(24)
+                    .padding(40)
                 }
 
-                Divider()
+                Divider().opacity(0.1)
 
                 footerView
             }
         }
-        .frame(width: 450, height: 600)
+        .frame(width: 480, height: 650)
     }
 
     private func circularProgress(percent: Double) -> some View {
         ZStack {
             Circle()
-                .stroke(Color.primary.opacity(0.05), lineWidth: 12)
-                .frame(width: 140, height: 140)
+                .stroke(Color.white.opacity(0.05), lineWidth: 14)
+                .frame(width: 160, height: 160)
 
             Circle()
                 .trim(from: 0, to: percent / 100.0)
@@ -98,19 +103,19 @@ struct TemplateDownloadView: View {
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                    style: StrokeStyle(lineWidth: 14, lineCap: .round)
                 )
-                .frame(width: 140, height: 140)
+                .frame(width: 160, height: 160)
                 .rotationEffect(.degrees(-90))
                 .animation(.spring(response: 0.6, dampingFraction: 0.8), value: percent)
 
             VStack(spacing: 2) {
                 Text("\(Int(percent))%")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
                 Text(statusText)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white.opacity(0.5))
                     .textCase(.uppercase)
             }
         }
@@ -119,38 +124,48 @@ struct TemplateDownloadView: View {
     private var footerView: some View {
         HStack {
             if progress.status == .downloading || progress.status == .extracting {
-                Label("Running in background", systemImage: "background")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text("Running in background")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                }
             }
             
             Spacer()
             
             if progress.status == .complete || progress.status == .failed {
-                Button(progress.status == .complete ? "Get Started" : "Close") {
+                Button(progress.status == .complete ? "Launch Worker" : "Close") {
                     onDismiss()
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(progress.status == .complete ? .blue : .red)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(progress.status == .complete ? Color.blue.gradient : Color.red.gradient)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .foregroundColor(.white)
+                .fontWeight(.bold)
             } else {
-                Button("Continue in Background") {
+                Button("Background") {
                     onDismiss()
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).clipShape(RoundedRectangle(cornerRadius: 8)))
+                .foregroundColor(.white)
             }
         }
-        .padding(16)
-        .background(.ultraThinMaterial)
+        .padding(32)
+        .background(VisualEffectView(material: .headerView, blendingMode: .withinWindow))
     }
 
     private var statusText: String {
         switch progress.status {
         case .idle: return "Ready"
-        case .downloading: return "Downloading"
-        case .extracting: return "Extracting"
-        case .complete: return "Complete"
+        case .downloading: return "Loading"
+        case .extracting: return "Setup"
+        case .complete: return "Ready"
         case .failed: return "Failed"
         }
     }
@@ -160,7 +175,7 @@ struct TemplateDownloadView: View {
     TemplateDownloadView(
         progress: DownloadProgress(
             status: .downloading,
-            message: "Fetching base image layers from GitHub Container Registry...",
+            message: "Fetching VM image layers from GitHub Container Registry...",
             percentComplete: 64.2
         ),
         onDismiss: {}

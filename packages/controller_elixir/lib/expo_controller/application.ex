@@ -7,6 +7,12 @@ defmodule ExpoController.Application do
 
   @impl true
   def start(_type, _args) do
+    # Validate API key before starting
+    api_key = Application.get_env(:expo_controller, :api_key)
+    unless api_key && byte_size(api_key) >= 32 do
+      raise "CONTROLLER_API_KEY must be set and at least 32 characters"
+    end
+
     children = [
       ExpoControllerWeb.Telemetry,
       ExpoController.Repo,

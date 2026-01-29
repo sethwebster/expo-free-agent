@@ -34,7 +34,7 @@ defmodule ExpoController.Workers.Worker do
       :builds_failed,
       :last_seen_at
     ])
-    |> validate_required([:id, :name, :status])
+    |> validate_required([:id, :name])
     |> validate_inclusion(:status, [:idle, :building, :offline])
     |> unique_constraint(:id, name: :workers_pkey)
   end
@@ -46,29 +46,29 @@ defmodule ExpoController.Workers.Worker do
     %__MODULE__{}
     |> changeset(attrs)
     |> put_change(:status, :idle)
-    |> put_change(:last_seen_at, DateTime.utc_now())
-    |> validate_required([:id, :name])
+    |> put_change(:last_seen_at, DateTime.utc_now() |> DateTime.truncate(:second))
+    |> validate_required([:id, :name, :status, :last_seen_at])
   end
 
   @doc """
   Changeset for updating last seen timestamp.
   """
   def heartbeat_changeset(worker) do
-    change(worker, last_seen_at: DateTime.utc_now())
+    change(worker, last_seen_at: DateTime.utc_now() |> DateTime.truncate(:second))
   end
 
   @doc """
   Changeset for marking worker as building.
   """
   def building_changeset(worker) do
-    change(worker, status: :building, last_seen_at: DateTime.utc_now())
+    change(worker, status: :building, last_seen_at: DateTime.utc_now() |> DateTime.truncate(:second))
   end
 
   @doc """
   Changeset for marking worker as idle.
   """
   def idle_changeset(worker) do
-    change(worker, status: :idle, last_seen_at: DateTime.utc_now())
+    change(worker, status: :idle, last_seen_at: DateTime.utc_now() |> DateTime.truncate(:second))
   end
 
   @doc """
