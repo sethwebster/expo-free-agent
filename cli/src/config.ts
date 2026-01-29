@@ -117,6 +117,6 @@ export function getAuthBaseUrl(): string {
     return envUrl;
   }
 
-  // Default to localhost for development
-  return 'http://localhost:5173';
+  // Default to production landing page
+  return 'https://expo-free-agent.pages.dev';
 }

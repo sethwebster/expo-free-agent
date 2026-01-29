@@ -62,6 +62,15 @@ defmodule ExpoController.Workers do
   end
 
   @doc """
+  Marks a worker as offline.
+  """
+  def mark_offline(worker) do
+    worker
+    |> Worker.changeset(%{status: :offline})
+    |> Repo.update()
+  end
+
+  @doc """
   Marks a worker as offline if not seen recently.
   """
   def mark_offline_if_stale(timeout_seconds \\ 300) do

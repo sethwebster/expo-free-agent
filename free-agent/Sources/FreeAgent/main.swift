@@ -84,9 +84,10 @@ enum ConnectionState: Equatable {
 }
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableObject {
     private var statusItem: NSStatusItem?
     private var workerService: WorkerService?
+    private var vmSyncService: VMSyncService?
     private var settingsWindow: NSWindow?
     private var statisticsWindow: NSWindow?
     private var statusUpdateTimer: Timer?
@@ -96,26 +97,73 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var connectionState: ConnectionState = .connecting
     private var animationFrame = 0
     private var downloadProgress: Double = 0.0
+    @Published var currentVMDownloadProgress: DownloadProgress? = nil
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Set activation policy for menu bar app with windows
+        NSApp.setActivationPolicy(.accessory)
+
         // Create menu bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        print("✓ Created status item: \(statusItem != nil)")
 
         if let button = statusItem?.button {
             // Start with connecting state
             connectionState = .connecting
-            button.image = createIconForState(.connecting)
+            let icon = createIconForState(.connecting)
+            button.image = icon
             button.image?.isTemplate = true
+            print("✓ Set status item icon")
+        } else {
+            print("✗ Failed to get status item button!")
         }
 
         setupMenu()
+        print("✓ Menu setup complete")
 
         // Start animation for connecting dots
         startAnimation()
 
+        // Initialize VM sync service
+        vmSyncService = VMSyncService()
+        vmSyncService?.setProgressHandler { [weak self] progress in
+            guard let self = self else { return }
+
+            // Store current download progress for Preferences window
+            self.currentVMDownloadProgress = progress
+
+            // Update connection state based on download progress
+            switch progress.status {
+            case .downloading, .extracting:
+                let percent = progress.percentComplete ?? 0.0
+                self.connectionState = .downloading(percent: percent)
+                self.updateIconForCurrentState()
+            case .complete, .failed:
+                // VM template ready or failed, proceed to worker initialization
+                Task {
+                    await self.initializeWorker()
+                }
+            case .idle:
+                break
+            }
+        }
+
+        // Start VM template sync in background
+        Task {
+            await vmSyncService?.ensureTemplateExists()
+        }
+    }
+
+    private func initializeWorker() async {
         // Initialize worker service
         let config = WorkerConfiguration.load()
         workerService = WorkerService(configuration: config)
+
+        // Set VM verification handler to ensure fresh verification before accepting builds
+        await workerService?.setVMVerificationHandler { [weak self] () async -> Bool in
+            guard let self = self else { return false }
+            return await self.vmSyncService?.ensureFreshVerification() ?? false
+        }
 
         // Auto-start worker if configured
         if config.autoStart {
@@ -297,15 +345,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Settings
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ",")
+        // Preferences
+        let settingsItem = NSMenuItem(title: "Preferences...", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
-
-        // Statistics
-        let statsItem = NSMenuItem(title: "Statistics", action: #selector(showStatistics), keyEquivalent: "i")
-        statsItem.target = self
-        menu.addItem(statsItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -409,50 +452,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func createOnlineIcon() -> NSImage {
-        let size = NSSize(width: 22, height: 18)
-        let image = NSImage(size: size, flipped: false) { rect in
-            // Draw base logo in black (will adapt to menu bar)
-            NSColor.black.setFill()
-
-            // Load and draw SVG or fallback pattern
-            if let svgURL = Bundle.resources.url(forResource: "free-agent-logo", withExtension: "svg"),
-               let svgImage = NSImage(contentsOf: svgURL) {
-                svgImage.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
-            } else {
-                // Fallback block pattern
-                let blockSize: CGFloat = 4.5
-                let topBlock = NSRect(x: 6.75, y: 9, width: blockSize, height: blockSize)
-                NSBezierPath(rect: topBlock).fill()
-
-                let bottomY: CGFloat = 4
-                NSBezierPath(rect: NSRect(x: 2.25, y: bottomY, width: blockSize, height: blockSize)).fill()
-                NSBezierPath(rect: NSRect(x: 6.75, y: bottomY, width: blockSize, height: blockSize)).fill()
-                NSBezierPath(rect: NSRect(x: 11.25, y: bottomY, width: blockSize, height: blockSize)).fill()
-            }
-
-            // Draw bright green checkmark badge in top-right
-            let checkX: CGFloat = 14.5
-            let checkY: CGFloat = 10.5
-            let circleSize: CGFloat = 7.5
-
-            // White circle background
-            let circleRect = NSRect(x: checkX - 0.5, y: checkY - 1, width: circleSize, height: circleSize)
-            NSColor.white.setFill()
-            NSBezierPath(ovalIn: circleRect).fill()
-
-            // Bright green checkmark
-            NSColor(calibratedRed: 0.0, green: 1.0, blue: 0.0, alpha: 1.0).setStroke()
-            let checkPath = NSBezierPath()
-            checkPath.lineWidth = 2.0
-            checkPath.move(to: NSPoint(x: checkX + 0.5, y: checkY + 1.5))
-            checkPath.line(to: NSPoint(x: checkX + 2.0, y: checkY - 0.5))
-            checkPath.line(to: NSPoint(x: checkX + 5.5, y: checkY + 3.5))
-            checkPath.stroke()
-
-            return true
-        }
-        image.isTemplate = false  // Preserve colors
-        return image
+        // Just use the same icon as offline - simple template icon with no badge
+        return createTrayIcon()
     }
 
     private func createBuildingIcon() -> NSImage {
@@ -542,72 +543,83 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showSettings() {
-        if settingsWindow == nil {
-            let settingsView = SettingsView(
-                configuration: WorkerConfiguration.load(),
-                onSave: { [weak self] config in
-                    Task { @MainActor in
-                        // Stop old service before replacing
-                        await self?.workerService?.stop()
-                        config.save()
-                        self?.workerService = WorkerService(configuration: config)
-                    }
-                },
-                onProgressUpdate: { [weak self] progress in
-                    Task { @MainActor in
-                        guard let self = self else { return }
+        NSApp.activate(ignoringOtherApps: true)
 
-                        // Update connection state based on download progress
-                        switch progress.status {
-                        case .downloading, .extracting:
-                            let percent = progress.percentComplete ?? 0.0
-                            self.connectionState = .downloading(percent: percent)
-                            self.updateIconForCurrentState()
-                        case .complete, .failed:
-                            // Restore previous state
-                            if await self.workerService?.isRunning == true {
-                                self.connectionState = .online
-                            } else {
-                                self.connectionState = .offline
-                            }
-                            self.updateIconForCurrentState()
-                        case .idle:
-                            break
+        settingsWindow?.close()
+        settingsWindow = nil
+
+        let progressBinding = Binding<DownloadProgress?>(
+            get: { [weak self] in self?.currentVMDownloadProgress },
+            set: { [weak self] newValue in self?.currentVMDownloadProgress = newValue }
+        )
+
+        let preferencesView = PreferencesView(
+            configuration: WorkerConfiguration.load(),
+            downloadProgress: progressBinding,
+            onSave: { [weak self] config in
+                Task { @MainActor in
+                    await self?.workerService?.stop()
+                    do {
+                        try config.save()
+                        let newService = WorkerService(configuration: config)
+                        await newService.setVMVerificationHandler { [weak self] () async -> Bool in
+                            guard let self = self else { return false }
+                            return await self.vmSyncService?.ensureFreshVerification() ?? false
                         }
+                        self?.workerService = newService
+                    } catch {
+                        print("Failed to save configuration: \(error)")
+                        // TODO: Show error alert to user
                     }
                 }
-            )
+            }
+        )
 
-            let hostingController = NSHostingController(rootView: settingsView)
-            settingsWindow = NSWindow(contentViewController: hostingController)
-            settingsWindow?.title = "Free Agent Settings"
-            settingsWindow?.styleMask = [.titled, .closable, .miniaturizable]
-            settingsWindow?.setContentSize(NSSize(width: 500, height: 600))
-            settingsWindow?.center()
-        }
+        let hostingController = NSHostingController(rootView: preferencesView)
+        
+        // Ensure the underlying NSView is transparent
+        hostingController.view.layer?.backgroundColor = .clear
+        
+        let window = NSWindow(contentViewController: hostingController)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        window.level = .floating
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.setContentSize(NSSize(width: 800, height: 600))
+        window.center()
 
-        settingsWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        self.settingsWindow = window
+        window.makeKeyAndOrderFront(nil)
     }
 
     @objc private func showStatistics() {
-        // Activate app first to ensure window comes to front
         NSApp.activate(ignoringOtherApps: true)
 
         if statisticsWindow == nil {
             let statsView = StatisticsView(configuration: WorkerConfiguration.load())
-
             let hostingController = NSHostingController(rootView: statsView)
-            statisticsWindow = NSWindow(contentViewController: hostingController)
-            statisticsWindow?.title = "Free Agent Statistics"
-            statisticsWindow?.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            statisticsWindow?.setContentSize(NSSize(width: 500, height: 600))
-            statisticsWindow?.center()
-            statisticsWindow?.level = .floating  // Keep window on top
-            statisticsWindow?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            
+            // Ensure the underlying NSView is transparent
+            hostingController.view.layer?.backgroundColor = .clear
+            
+            let window = NSWindow(contentViewController: hostingController)
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.setContentSize(NSSize(width: 580, height: 720))
+            window.center()
+            window.level = .floating
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            
+            self.statisticsWindow = window
         }
 
-        statisticsWindow?.orderFrontRegardless()
         statisticsWindow?.makeKeyAndOrderFront(nil)
     }
 

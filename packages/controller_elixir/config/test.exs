@@ -6,12 +6,15 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :expo_controller, ExpoController.Repo,
-  username: "postgres",
-  password: "postgres",
+  username: "expo",
+  password: "expo_dev",
   hostname: "localhost",
   database: "expo_controller_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
+
+# Test API key (must be at least 32 characters)
+config :expo_controller, :api_key, "test-api-key-for-testing-purposes-only-32-chars-minimum"
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
@@ -35,3 +38,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Configure storage path for build artifacts (tests override per-test)
+config :expo_controller, :storage_path, "./test_storage"

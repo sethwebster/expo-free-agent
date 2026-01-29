@@ -7,12 +7,26 @@ defmodule ExpoControllerWeb.Plugs.Auth do
   import Phoenix.Controller
 
   alias ExpoController.Workers
+  alias ExpoController.Builds
+
+  @behaviour Plug
+
+  @doc """
+  Initialize the plug with the authentication mode.
+  """
+  def init(mode), do: mode
+
+  @doc """
+  Call the appropriate authentication function based on the mode.
+  """
+  def call(conn, :require_api_key), do: require_api_key(conn)
+  def call(conn, :require_worker_access), do: require_worker_access(conn)
 
   @doc """
   Validates the API key from the X-API-Key header.
   Uses constant-time comparison to prevent timing attacks.
   """
-  def require_api_key(conn, _opts) do
+  defp require_api_key(conn) do
     api_key = Application.get_env(:expo_controller, :api_key)
     provided_key = get_req_header(conn, "x-api-key") |> List.first()
 
@@ -31,7 +45,7 @@ defmodule ExpoControllerWeb.Plugs.Auth do
   Validates worker access to a resource.
   Requires X-Worker-Id header and optionally validates build ownership.
   """
-  def require_worker_access(conn, opts \\ []) do
+  defp require_worker_access(conn, opts \\ []) do
     require_build_id = Keyword.get(opts, :require_build_id, false)
     worker_id = get_req_header(conn, "x-worker-id") |> List.first()
 
@@ -53,18 +67,23 @@ defmodule ExpoControllerWeb.Plugs.Auth do
 
   defp validate_build_access(conn, worker_id) do
     build_id = get_build_id_from_path(conn)
+    build = if build_id, do: Builds.get_build(build_id), else: nil
 
     cond do
       is_nil(build_id) ->
         unauthorized(conn, "Missing build ID")
 
-      !Workers.owns_build?(worker_id, build_id) ->
-        forbidden(conn, "Worker not assigned to this build")
+      is_nil(build) ->
+        not_found(conn, "Build not found")
+
+      build.worker_id != worker_id ->
+        forbidden(conn, "Build not assigned to this worker")
 
       true ->
         conn
         |> assign(:worker_id, worker_id)
         |> assign(:build_id, build_id)
+        |> assign(:build, build)
     end
   end
 
@@ -90,6 +109,14 @@ defmodule ExpoControllerWeb.Plugs.Auth do
     |> put_status(:forbidden)
     |> put_view(json: ExpoControllerWeb.ErrorJSON)
     |> render(:"403", message: message)
+    |> halt()
+  end
+
+  defp not_found(conn, message) do
+    conn
+    |> put_status(:not_found)
+    |> put_view(json: ExpoControllerWeb.ErrorJSON)
+    |> render(:"404", message: message)
     |> halt()
   end
 end

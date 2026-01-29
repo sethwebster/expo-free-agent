@@ -36,7 +36,7 @@ defmodule ExpoController.Builds.BuildLog do
       build_id: build_id,
       level: level,
       message: message,
-      timestamp: DateTime.utc_now()
+      timestamp: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end
 end

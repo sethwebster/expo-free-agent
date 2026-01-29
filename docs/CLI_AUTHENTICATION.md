@@ -58,9 +58,8 @@ EXPO_CONTROLLER_URL=http://localhost:3000
 # API Key (optional - set via login command)
 EXPO_CONTROLLER_API_KEY=your-api-key-here
 
-# Auth page URL (defaults to production)
-AUTH_BASE_URL=http://localhost:5173  # Development
-# AUTH_BASE_URL=https://expo-free-agent.pages.dev  # Production (default)
+# Auth page URL (defaults to https://expo-free-agent.pages.dev)
+# AUTH_BASE_URL=http://localhost:5173  # Set for local development
 ```
 
 ### Landing Page Environment Variables

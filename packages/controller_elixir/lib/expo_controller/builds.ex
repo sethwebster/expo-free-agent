@@ -5,7 +5,7 @@ defmodule ExpoController.Builds do
 
   import Ecto.Query, warn: false
   alias ExpoController.Repo
-  alias ExpoController.Builds.{Build, BuildLog}
+  alias ExpoController.Builds.{Build, BuildLog, CpuSnapshot}
   alias ExpoController.Workers
 
   @doc """
@@ -50,8 +50,8 @@ defmodule ExpoController.Builds do
   Creates a build.
   """
   def create_build(attrs \\ %{}) do
-    # Generate UUID if not provided
-    attrs = Map.put_new(attrs, :id, Ecto.UUID.generate())
+    # Generate nanoid if not provided (matches TypeScript controller)
+    attrs = Map.put_new(attrs, :id, Nanoid.generate())
 
     attrs
     |> Build.create_changeset()
@@ -86,7 +86,7 @@ defmodule ExpoController.Builds do
       else
         {:error, reason} -> Repo.rollback(reason)
       end
-    end)
+    end, timeout: 5_000)
   end
 
   defp get_and_validate_worker(worker_id) do
@@ -130,7 +130,7 @@ defmodule ExpoController.Builds do
       else
         {:error, reason} -> Repo.rollback(reason)
       end
-    end)
+    end, timeout: 5_000)
   end
 
   defp get_and_validate_build(build_id) do
@@ -171,7 +171,7 @@ defmodule ExpoController.Builds do
       else
         {:error, reason} -> Repo.rollback(reason)
       end
-    end)
+    end, timeout: 5_000)
   end
 
   defp update_build_failed(build, error_message) do
@@ -206,7 +206,7 @@ defmodule ExpoController.Builds do
       else
         {:error, reason} -> Repo.rollback(reason)
       end
-    end)
+    end, timeout: 5_000)
   end
 
   defp validate_cancellable(%{status: status}) when status in [:pending, :assigned], do: :ok
@@ -233,6 +233,21 @@ defmodule ExpoController.Builds do
     build_id
     |> BuildLog.create_changeset(level, message)
     |> Repo.insert()
+  end
+
+  @doc """
+  Adds multiple log entries to a build in a single transaction.
+  Returns {:ok, count} on success.
+  """
+  def add_logs(build_id, logs) when is_list(logs) do
+    Repo.transaction(fn ->
+      Enum.reduce(logs, 0, fn log, count ->
+        case add_log(build_id, log.level, log.message) do
+          {:ok, _} -> count + 1
+          {:error, _} -> count  # Skip invalid entries
+        end
+      end)
+    end, timeout: 10_000)  # 10 seconds for potentially many logs
   end
 
   @doc """
@@ -306,5 +321,123 @@ defmodule ExpoController.Builds do
       from(b in Build, where: b.status == :pending),
       :count
     )
+  end
+
+  @doc """
+  Returns the count of active builds (assigned or building).
+  """
+  def active_count do
+    Repo.aggregate(
+      from(b in Build, where: b.status in [:assigned, :building]),
+      :count
+    )
+  end
+
+  @doc """
+  Returns list of active builds (assigned or building).
+  """
+  def list_active_builds do
+    from(b in Build,
+      where: b.status in [:assigned, :building],
+      order_by: [asc: b.submitted_at]
+    )
+    |> Repo.all()
+    |> Repo.preload(:worker)
+  end
+
+  @doc """
+  Retries a build by copying source and certs to a new build.
+
+  Returns {:ok, new_build} or {:error, reason}.
+  """
+  def retry_build(original_build_id) do
+    Repo.transaction(fn ->
+      with {:ok, original} <- get_and_validate_build(original_build_id),
+           {:ok, _} <- validate_source_exists(original),
+           {:ok, new_build} <- create_retry_build(original),
+           {:ok, new_build} <- copy_build_files(original, new_build),
+           {:ok, _} <- log_retry(original.id, new_build.id) do
+        new_build
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end, timeout: 10_000)  # 10 seconds for file copy operations
+  end
+
+  defp validate_source_exists(build) do
+    alias ExpoController.Storage.FileStorage
+
+    if build.source_path && FileStorage.exists?(build.source_path) do
+      {:ok, build}
+    else
+      {:error, :source_not_found}
+    end
+  end
+
+  defp create_retry_build(original) do
+    create_build(%{
+      platform: original.platform
+    })
+  end
+
+  defp copy_build_files(original, new_build) do
+    alias ExpoController.Storage.FileStorage
+
+    with {:ok, new_source_path} <- FileStorage.copy_source(original.source_path, new_build.id),
+         {:ok, new_certs_path} <- copy_certs_if_exists(original.certs_path, new_build.id) do
+      new_build
+      |> Ecto.Changeset.change(
+        source_path: new_source_path,
+        certs_path: new_certs_path
+      )
+      |> Repo.update()
+    end
+  end
+
+  defp copy_certs_if_exists(nil, _new_build_id), do: {:ok, nil}
+  defp copy_certs_if_exists(certs_path, new_build_id) do
+    alias ExpoController.Storage.FileStorage
+
+    if FileStorage.exists?(certs_path) do
+      FileStorage.copy_certs(certs_path, new_build_id)
+    else
+      {:ok, nil}
+    end
+  end
+
+  defp log_retry(original_id, new_id) do
+    with {:ok, _} <- add_log(new_id, :info, "Build submitted (retry of #{original_id})"),
+         {:ok, _} <- add_log(original_id, :info, "Retried as build #{new_id}") do
+      {:ok, :logged}
+    end
+  end
+
+  @doc """
+  Saves a CPU snapshot for a build.
+  """
+  def add_cpu_snapshot(build_id, cpu_percent, memory_mb) do
+    %{
+      build_id: build_id,
+      timestamp: DateTime.utc_now(),
+      cpu_percent: cpu_percent,
+      memory_mb: memory_mb
+    }
+    |> CpuSnapshot.create_changeset()
+    |> Repo.insert()
+  end
+
+  @doc """
+  Gets CPU snapshots for a build.
+  """
+  def get_cpu_snapshots(build_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit)
+
+    query = from s in CpuSnapshot,
+      where: s.build_id == ^build_id,
+      order_by: [asc: s.timestamp]
+
+    query = if limit, do: limit(query, ^limit), else: query
+
+    Repo.all(query)
   end
 end

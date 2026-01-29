@@ -7,6 +7,7 @@ public actor WorkerService {
     private var isActive = false
     private var pollingTask: Task<Void, Never>?
     private var activeBuilds: [String: Task<Void, Never>] = [:]
+    private var vmVerificationHandler: (@Sendable () async -> Bool)?
 
     public var isRunning: Bool { isActive }
 
@@ -14,14 +15,26 @@ public actor WorkerService {
         self.configuration = configuration
     }
 
+    /// Set a handler to verify VM template freshness before accepting builds
+    public func setVMVerificationHandler(_ handler: @escaping @Sendable () async -> Bool) {
+        self.vmVerificationHandler = handler
+    }
+
     public func start() async {
         guard !isActive else { return }
 
-        isActive = true
         print("Worker service starting...")
 
-        // Register with controller
-        await registerWorker()
+        // Register with controller - halt startup if registration fails
+        do {
+            try await registerWorker()
+        } catch {
+            print("FATAL: Registration failed: \(error)")
+            print("Worker service cannot start without valid registration")
+            return
+        }
+
+        isActive = true
 
         // Start polling loop
         pollingTask = Task {
@@ -60,6 +73,16 @@ public actor WorkerService {
             do {
                 // Check if we can accept more builds
                 if activeBuilds.count < configuration.maxConcurrentBuilds {
+                    // Verify VM template is fresh (< 5 min old) before accepting builds
+                    if let verificationHandler = vmVerificationHandler {
+                        let isVMFresh = await verificationHandler()
+                        if !isVMFresh {
+                            print("VM template verification stale or failed, skipping poll")
+                            try await Task.sleep(for: .seconds(configuration.pollIntervalSeconds))
+                            continue
+                        }
+                    }
+
                     if let job = try await pollForJob() {
                         await executeJob(job)
                     }
@@ -77,49 +100,68 @@ public actor WorkerService {
         }
     }
 
-    private func registerWorker() async {
-        do {
-            let url = URL(string: "\(configuration.controllerURL)/api/workers/register")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
+    private func registerWorker() async throws {
+        let url = URL(string: "\(configuration.controllerURL)/api/workers/register")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
 
-            // Controller expects: { name, capabilities }
-            let payload: [String: Any] = [
-                "name": configuration.deviceName ?? Host.current().localizedName ?? "Unknown",
-                "capabilities": [
-                    "platforms": ["ios"],
-                    "maxConcurrentBuilds": configuration.maxConcurrentBuilds,
-                    "maxMemoryGB": configuration.maxMemoryGB,
-                    "maxCPUPercent": configuration.maxCPUPercent,
-                    "xcode_version": "15.0"
-                ]
+        // Controller expects: { name, capabilities }
+        // Send existing worker ID if available for idempotent registration
+        var payload: [String: Any] = [
+            "name": configuration.deviceName ?? Host.current().localizedName ?? "Unknown",
+            "capabilities": [
+                "platforms": ["ios"],
+                "maxConcurrentBuilds": configuration.maxConcurrentBuilds,
+                "maxMemoryGB": configuration.maxMemoryGB,
+                "maxCPUPercent": configuration.maxCPUPercent,
+                "xcode_version": "15.0"
             ]
+        ]
 
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        // Include existing worker ID if we have one (for re-registration)
+        if let existingId = configuration.workerID {
+            payload["id"] = existingId
+        }
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+        print("Registering worker (current ID: \(configuration.workerID ?? "nil"))")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-            if let httpResponse = response as? HTTPURLResponse {
-                if httpResponse.statusCode == 200 {
-                    // Controller returns { id, status } - save the assigned worker ID
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let assignedId = json["id"] as? String {
-                        // Store the controller-assigned worker ID for future requests
-                        // CRITICAL: Update in-memory config so pollForJob() uses the correct ID
-                        configuration.workerID = assignedId
-                        configuration.save()
-                        print("✓ Registered with controller (ID: \(assignedId))")
-                    } else {
-                        print("✓ Registered with controller")
-                    }
-                } else {
-                    print("Registration failed: \(httpResponse.statusCode)")
-                }
-            }
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw WorkerError.buildFailed(reason: "Invalid response from controller")
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? "No response body"
+            throw WorkerError.buildFailed(reason: "Registration failed with status \(httpResponse.statusCode): \(body)")
+        }
+
+        // Debug: Print raw JSON response
+        if let rawJson = String(data: data, encoding: .utf8) {
+            print("Registration response JSON: \(rawJson)")
+        }
+
+        // Controller returns { id, status } - save the assigned worker ID
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let assignedId = json["id"] as? String else {
+            throw WorkerError.buildFailed(reason: "Missing worker ID in registration response")
+        }
+
+        print("Parsed ID from response: '\(assignedId)' (length: \(assignedId.count))")
+
+        // CRITICAL: Update configuration atomically
+        configuration.workerID = assignedId
+        do {
+            try configuration.save()
+            print("✓ Registered with controller (ID: \(assignedId))")
+            print("Configuration workerID is now: '\(configuration.workerID ?? "nil")'")
         } catch {
-            print("Failed to register worker: \(error)")
+            // Revert in-memory change if save fails
+            configuration.workerID = nil
+            throw WorkerError.buildFailed(reason: "Failed to persist worker ID: \(error.localizedDescription)")
         }
     }
 
@@ -147,10 +189,16 @@ public actor WorkerService {
     }
 
     private func pollForJob() async throws -> BuildJob? {
-        guard let workerID = configuration.workerID else { return nil }
+        guard let workerID = configuration.workerID else {
+            print("No worker ID found, skipping poll")
+            return nil
+        }
+
+        print("About to poll with workerID: '\(workerID)' (length: \(workerID.count))")
 
         // Controller expects query param: /api/workers/poll?worker_id={id}
         let url = URL(string: "\(configuration.controllerURL)/api/workers/poll?worker_id=\(workerID)")!
+        print("Polling: \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
@@ -172,6 +220,9 @@ public actor WorkerService {
             return nil
         } else {
             print("Poll failed: \(httpResponse.statusCode)")
+            if let body = String(data: data, encoding: .utf8) {
+                print("Response body: \(body)")
+            }
             return nil
         }
     }
@@ -275,16 +326,32 @@ public actor WorkerService {
 
         // Use source_url from job (relative URL like /api/builds/{id}/source)
         let url = URL(string: "\(configuration.controllerURL)\(job.source_url)")!
+        print("Downloading build package from: \(url.absoluteString)")
+
         var request = URLRequest(url: url)
         request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
         // Controller requires X-Worker-Id header for source/certs downloads
         if let workerID = configuration.workerID {
             request.setValue(workerID, forHTTPHeaderField: "X-Worker-Id")
+            print("Using worker ID: \(workerID)")
         }
 
         let (localURL, response) = try await URLSession.shared.download(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("✗ Download failed: Invalid response type")
+            throw WorkerError.downloadFailed
+        }
+
+        print("Download response status: \(httpResponse.statusCode)")
+
+        guard httpResponse.statusCode == 200 else {
+            print("✗ Download failed with status \(httpResponse.statusCode)")
+            // Try to read error body
+            if let data = try? Data(contentsOf: localURL),
+               let errorBody = String(data: data, encoding: .utf8) {
+                print("Error response: \(errorBody)")
+            }
             throw WorkerError.downloadFailed
         }
 
@@ -294,7 +361,7 @@ public actor WorkerService {
         }
 
         try FileManager.default.moveItem(at: localURL, to: packagePath)
-        print("Downloaded build package to \(packagePath.path)")
+        print("✓ Downloaded build package to \(packagePath.path)")
 
         return packagePath
     }

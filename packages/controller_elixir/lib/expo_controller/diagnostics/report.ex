@@ -35,7 +35,7 @@ defmodule ExpoController.Diagnostics.Report do
       worker_id: worker_id,
       type: type,
       data: data,
-      reported_at: DateTime.utc_now()
+      reported_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
   end
 end

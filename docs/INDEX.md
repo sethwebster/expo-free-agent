@@ -31,6 +31,7 @@ System design, component structure, and technical decisions.
 - [Agents](./architecture/agents.md) - Agent rules and guardrails for code changes
 - [CLI Implementation](./architecture/cli-implementation.md) - Submit CLI design
 - [VM Implementation](./architecture/vm-implementation.md) - VM execution architecture
+- [TS Compatibility Routes](./architecture/ts-compatibility-routes.md) - Elixir controller route aliases for TS API compatibility
 
 ## Operations
 

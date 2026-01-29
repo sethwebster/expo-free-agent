@@ -34,6 +34,15 @@ const BuildSchema = z.object({
   completedAt: z.string().optional(),
 });
 
+// Support both array (TypeScript controller) and object with metadata (Elixir controller)
+const BuildsResponseSchema = z.union([
+  z.array(BuildSchema),  // TypeScript controller format
+  z.object({             // Elixir controller format (better - includes metadata)
+    builds: z.array(BuildSchema),
+    total: z.number(),
+  }),
+]);
+
 const BuildsArraySchema = z.array(BuildSchema);
 
 // Exported types
@@ -49,8 +58,8 @@ export type Build = z.infer<typeof BuildSchema>;
 
 // Config
 const FETCH_TIMEOUT_MS = 30_000;
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000;
+const MAX_RETRIES = 10;
+const INITIAL_RETRY_DELAY_MS = 1000;
 const MAX_UPLOAD_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 
 export class APIClient {
@@ -82,7 +91,8 @@ export class APIClient {
   private async fetchWithTimeout(
     url: string,
     options: RequestInit = {},
-    retries = MAX_RETRIES
+    retries = MAX_RETRIES,
+    attemptNumber = 0
   ): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -118,10 +128,21 @@ export class APIClient {
     } catch (error) {
       clearTimeout(timeout);
 
-      // Retry on network errors or timeouts
-      if (retries > 0 && (error instanceof Error && error.name === 'AbortError')) {
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-        return this.fetchWithTimeout(url, options, retries - 1);
+      // Check if error is retryable (network errors, timeouts, connection refused)
+      const isRetryable = error instanceof Error && (
+        error.name === 'AbortError' ||
+        error.message.includes('fetch failed') ||
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('ETIMEDOUT') ||
+        error.message.includes('Unable to connect')
+      );
+
+      if (retries > 0 && isRetryable) {
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 64s, 128s, 256s, 512s
+        const delayMs = INITIAL_RETRY_DELAY_MS * Math.pow(2, attemptNumber);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        return this.fetchWithTimeout(url, options, retries - 1, attemptNumber + 1);
       }
 
       throw error;
@@ -311,7 +332,10 @@ export class APIClient {
     }
 
     const json = await response.json();
-    return BuildsArraySchema.parse(json);
+    const parsed = BuildsResponseSchema.parse(json);
+
+    // Handle both formats: array or object with builds array
+    return Array.isArray(parsed) ? parsed : parsed.builds;
   }
 
   async cancelBuild(buildId: string): Promise<void> {

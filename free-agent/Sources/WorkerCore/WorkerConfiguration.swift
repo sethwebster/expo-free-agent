@@ -1,6 +1,6 @@
 import Foundation
 
-public struct WorkerConfiguration: Codable, Sendable {
+public struct WorkerConfiguration: Codable, Sendable, Equatable {
     // Controller settings
     public var controllerURL: String
     public var apiKey: String
@@ -53,22 +53,16 @@ public struct WorkerConfiguration: Codable, Sendable {
 
     public static func load() -> WorkerConfiguration {
         guard let data = try? Data(contentsOf: configFileURL),
-              var config = try? JSONDecoder().decode(WorkerConfiguration.self, from: data) else {
+              let config = try? JSONDecoder().decode(WorkerConfiguration.self, from: data) else {
             return .default
         }
 
-        // Generate worker ID if missing
-        if config.workerID == nil {
-            config.workerID = UUID().uuidString
-            config.deviceName = Host.current().localizedName
-            config.save()
-        }
-
+        // Controller is the sole authority for worker IDs - don't generate locally
         return config
     }
 
-    public func save() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
-        try? data.write(to: Self.configFileURL)
+    public func save() throws {
+        let data = try JSONEncoder().encode(self)
+        try data.write(to: Self.configFileURL)
     }
 }

@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var showingSaveConfirmation = false
     @State private var downloadProgress: DownloadProgress?
     @State private var isCheckingTemplate = false
+    @State private var userDismissedDownload = false
 
     init(
         configuration: WorkerConfiguration,
@@ -22,17 +23,6 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        if let progress = downloadProgress {
-            // Show download progress overlay
-            TemplateDownloadView(progress: progress) {
-                downloadProgress = nil
-            }
-        } else {
-            settingsContent
-        }
-    }
-
-    private var settingsContent: some View {
         content
             .onAppear {
                 checkTemplateExists()
@@ -49,8 +39,12 @@ struct SettingsView: View {
             // Set up progress handler
             await check.setProgressHandler { progress in
                 Task { @MainActor in
-                    downloadProgress = progress
+                    // Always notify parent for menu bar icon updates
                     onProgressUpdate?(progress)
+                    // Update local progress bar
+                    if !self.userDismissedDownload {
+                        self.downloadProgress = progress
+                    }
                 }
             }
 
@@ -79,6 +73,34 @@ struct SettingsView: View {
             Text("Free Agent Settings")
                 .font(.title)
                 .padding(.bottom, 10)
+
+            // VM Template Download Progress
+            if let progress = downloadProgress, !userDismissedDownload {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(progress.message)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        if progress.status == .downloading || progress.status == .extracting {
+                            Button("Dismiss") {
+                                userDismissedDownload = true
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                        }
+                    }
+                    if let percent = progress.percentComplete {
+                        ProgressView(value: percent, total: 100.0)
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                    }
+                }
+                .padding()
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(8)
+            }
 
             // Controller Configuration
             GroupBox(label: Text("Controller").fontWeight(.semibold)) {

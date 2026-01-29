@@ -84,10 +84,21 @@ defmodule ExpoController.Orchestration.QueueManager do
             {:reply, {:ok, build}, new_state}
 
           {:error, reason} ->
-            # Build couldn't be assigned, remove from queue anyway
-            Logger.warning("Failed to assign build #{build_id}: #{inspect(reason)}")
-            new_state = %{state | queue: rest}
-            {:reply, {:error, reason}, new_state}
+            # On transient errors (worker busy/offline), keep build in queue
+            # On permanent errors (build not found), remove from queue
+            case reason do
+              r when r in [:worker_busy, :worker_offline, :worker_not_found] ->
+                # Keep build in queue for retry
+                Logger.warning("Failed to assign build #{build_id} (transient): #{inspect(reason)}")
+                {:reply, {:error, reason}, state}
+
+              _ ->
+                # Permanent error: mark failed and remove from queue
+                Logger.warning("Failed to assign build #{build_id} (permanent): #{inspect(reason)}")
+                mark_build_failed(build_id, "Assignment failed: #{inspect(reason)}")
+                new_state = %{state | queue: rest}
+                {:reply, {:error, reason}, new_state}
+            end
         end
     end
   end
@@ -158,6 +169,19 @@ defmodule ExpoController.Orchestration.QueueManager do
 
   defp broadcast_job_available do
     broadcast("job:available", %{})
+  end
+
+  defp mark_build_failed(build_id, error_message) do
+    case Builds.get_build(build_id) do
+      nil -> :ok
+      build ->
+        case Builds.fail_build(build.id, error_message) do
+          {:ok, _} -> :ok
+          {:error, reason} ->
+            Logger.error("Failed to mark build #{build_id} as failed: #{inspect(reason)}")
+            :ok
+        end
+    end
   end
 
   defp broadcast(event, payload) do
