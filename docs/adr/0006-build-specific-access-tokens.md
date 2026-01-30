@@ -134,6 +134,6 @@ Worker endpoints use separate auth (`X-Worker-Id` header).
 ## References
 
 - Middleware implementation: `packages/controller/src/middleware/auth.ts`
-- CLI token storage: `cli/src/build-tokens.ts`
+- CLI token storage: `packages/cli/src/build-tokens.ts`
 - Database schema: `packages/controller/src/db/schema.sql` (`access_token` column)
 - Security documentation: `docs/architecture/security.md`

@@ -557,7 +557,7 @@ import sqlite3 from 'sqlite3';
 
 #### Week 2: Submit CLI (Client)
 
-**File:** `cli/src/commands/submit.ts`
+**File:** `packages/cli/src/commands/submit.ts`
 ```typescript
 import { Command } from 'commander';
 import FormData from 'form-data';

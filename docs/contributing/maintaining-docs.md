@@ -32,7 +32,7 @@ docs/
 
 Each component has its own README:
 - `packages/controller/README.md` - Controller overview
-- `cli/README.md` - CLI usage
+- `packages/cli/README.md` - CLI usage
 - `free-agent/README.md` - Worker app
 - `packages/worker-installer/README.md` - Installer
 - `packages/landing-page/README.md` - Landing page
@@ -51,7 +51,7 @@ Each component has its own README:
 | Change Type | Required Doc Updates |
 |-------------|---------------------|
 | New API endpoint | `docs/reference/api.md`, component README, possibly examples |
-| New CLI command | `cli/README.md`, `docs/getting-started/` if user-facing |
+| New CLI command | `packages/cli/README.md`, `docs/getting-started/` if user-facing |
 | New error code | `docs/reference/errors.md` |
 | Architecture change | `docs/architecture/architecture.md`, possibly diagrams |
 | Breaking change | All affected docs + migration guide |

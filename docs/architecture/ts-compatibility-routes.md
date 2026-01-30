@@ -128,7 +128,7 @@ Comprehensive tests in `test/expo_controller_web/controllers/ts_compatibility_te
 
 Run tests:
 ```bash
-cd packages/controller_elixir
+cd packages/controller-elixir
 MIX_ENV=test mix test test/expo_controller_web/controllers/ts_compatibility_test.exs
 ```
 

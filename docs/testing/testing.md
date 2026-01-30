@@ -126,7 +126,7 @@ bun test src/__tests__/e2e.test.ts
 
 ## CLI Tests
 
-**Location:** `cli/src/__tests__/integration.test.ts`
+**Location:** `packages/cli/src/__tests__/integration.test.ts`
 
 Tests for CLI API client:
 

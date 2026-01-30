@@ -259,12 +259,12 @@ end, timeout: 5_000)
 ## Documentation
 
 **Comprehensive docs created:**
-- `packages/controller_elixir/ARCHITECTURE.md` - System design
-- `packages/controller_elixir/MIGRATION.md` - Migration guide
-- `packages/controller_elixir/API.md` - API reference
-- `packages/controller_elixir/SETUP.md` - Development setup
-- `packages/controller_elixir/TESTING.md` - Test strategy
-- `packages/controller_elixir/CONCURRENCY.md` - Race condition fixes
+- `packages/controller-elixir/ARCHITECTURE.md` - System design
+- `packages/controller-elixir/MIGRATION.md` - Migration guide
+- `packages/controller-elixir/API.md` - API reference
+- `packages/controller-elixir/SETUP.md` - Development setup
+- `packages/controller-elixir/TESTING.md` - Test strategy
+- `packages/controller-elixir/CONCURRENCY.md` - Race condition fixes
 - `docs/architecture/build-pickup-flow.md` - Protocol flow
 - `plans/race-condition-fixes-before-after.md` - Before/after comparison
 
@@ -273,5 +273,5 @@ end, timeout: 5_000)
 - Migration branch: `seth/elixir-controller-migration`
 - Merge commit: `d409a1f`
 - E2E verification: `test-e2e-elixir.sh`
-- Controller directory: `packages/controller_elixir/`
+- Controller directory: `packages/controller-elixir/`
 - Race condition analysis: `plans/race-condition-fixes-before-after.md`

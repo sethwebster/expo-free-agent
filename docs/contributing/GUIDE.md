@@ -415,10 +415,10 @@ export default router;
 
 ### Add New CLI Command
 
-1. Add command in `cli/src/commands/`
-2. Register in `cli/src/index.ts`
-3. Add tests in `cli/tests/`
-4. Update `cli/README.md`
+1. Add command in `packages/cli/src/commands/`
+2. Register in `packages/cli/src/index.ts`
+3. Add tests in `packages/cli/tests/`
+4. Update `packages/cli/README.md`
 
 **Example:**
 

@@ -109,7 +109,7 @@ Component-specific docs in `packages/controller/`:
 
 ### Submit CLI
 
-Component-specific docs in `cli/`:
+Component-specific docs in `packages/cli/`:
 - [README](../cli/README.md) - CLI overview
 
 ### Worker App

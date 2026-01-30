@@ -39,47 +39,26 @@ if ! bun install > /dev/null 2>&1; then
 fi
 log_success "Dependencies installed"
 
-# Controller tests
-log_info "Running controller tests..."
-cd packages/controller
-if ! bun test > /dev/null 2>&1; then
-    log_error "Controller tests failed"
-    bun test
-    exit 1
-fi
-log_success "Controller tests passed"
-cd ../..
-
 # CLI tests
 log_info "Running CLI tests..."
-cd cli
+cd packages/cli
 if ! bun test > /dev/null 2>&1; then
     log_error "CLI tests failed"
     bun test
     exit 1
 fi
 log_success "CLI tests passed"
-cd ..
-
-# Build controller
-log_info "Building controller..."
-cd packages/controller
-if ! bun run build > /dev/null 2>&1; then
-    log_error "Controller build failed"
-    exit 1
-fi
-log_success "Controller built successfully"
 cd ../..
 
 # Build CLI
 log_info "Building CLI..."
-cd cli
+cd packages/cli
 if ! bun run build > /dev/null 2>&1; then
     log_error "CLI build failed"
     exit 1
 fi
 log_success "CLI built successfully"
-cd ..
+cd ../..
 
 # Build Free Agent (if on macOS)
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -102,7 +81,7 @@ echo -e "${GREEN}  ✓ Smoketest Passed!${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Next steps:"
-echo "  • Run full E2E test: ./test-e2e.sh"
-echo "  • Start controller: cd packages/controller && bun controller"
-echo "  • Read setup guide: cat SMOKETEST.md"
+echo "  • Run full E2E test: ./test-e2e-elixir.sh"
+echo "  • Start controller: bun controller (Elixir/Phoenix)"
+echo "  • Read setup guide: docs/getting-started/setup-local.md"
 echo ""

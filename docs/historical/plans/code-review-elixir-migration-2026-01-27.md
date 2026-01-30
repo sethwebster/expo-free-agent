@@ -2,7 +2,7 @@
 
 **Date:** 2026-01-27
 **Reviewer:** Claude Code
-**Files Reviewed:** 28 files in `packages/controller_elixir/`
+**Files Reviewed:** 28 files in `packages/controller-elixir/`
 **Severity Levels:** Critical / High / Medium / Low / Nitpick
 
 ---
@@ -19,7 +19,7 @@ The Elixir migration demonstrates solid OTP fundamentals and addresses key issue
 
 ### C1. API Key Not Configured - Application Crashes on nil Comparison
 
-**Location:** `/packages/controller_elixir/lib/expo_controller_web/plugs/auth.ex:16-19`
+**Location:** `/packages/controller-elixir/lib/expo_controller_web/plugs/auth.ex:16-19`
 
 **Problem:** If `api_key` config is not set, `Plug.Crypto.secure_compare(provided_key, nil)` will crash.
 
@@ -45,7 +45,7 @@ end
 
 ### C2. Race Condition in QueueManager - In-Memory Queue Diverges from DB
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/orchestration/queue_manager.ex:78-91`
+**Location:** `/packages/controller-elixir/lib/expo_controller/orchestration/queue_manager.ex:78-91`
 
 **Problem:** The `next_for_worker` function maintains an in-memory queue that can diverge from database state. If assignment fails, the build is removed from the queue anyway:
 
@@ -74,7 +74,7 @@ end
 
 ### C3. Missing Transaction in Worker Poll Endpoint
 
-**Location:** `/packages/controller_elixir/lib/expo_controller_web/controllers/worker_controller.ex:54-68`
+**Location:** `/packages/controller-elixir/lib/expo_controller_web/controllers/worker_controller.ex:54-68`
 
 **Problem:** `try_assign_build/1` calls `next_pending_for_update()` outside a transaction:
 
@@ -105,7 +105,7 @@ end
 
 ### C4. Path Traversal Validation Insufficient
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/storage/file_storage.ex:107-113`
+**Location:** `/packages/controller-elixir/lib/expo_controller/storage/file_storage.ex:107-113`
 
 **Problem:** Path validation only checks for `..` substring:
 
@@ -144,7 +144,7 @@ end
 
 ### C5. Sensitive Data in Error Responses
 
-**Location:** `/packages/controller_elixir/lib/expo_controller_web/controllers/worker_controller.ex:94-96`
+**Location:** `/packages/controller-elixir/lib/expo_controller_web/controllers/worker_controller.ex:94-96`
 
 **Problem:** Internal errors leak to clients:
 
@@ -174,7 +174,7 @@ Same issue in `build_controller.ex:43-45`, `worker_controller.ex:111-112`, `buil
 
 ### H1. Supervision Strategy Too Aggressive - Single Failure Cascades
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/application.ex:24`
+**Location:** `/packages/controller-elixir/lib/expo_controller/application.ex:24`
 
 **Problem:** `:one_for_one` strategy with QueueManager and HeartbeatMonitor depending on Repo:
 
@@ -207,7 +207,7 @@ Better: Use `:rest_for_one` strategy.
 
 ### H2. Worker Registration Allows ID Collision
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/workers.ex:31-35`
+**Location:** `/packages/controller-elixir/lib/expo_controller/workers.ex:31-35`
 
 **Problem:** `register_worker` always does `Repo.insert()`. If worker_id already exists, it errors instead of updating.
 
@@ -237,7 +237,7 @@ end
 
 ### H3. No File Upload Size Limit
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/storage/file_storage.ex:12-15`
+**Location:** `/packages/controller-elixir/lib/expo_controller/storage/file_storage.ex:12-15`
 
 **Problem:** No validation of uploaded file sizes. Attackers can exhaust disk space.
 
@@ -273,7 +273,7 @@ end
 
 ### H4. Build Logs Unbounded - Memory/Storage DoS
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/builds.ex:232-236`
+**Location:** `/packages/controller-elixir/lib/expo_controller/builds.ex:232-236`
 
 **Problem:** No limit on log entries per build:
 
@@ -305,7 +305,7 @@ end
 
 ### H5. No Timeout on Database Transactions
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/builds.ex:80-89`
+**Location:** `/packages/controller-elixir/lib/expo_controller/builds.ex:80-89`
 
 **Problem:** Transactions have no timeout, can hold locks indefinitely:
 
@@ -328,7 +328,7 @@ Repo.transaction(fn -> ... end, timeout: 5_000)
 
 ### H6. String.to_integer Without Validation
 
-**Location:** `/packages/controller_elixir/lib/expo_controller_web/controllers/build_controller.ex:84`
+**Location:** `/packages/controller-elixir/lib/expo_controller_web/controllers/build_controller.ex:84`
 
 **Problem:** Direct `String.to_integer/1` on user input:
 
@@ -354,7 +354,7 @@ limit =
 
 ### M1. Counter Increment Race Condition
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/workers/worker.ex:77-79`
+**Location:** `/packages/controller-elixir/lib/expo_controller/workers/worker.ex:77-79`
 
 **Problem:** Counters incremented via read-modify-write:
 
@@ -378,7 +378,7 @@ end
 
 ### M2. `list_builds` Has No Pagination
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/builds.ex:14-20`
+**Location:** `/packages/controller-elixir/lib/expo_controller/builds.ex:14-20`
 
 **Problem:** Returns all builds without limit:
 
@@ -414,7 +414,7 @@ end
 
 ### M3. timer.send_interval Leaks on Reconnect
 
-**Location:** `/packages/controller_elixir/lib/expo_controller_web/live/dashboard_live.ex:18`
+**Location:** `/packages/controller-elixir/lib/expo_controller_web/live/dashboard_live.ex:18`
 
 **Problem:** Each mount creates new interval timer:
 
@@ -447,7 +447,7 @@ end
 
 ### M4. Missing Index on last_heartbeat_at
 
-**Location:** `/packages/controller_elixir/priv/repo/migrations/20260127024523_create_workers.exs`
+**Location:** `/packages/controller-elixir/priv/repo/migrations/20260127024523_create_workers.exs`
 
 **Problem:** `mark_stuck_builds_as_failed` queries on `last_heartbeat_at`:
 
@@ -471,7 +471,7 @@ create index(:builds, [:status, :last_heartbeat_at])
 
 ### M5. Application.compile_env for Storage Root
 
-**Location:** `/packages/controller_elixir/lib/expo_controller/storage/file_storage.ex:7`
+**Location:** `/packages/controller-elixir/lib/expo_controller/storage/file_storage.ex:7`
 
 **Problem:** `@storage_root` uses compile-time config:
 
@@ -492,7 +492,7 @@ end
 
 ### M6. Public Dashboard Exposes Internal Data
 
-**Location:** `/packages/controller_elixir/lib/expo_controller_web/router.ex:18-23`
+**Location:** `/packages/controller-elixir/lib/expo_controller_web/router.ex:18-23`
 
 **Problem:** Dashboard accessible without authentication:
 
@@ -511,7 +511,7 @@ end
 
 ### M7. builds_today Calculation Wrong
 
-**Location:** `/packages/controller_elixir/lib/expo_controller_web/controllers/public_controller.ex:21`
+**Location:** `/packages/controller-elixir/lib/expo_controller_web/controllers/public_controller.ex:21`
 
 **Problem:** `builds_today` calculates wrong value:
 
@@ -546,7 +546,7 @@ Comment even acknowledges this:
 
 ### L2. WebSocket Authentication Doesn't Validate Worker State
 
-**Location:** `/packages/controller_elixir/lib/expo_controller_web/channels/worker_socket.ex:20`
+**Location:** `/packages/controller-elixir/lib/expo_controller_web/channels/worker_socket.ex:20`
 
 **Problem:** Only checks worker exists, not status:
 

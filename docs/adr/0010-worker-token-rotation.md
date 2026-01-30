@@ -290,7 +290,7 @@ LIMIT 1
 
 ## References
 
-- Worker registration: `packages/controller_elixir/lib/expo_controller/workers.ex`
-- Token rotation middleware: `packages/controller_elixir/lib/expo_controller_web/plugs/auth.ex`
+- Worker registration: `packages/controller-elixir/lib/expo_controller/workers.ex`
+- Token rotation middleware: `packages/controller-elixir/lib/expo_controller_web/plugs/auth.ex`
 - Worker implementation: `free-agent/Sources/WorkerCore/WorkerService.swift`
-- Migration: `packages/controller_elixir/priv/repo/migrations/*_add_access_token_to_workers.exs`
+- Migration: `packages/controller-elixir/priv/repo/migrations/*_add_access_token_to_workers.exs`

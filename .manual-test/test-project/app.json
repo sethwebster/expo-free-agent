@@ -1,8 +1,0 @@
-  {
-    "expo": {
-      "name": "Manual Test App",
-      "slug": "manual-test-app",
-      "version": "1.0.0",
-      "platforms": ["ios", "android"]
-    }
-  }

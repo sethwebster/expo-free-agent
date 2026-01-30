@@ -53,7 +53,7 @@ const handleSubmit = (e: FormEvent) => {
 
 ### 2. Race Condition: Multiple Callbacks Can Resolve Promise
 
-**Location:** `cli/src/commands/login.ts:43-122`
+**Location:** `packages/cli/src/commands/login.ts:43-122`
 
 **Problem:** The HTTP server accepts requests indefinitely until timeout or first successful callback. However:
 1. Multiple requests to `/auth/callback` can arrive (browser retries, user clicks twice)
@@ -86,7 +86,7 @@ const server = http.createServer((req, res) => {
 
 ### 3. Host Validation is Checking Wrong Value
 
-**Location:** `cli/src/commands/login.ts:52-58`
+**Location:** `packages/cli/src/commands/login.ts:52-58`
 
 **Problem:** The code validates `url.hostname` from the parsed URL:
 ```typescript
@@ -117,7 +117,7 @@ This is always `localhost` because the base URL is hardcoded as `http://localhos
 
 ### 1. Default Auth URL Points to Development Server
 
-**Location:** `cli/src/config.ts:118-127`
+**Location:** `packages/cli/src/config.ts:118-127`
 
 **Problem:**
 ```typescript
@@ -226,7 +226,7 @@ function Router() {
 ### 1. URL Validation Logic Duplicated
 
 **Location:**
-- `cli/src/commands/login.ts:52-58` (server-side validation attempt)
+- `packages/cli/src/commands/login.ts:52-58` (server-side validation attempt)
 - `packages/landing-page/src/pages/CLILoginPage.tsx` (needs client-side validation)
 
 **Problem:** Localhost validation logic should be added to the landing page and exists (incorrectly) in the CLI. When fixed, both will need similar validation.
@@ -236,9 +236,9 @@ function Router() {
 ### 2. Base64 Encoding/Decoding Convention
 
 **Location:**
-- `cli/src/commands/login.ts:70` - `Buffer.from(token, 'base64')`
+- `packages/cli/src/commands/login.ts:70` - `Buffer.from(token, 'base64')`
 - `packages/landing-page/src/pages/CLILoginPage.tsx:16` - `btoa(DEMO_API_KEY)`
-- `cli/src/commands/__tests__/login.test.ts` - Multiple instances
+- `packages/cli/src/commands/__tests__/login.test.ts` - Multiple instances
 
 **Problem:** Base64 encoding is used for token transport. This is documented but scattered. If the encoding scheme changes, multiple files need updates.
 
@@ -250,7 +250,7 @@ function Router() {
 
 ### 1. Test Coverage Gaps
 
-**Location:** `cli/src/commands/__tests__/login.test.ts`
+**Location:** `packages/cli/src/commands/__tests__/login.test.ts`
 
 **Problem:** The tests are incomplete:
 1. `rejects non-localhost callback hosts` test doesn't actually test the server - it tries to connect to a non-running server
@@ -277,7 +277,7 @@ describe('login server integration', () => {
 
 ### 2. Error Messages Could Be More Helpful
 
-**Location:** `cli/src/commands/login.ts:121`
+**Location:** `packages/cli/src/commands/login.ts:121`
 
 **Problem:**
 ```typescript
@@ -298,7 +298,7 @@ This generic message doesn't help debug. Was it malformed base64? Empty? Wrong f
 
 ### 3. Timeout Not Cleared on Error Path
 
-**Location:** `cli/src/commands/login.ts:139-156`
+**Location:** `packages/cli/src/commands/login.ts:139-156`
 
 **Problem:** If `authPromise` rejects (not from timeout), the timeout callback may still fire after error is thrown, calling `server.close()` again and trying to reject an already-rejected promise.
 
@@ -319,7 +319,7 @@ try {
 
 ### 4. Success HTML is Inline and Large
 
-**Location:** `cli/src/commands/login.ts:73-115`
+**Location:** `packages/cli/src/commands/login.ts:73-115`
 
 **Problem:** 40+ lines of HTML template string embedded in the request handler. Hard to maintain, no syntax highlighting, difficult to test.
 
@@ -338,7 +338,7 @@ res.end(SUCCESS_HTML);
 
 ### 1. Unused Import in Test File
 
-**Location:** `cli/src/commands/__tests__/login.test.ts:3`
+**Location:** `packages/cli/src/commands/__tests__/login.test.ts:3`
 
 ```typescript
 import * as config from '../../config';
@@ -349,13 +349,13 @@ This import is unused (mocking is done via `mock.module`).
 ### 2. Inconsistent Config File Path Documentation
 
 **Location:** `docs/CLI_AUTHENTICATION.md:5` says `~/.expo-controller/config.json`
-**Location:** `cli/src/config.ts:12` uses `~/.expo-free-agent/config.json`
+**Location:** `packages/cli/src/config.ts:12` uses `~/.expo-free-agent/config.json`
 
 The docs reference the old path.
 
 ### 3. `catch (error) { throw error }` is Redundant
 
-**Location:** `cli/src/commands/login.ts:153-155`
+**Location:** `packages/cli/src/commands/login.ts:153-155`
 
 ```typescript
 } catch (error) {
@@ -367,7 +367,7 @@ This does nothing except make the code longer. Remove or add actual error handli
 
 ### 4. Missing `.js` Extension Consistency
 
-**Location:** `cli/src/commands/__tests__/login.test.ts:2`
+**Location:** `packages/cli/src/commands/__tests__/login.test.ts:2`
 
 ```typescript
 import { createLoginCommand } from '../login';

@@ -58,7 +58,7 @@ docs/
 Component-specific docs remain in their respective directories:
 
 - `packages/controller/` - Controller docs (README, ROUTES, SECURITY, etc.)
-- `cli/` - CLI docs (README, USAGE, SECURITY)
+- `packages/cli/` - CLI docs (README, USAGE, SECURITY)
 - `free-agent/` - Worker app docs (README, QUICK_START, DISTRIBUTION)
 - `packages/worker-installer/` - Installer docs (README, TESTING, CHANGELOG)
 - `packages/landing-page/` - Landing page docs (README, DESIGN, SETUP, etc.)

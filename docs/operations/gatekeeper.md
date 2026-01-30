@@ -140,8 +140,8 @@ try {
 
 **Files**:
 - `packages/worker-installer/src/install.ts:74-77`
-- `cli/src/commands/start.ts:23-27`
-- `cli/src/commands/worker.ts:65-68`
+- `packages/cli/src/commands/start.ts:23-27`
+- `packages/cli/src/commands/worker.ts:65-68`
 
 **Removed**:
 ```typescript

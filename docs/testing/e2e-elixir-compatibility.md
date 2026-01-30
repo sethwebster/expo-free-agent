@@ -133,7 +133,7 @@ Elixir provides both forms:
 
 2. **Start Elixir Controller**
    ```bash
-   cd packages/controller_elixir
+   cd packages/controller-elixir
    export CONTROLLER_API_KEY="test-api-key-for-e2e-testing-minimum-32-chars"
    export PORT=4000
    mix ecto.reset  # Reset test database

@@ -7,26 +7,26 @@ Implementation of `ExpoController.Storage.FileStorage` module is complete and re
 ## Files Created
 
 ### Implementation
-- `/packages/controller_elixir/lib/expo_controller/storage/file_storage.ex` (303 lines)
+- `/packages/controller-elixir/lib/expo_controller/storage/file_storage.ex` (303 lines)
   - Complete module with all required functions
   - Security hardening (UUID validation, path traversal prevention, size limits)
   - Streaming support for large files
   - Comprehensive error handling
 
 ### Tests
-- `/packages/controller_elixir/test/expo_controller/storage/file_storage_test.exs` (286 lines)
+- `/packages/controller-elixir/test/expo_controller/storage/file_storage_test.exs` (286 lines)
   - 100% coverage of all public functions
   - Security edge case testing (path traversal, null bytes, symlinks)
   - File size limit enforcement tests
   - Streaming behavior tests
 
 ### Documentation
-- `/packages/controller_elixir/lib/expo_controller/storage/README.md` (comprehensive guide)
+- `/packages/controller-elixir/lib/expo_controller/storage/README.md` (comprehensive guide)
 
 ### Configuration Updates
-- `/packages/controller_elixir/config/dev.exs` - Added `:storage_path` config
-- `/packages/controller_elixir/config/test.exs` - Added `:storage_path` config
-- `/packages/controller_elixir/config/runtime.exs` - Added `:storage_path` with env var support
+- `/packages/controller-elixir/config/dev.exs` - Added `:storage_path` config
+- `/packages/controller-elixir/config/test.exs` - Added `:storage_path` config
+- `/packages/controller-elixir/config/runtime.exs` - Added `:storage_path` with env var support
 
 ## API Implementation
 
@@ -96,8 +96,8 @@ Module is already integrated and used by:
 ## Next Steps
 
 ### Required Before Merge
-1. **Compile verification**: `cd packages/controller_elixir && mix compile`
-2. **Run tests**: `cd packages/controller_elixir && mix test`
+1. **Compile verification**: `cd packages/controller-elixir && mix compile`
+2. **Run tests**: `cd packages/controller-elixir && mix test`
 3. **Verify existing integration**: `mix test test/expo_controller_web/controllers/ts_compatibility_test.exs`
 
 ### Expected Results
@@ -248,5 +248,5 @@ Module is designed for easy backend swap:
 ## References
 
 - TypeScript implementation: `/packages/controller/src/services/FileStorage.ts`
-- Module documentation: `/packages/controller_elixir/lib/expo_controller/storage/README.md`
-- Test suite: `/packages/controller_elixir/test/expo_controller/storage/file_storage_test.exs`
+- Module documentation: `/packages/controller-elixir/lib/expo_controller/storage/README.md`
+- Test suite: `/packages/controller-elixir/test/expo_controller/storage/file_storage_test.exs`

@@ -1241,15 +1241,15 @@ ORDER BY last_seen_at DESC;
 - `/free-agent/Sources/WorkerCore/WorkerConfiguration.swift` (token storage)
 
 **Controller (Elixir)**:
-- `/packages/controller_elixir/lib/expo_controller_web/controllers/worker_controller.ex` (14-151: endpoints)
-- `/packages/controller_elixir/lib/expo_controller/builds.ex` (65-90: atomic assignment)
-- `/packages/controller_elixir/lib/expo_controller/workers.ex` (context functions)
-- `/packages/controller_elixir/lib/expo_controller/workers/worker.ex` (52-78: token rotation)
-- `/packages/controller_elixir/lib/expo_controller_web/plugs/auth.ex` (authentication logic)
+- `/packages/controller-elixir/lib/expo_controller_web/controllers/worker_controller.ex` (14-151: endpoints)
+- `/packages/controller-elixir/lib/expo_controller/builds.ex` (65-90: atomic assignment)
+- `/packages/controller-elixir/lib/expo_controller/workers.ex` (context functions)
+- `/packages/controller-elixir/lib/expo_controller/workers/worker.ex` (52-78: token rotation)
+- `/packages/controller-elixir/lib/expo_controller_web/plugs/auth.ex` (authentication logic)
 
 **Database**:
-- `/packages/controller_elixir/priv/repo/migrations/20260129031515_add_access_token_to_workers.exs`
-- `/packages/controller_elixir/priv/repo/migrations/20260129031721_add_token_expiration_to_workers.exs`
+- `/packages/controller-elixir/priv/repo/migrations/20260129031515_add_access_token_to_workers.exs`
+- `/packages/controller-elixir/priv/repo/migrations/20260129031721_add_token_expiration_to_workers.exs`
 
 ---
 

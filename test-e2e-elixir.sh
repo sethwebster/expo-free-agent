@@ -134,7 +134,7 @@ else
     log_warning "Controller not running or not ours, starting Elixir controller..."
 
     # Start Elixir controller in background
-    cd "$ORIGINAL_DIR/packages/controller_elixir"
+    cd "$ORIGINAL_DIR/packages/controller-elixir"
 
     log_info "Starting Elixir controller on port ${CONTROLLER_PORT}..."
     env CONTROLLER_API_KEY="$API_KEY" PORT="$CONTROLLER_PORT" MIX_ENV=dev mix phx.server > "$ORIGINAL_DIR/$TEST_DIR/controller.log" 2>&1 &

@@ -20,7 +20,7 @@ echo "Monitoring controller logs for registration and polling..."
 echo ""
 
 # Start log monitoring in background
-(cd /Users/sethwebster/Development/expo/elixir-controller-migration/packages/controller_elixir && \
+(cd /Users/sethwebster/Development/expo/elixir-controller-migration/packages/controller-elixir && \
   iex -S mix 2>&1 | grep -E "(Registering|registered|Poll|worker_id)" &)
 
 LOG_PID=$!

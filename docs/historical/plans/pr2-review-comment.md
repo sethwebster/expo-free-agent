@@ -50,7 +50,7 @@ const handleSubmit = (e: FormEvent) => {
 
 ### 2. Race Condition: Multiple Callbacks Can Resolve Promise
 
-**Location:** `cli/src/commands/login.ts:43-122`
+**Location:** `packages/cli/src/commands/login.ts:43-122`
 
 Multiple requests to `/auth/callback` can arrive (browser retries, double-clicks). Each `resolveAuth(apiKey)` succeeds even after promise resolved.
 
@@ -70,7 +70,7 @@ resolveAuth(apiKey);
 
 ### 3. Host Validation is No-Op
 
-**Location:** `cli/src/commands/login.ts:52-58`
+**Location:** `packages/cli/src/commands/login.ts:52-58`
 
 ```typescript
 const url = new URL(req.url, `http://localhost:${port}`);
@@ -95,7 +95,7 @@ if (host !== 'localhost' && host !== '127.0.0.1') { ... }
 
 ### 4. Default Auth URL Points to Development Server
 
-**Location:** `cli/src/config.ts:118-127`
+**Location:** `packages/cli/src/config.ts:118-127`
 
 ```typescript
 return 'http://localhost:5173';  // "Default to localhost for development"
@@ -137,7 +137,7 @@ function useHashRoute() {
 
 ### 7. Test Coverage Gaps
 
-**Location:** `cli/src/commands/__tests__/login.test.ts`
+**Location:** `packages/cli/src/commands/__tests__/login.test.ts`
 
 - `rejects non-localhost callback hosts` test doesn't actually test the server
 - No integration tests for HTTP server flow
@@ -145,7 +145,7 @@ function useHashRoute() {
 
 ### 8. Timeout Not Cleared on Error Path
 
-**Location:** `cli/src/commands/login.ts:139-156`
+**Location:** `packages/cli/src/commands/login.ts:139-156`
 
 Add `clearTimeout(timeout)` in catch block to prevent double server close.
 

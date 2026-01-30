@@ -50,13 +50,8 @@ function checkVersionSync(): void {
       type: 'package.json'
     },
     {
-      path: 'cli/package.json',
-      version: readPackageVersion(join(rootDir, 'cli/package.json')),
-      type: 'package.json'
-    },
-    {
-      path: 'packages/controller/package.json',
-      version: readPackageVersion(join(rootDir, 'packages/controller/package.json')),
+      path: 'packages/cli/package.json',
+      version: readPackageVersion(join(rootDir, 'packages/cli/package.json')),
       type: 'package.json'
     },
     {
@@ -70,9 +65,9 @@ function checkVersionSync(): void {
       type: 'package.json'
     },
     {
-      path: 'cli/src/index.ts',
+      path: 'packages/cli/src/index.ts',
       version: extractVersionFromFile(
-        join(rootDir, 'cli/src/index.ts'),
+        join(rootDir, 'packages/cli/src/index.ts'),
         /\.version\(['"]([^'"]+)['"]\)/
       ),
       type: 'constant'
@@ -82,6 +77,14 @@ function checkVersionSync(): void {
       version: extractVersionFromFile(
         join(rootDir, 'packages/worker-installer/src/download.ts'),
         /const VERSION = ['"]([^'"]+)['"]/
+      ),
+      type: 'constant'
+    },
+    {
+      path: 'free-agent/Info.plist',
+      version: extractVersionFromFile(
+        join(rootDir, 'free-agent/Info.plist'),
+        /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/
       ),
       type: 'constant'
     }

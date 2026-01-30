@@ -302,16 +302,16 @@ Before considering migration complete:
 - `test/**/*_test.exs` (all streams)
 
 **Documentation Files** (being created by agents):
-- `packages/controller_elixir/MIGRATION.md`
-- `packages/controller_elixir/API_COMPATIBILITY.md`
-- `packages/controller_elixir/DEVELOPMENT.md`
-- `packages/controller_elixir/ARCHITECTURE.md`
-- `packages/controller_elixir/TESTING.md`
-- `packages/controller_elixir/DEPLOYMENT.md`
-- `packages/controller_elixir/TROUBLESHOOTING.md`
-- `packages/controller_elixir/API.md`
-- `packages/controller_elixir/INTEGRATION_EXAMPLES.md`
-- `packages/controller_elixir/ERRORS.md`
+- `packages/controller-elixir/MIGRATION.md`
+- `packages/controller-elixir/API_COMPATIBILITY.md`
+- `packages/controller-elixir/DEVELOPMENT.md`
+- `packages/controller-elixir/ARCHITECTURE.md`
+- `packages/controller-elixir/TESTING.md`
+- `packages/controller-elixir/DEPLOYMENT.md`
+- `packages/controller-elixir/TROUBLESHOOTING.md`
+- `packages/controller-elixir/API.md`
+- `packages/controller-elixir/INTEGRATION_EXAMPLES.md`
+- `packages/controller-elixir/ERRORS.md`
 
 ---
 

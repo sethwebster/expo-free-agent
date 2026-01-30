@@ -7,15 +7,16 @@
 ## Context
 
 Monorepo contains multiple publishable packages:
-- CLI (`cli/package.json`) - published to npm as `@sethwebster/expo-free-agent`
-- Controller (`packages/controller/package.json`) - internal, not published
+- CLI (`packages/cli/package.json`) - published to npm as `@sethwebster/expo-free-agent`
+- Controller (`packages/controller-elixir/`) - Elixir/Phoenix backend, not published
 - Worker Installer (`packages/worker-installer/package.json`) - published to npm
 - Landing Page (`packages/landing-page/package.json`) - deployed to Cloudflare Pages
-- Worker App (`free-agent/`) - Swift app, uses version from package.json
+- Worker App (`free-agent/`) - Swift app, uses version from Info.plist
 
-Version numbers also embedded in TypeScript constants:
-- `cli/src/index.ts` - Commander `.version("X.Y.Z")`
+Version numbers also embedded in TypeScript constants and plist files:
+- `packages/cli/src/index.ts` - Commander `.version("X.Y.Z")`
 - `packages/worker-installer/src/download.ts` - `const VERSION = "X.Y.Z"`
+- `free-agent/Info.plist` - `CFBundleShortVersionString`
 
 **Problem:** Versions drifted out of sync, causing:
 - CLI reporting v0.1.4 while package.json said v0.1.5
@@ -35,12 +36,12 @@ Version numbers also embedded in TypeScript constants:
 
 **Synchronized locations (7 total):**
 - `package.json` (root)
-- `cli/package.json`
-- `packages/controller/package.json`
+- `packages/cli/package.json`
 - `packages/landing-page/package.json`
 - `packages/worker-installer/package.json`
-- `cli/src/index.ts` (`.version("...")`)
+- `packages/cli/src/index.ts` (`.version("...")`)
 - `packages/worker-installer/src/download.ts` (`const VERSION = "..."`)
+- `free-agent/Info.plist` (`CFBundleShortVersionString`)
 
 ## Consequences
 

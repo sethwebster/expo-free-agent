@@ -25,7 +25,7 @@ This document defines **mandatory** rules for automated agents changing code/doc
 If a change touches a component, also skim that component’s README:
 - `packages/controller/README.md`
 - `packages/worker-installer/README.md`
-- `cli/README.md`
+- `packages/cli/README.md`
 - `free-agent/README.md`
 
 ---
@@ -50,7 +50,7 @@ docs/
 
 Component-specific docs remain in component directories:
 - `packages/controller/` - Controller implementation docs
-- `cli/` - CLI implementation docs
+- `packages/cli/` - CLI implementation docs
 - `free-agent/` - Worker app docs
 - `packages/worker-installer/` - Installer docs
 - `packages/landing-page/` - Landing page docs
@@ -175,11 +175,11 @@ What did we decide? Be specific.
 All versions must stay synchronized across:
 
 - `package.json` (root)
-- `cli/package.json`
+- `packages/cli/package.json`
 - `packages/controller/package.json`
 - `packages/landing-page/package.json`
 - `packages/worker-installer/package.json`
-- `cli/src/index.ts` (Commander `.version("…")`)
+- `packages/cli/src/index.ts` (Commander `.version("…")`)
 - `packages/worker-installer/src/download.ts` (`const VERSION = "…"` constant)
 
 Checks:

@@ -27,7 +27,7 @@ echo ""
 # Check prerequisites
 if ! command -v tart &> /dev/null; then
     echo "❌ Error: Tart not installed"
-    echo "Install with: brew install cirruslabs/cli/tart"
+    echo "Install with: brew install cirruslabs/packages/cli/tart"
     exit 1
 fi
 

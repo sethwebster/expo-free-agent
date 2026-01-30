@@ -144,7 +144,7 @@ const message = decodeError instanceof Error
 **Status:** NOT FIXED
 **Severity:** Medium (Architecture)
 
-**Location:** `cli/src/config.ts:113-120`
+**Location:** `packages/cli/src/config.ts:113-120`
 
 **Current Code:**
 ```typescript
@@ -220,7 +220,7 @@ if (url.protocol !== 'http:' && url.protocol !== 'https:') {
 **Status:** NEW (Improvement opportunity)
 **Severity:** Low
 
-**Location:** `cli/src/commands/__tests__/login.test.ts`
+**Location:** `packages/cli/src/commands/__tests__/login.test.ts`
 
 The tests now validate callback URL logic but still lack:
 - Integration tests for actual HTTP server flow
@@ -277,9 +277,9 @@ Remaining issues are non-critical:
 
 ## Files Reviewed
 
-- `cli/src/commands/login.ts` - Login command implementation (179 lines)
-- `cli/src/config.ts` - Config with getAuthBaseUrl (120 lines)
+- `packages/cli/src/commands/login.ts` - Login command implementation (179 lines)
+- `packages/cli/src/config.ts` - Config with getAuthBaseUrl (120 lines)
 - `packages/landing-page/src/pages/CLILoginPage.tsx` - Login page component
 - `packages/landing-page/src/main.tsx` - Router with useHashRoute hook
-- `cli/src/commands/__tests__/login.test.ts` - Test file
+- `packages/cli/src/commands/__tests__/login.test.ts` - Test file
 - `docs/CLI_AUTHENTICATION.md` - Documentation

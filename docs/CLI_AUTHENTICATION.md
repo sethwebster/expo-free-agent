@@ -26,7 +26,7 @@ This prints the login URL instead of auto-opening the browser.
 ## Architecture
 
 ### CLI Login Command
-- **File**: `cli/src/commands/login.ts`
+- **File**: `packages/cli/src/commands/login.ts`
 - Starts local HTTP server on random port (using `get-port`)
 - Opens browser to landing page with callback URL
 - Waits for authentication callback (30s timeout)
@@ -168,19 +168,19 @@ Tests cover:
 ## Files Changed
 
 ### New Files
-- `cli/src/commands/login.ts` - Login command implementation
-- `cli/.env.example` - CLI environment variables example
+- `packages/cli/src/commands/login.ts` - Login command implementation
+- `packages/cli/.env.example` - CLI environment variables example
 - `packages/landing-page/src/pages/CLILoginPage.tsx` - Login page component
-- `cli/src/commands/__tests__/login.test.ts` - Login command tests
+- `packages/cli/src/commands/__tests__/login.test.ts` - Login command tests
 - `docs/CLI_AUTHENTICATION.md` - This documentation
 
 ### Modified Files
-- `cli/src/index.ts` - Register login command
-- `cli/src/config.ts` - Add `getAuthBaseUrl()` helper
-- `cli/src/api-client.ts` - Show helpful error when API key missing
+- `packages/cli/src/index.ts` - Register login command
+- `packages/cli/src/config.ts` - Add `getAuthBaseUrl()` helper
+- `packages/cli/src/api-client.ts` - Show helpful error when API key missing
 - `packages/landing-page/src/main.tsx` - Add `/cli/login` route
 - `packages/landing-page/.env.example` - Add auth base URL
-- `cli/package.json` - Add `get-port` and `open` dependencies
+- `packages/cli/package.json` - Add `get-port` and `open` dependencies
 
 ## Dependencies Added
 
