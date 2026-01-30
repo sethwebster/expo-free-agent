@@ -152,8 +152,8 @@ For contributors and automated agents:
 - [Contributing Guide](./contributing/GUIDE.md) - Complete contributor guide
 - [Accessibility Guide](./contributing/accessibility.md) - Making documentation accessible
 - [Maintaining Documentation](./contributing/maintaining-docs.md) - Keeping docs up-to-date
-- [CLAUDE.md](../CLAUDE.md) - Agent rules and repo guardrails (MANDATORY reading)
-- [Agents](./architecture/agents.md) - Detailed agent behavior expectations
+- [CLAUDE.md](../CLAUDE.md) / [AGENTS.md](../AGENTS.md) - Agent rules and repo guardrails (MANDATORY reading)
+- [Agents](./architecture/agents.md) - Full agent development guide (same as CLAUDE.md/AGENTS.md)
 
 ## Key Workflows
 
