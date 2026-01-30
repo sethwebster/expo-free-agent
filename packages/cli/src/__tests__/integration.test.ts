@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll, mock } from 'bun:test';
 import { APIClient } from '../api-client';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import type { Server } from 'bun';
+// No Server type import needed - we'll use the server instance directly
 
 describe('CLI Integration Tests', () => {
   const testDir = join(process.cwd(), '.test-cli');
@@ -21,7 +21,7 @@ describe('CLI Integration Tests', () => {
   });
 
   describe('APIClient', () => {
-    let mockServer: Server;
+    let mockServer: ReturnType<typeof Bun.serve>;
     let mockUrl: string;
     let apiClient: APIClient;
 
@@ -100,7 +100,8 @@ describe('CLI Integration Tests', () => {
         const mockFetch = mock(() =>
           Promise.resolve(Response.json({ error: 'Unauthorized' }, { status: 401 }))
         );
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         const client = new APIClient(mockUrl);
         await expect(client.getBuildStatus('test-123')).rejects.toThrow();
@@ -187,7 +188,8 @@ describe('CLI Integration Tests', () => {
           )
         );
 
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         await expect(apiClient.getBuildStatus('nonexistent')).rejects.toThrow();
 
@@ -209,7 +211,8 @@ describe('CLI Integration Tests', () => {
           );
         });
 
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         // Simulate polling
         for (let i = 0; i < 3; i++) {
@@ -251,7 +254,8 @@ describe('CLI Integration Tests', () => {
           Promise.resolve(Response.json({ error: 'Not found' }, { status: 404 }))
         );
 
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         const outputPath = join(testDir, 'failed-download.ipa');
 
@@ -283,7 +287,8 @@ describe('CLI Integration Tests', () => {
       test('should handle empty build list', async () => {
         const originalFetch = global.fetch;
         const mockFetch = mock(() => Promise.resolve(Response.json([])));
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         const builds = await apiClient.listBuilds();
 
@@ -298,7 +303,7 @@ describe('CLI Integration Tests', () => {
       test('should retry on network timeout', async () => {
         const originalFetch = global.fetch;
         let attempts = 0;
-        const mockFetch = mock((url: string, options?: any) => {
+        const mockFetch = mock((_url: string, _options?: RequestInit) => {
           attempts++;
           if (attempts < 2) {
             // Simulate AbortError for timeout
@@ -315,7 +320,8 @@ describe('CLI Integration Tests', () => {
           );
         });
 
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         const status = await apiClient.getBuildStatus('test-123');
         expect(status.id).toBe('test-123');
@@ -327,7 +333,8 @@ describe('CLI Integration Tests', () => {
       test('should fail after max retries', async () => {
         const originalFetch = global.fetch;
         const mockFetch = mock(() => Promise.reject(new Error('Network error')));
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         await expect(apiClient.getBuildStatus('test-123')).rejects.toThrow();
 
@@ -339,7 +346,8 @@ describe('CLI Integration Tests', () => {
         const mockFetch = mock(() =>
           Promise.resolve(new Response('not json', { status: 200 }))
         );
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         await expect(apiClient.getBuildStatus('test-123')).rejects.toThrow();
 
@@ -353,7 +361,8 @@ describe('CLI Integration Tests', () => {
             Response.json({ error: 'Internal server error' }, { status: 500 })
           )
         );
-        global.fetch = mockFetch as any;
+        // Test mock: intentionally override global fetch
+        global.fetch = mockFetch as unknown as typeof fetch;
 
         await expect(apiClient.getBuildStatus('test-123')).rejects.toThrow();
 

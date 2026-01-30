@@ -38,7 +38,10 @@ export async function saveBuildToken(buildId: string, token: string): Promise<vo
   } catch (error) {
     try {
       await fs.unlink(tempFile);
-    } catch {}
+    } catch (unlinkError) {
+      // Temp file cleanup failed, but original error takes precedence
+      console.warn(`Failed to clean up temp build tokens file ${tempFile}:`, unlinkError);
+    }
     throw error;
   }
 }
@@ -66,7 +69,10 @@ export async function deleteBuildToken(buildId: string): Promise<void> {
   } catch (error) {
     try {
       await fs.unlink(tempFile);
-    } catch {}
+    } catch (unlinkError) {
+      // Temp file cleanup failed, but original error takes precedence
+      console.warn(`Failed to clean up temp build tokens file ${tempFile}:`, unlinkError);
+    }
     throw error;
   }
 }

@@ -1,16 +1,16 @@
-import { useRef, useMemo, useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
   ANIM_SPEED,
   GEOMETRY,
-  COLORS,
   tempVec3A,
   tempQuat,
   Y_AXIS,
 } from './constants';
-import { getGeometry, acquirePool, releasePool } from './geometryPool';
-import { createEmissiveMaterial, disposeMaterial } from './materialPool';
+import { useConnectionLineGeometry } from '../../hooks/useConnectionLineGeometry';
+import { useConnectionLineRetract } from '../../hooks/useConnectionLineRetract';
+import { useConnectionLinePulse } from '../../hooks/useConnectionLinePulse';
 
 interface ConnectionLineProps {
   from: [number, number, number];
@@ -116,107 +116,31 @@ export function ConnectionLine({
   const innerTubeRef = useRef<THREE.Mesh>(null);
   const outerTubeRef = useRef<THREE.Mesh>(null);
 
-  // Acquire geometry pool reference on mount
-  useEffect(() => {
-    acquirePool();
-    return () => releasePool();
-  }, []);
-
-  // Get shared unit cylinder geometry from pool (scaled for each tube)
-  const unitCylinderGeometry = useMemo(() => getGeometry('cylinderUnit'), []);
-
-  // Get shared sphere geometries from pool
-  const pulseGeometry = useMemo(() => getGeometry('sphereSmall'), []);
-  const flashGeometry = useMemo(() => getGeometry('sphereMedium'), []);
-
-  // Create materials (per-instance since they animate independently)
-  const innerTubeMaterial = useMemo(
-    () => createEmissiveMaterial(COLORS.WHITE, false),
-    []
-  );
-  const outerTubeMaterial = useMemo(
-    () => createEmissiveMaterial(COLORS.INDIGO, false),
-    []
-  );
-  const pulseMaterial = useMemo(
-    () => createEmissiveMaterial(COLORS.WHITE),
-    []
-  );
-  const flashMaterialFrom = useMemo(
-    () => createEmissiveMaterial(COLORS.WHITE),
-    []
-  );
-  const flashMaterialTo = useMemo(
-    () => createEmissiveMaterial(COLORS.WHITE),
-    []
-  );
-
-  // Track active state for line opacity
-  const isActiveRef = useRef(isActive);
-  isActiveRef.current = isActive;
-
-  // Dispose materials on unmount
-  useEffect(() => {
-    return () => {
-      disposeMaterial(innerTubeMaterial);
-      disposeMaterial(outerTubeMaterial);
-      disposeMaterial(pulseMaterial);
-      disposeMaterial(flashMaterialFrom);
-      disposeMaterial(flashMaterialTo);
-    };
-  }, [
+  const {
+    unitCylinderGeometry,
+    pulseGeometry,
+    flashGeometry,
     innerTubeMaterial,
     outerTubeMaterial,
     pulseMaterial,
     flashMaterialFrom,
     flashMaterialTo,
-  ]);
+  } = useConnectionLineGeometry();
 
-  // Trigger retract animation when isRemoving becomes true
-  useEffect(() => {
-    if (isRemoving && !isRetracting) {
-      setIsExtending(false);
-      setIsRetracting(true);
-    }
-  }, [isRemoving, isRetracting]);
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
 
-  // Trigger random pulses
-  useEffect(() => {
-    const triggerPulse = () => {
-      if (!isActiveRef.current) {
-        console.log(`[ConnectionLine ${fromId}-${toId}] Pulse skipped - inactive connection`);
-        return;
-      }
+  useConnectionLineRetract(isRemoving, isRetracting, setIsExtending, setIsRetracting);
 
-      if (!pulseState.current.active && Math.random() < 0.4) {
-        pulseState.current.progress = 0;
-        pulseState.current.direction = Math.random() < 0.5 ? 'forward' : 'backward';
-        pulseState.current.active = true;
-
-        const departingNodeId =
-          pulseState.current.direction === 'forward' ? fromId : toId;
-        pulseState.current.departureNodeId = departingNodeId;
-
-        onPulseDepartureRef.current(departingNodeId);
-      }
-    };
-
-    const baseInterval = 4000 / Math.max(0.2, pulseFrequencyScale);
-    const randomVariance = 2000 / Math.max(0.2, pulseFrequencyScale);
-
-    const initialDelay = 500 + index * 150 + Math.random() * 1000;
-    const timeout = setTimeout(triggerPulse, initialDelay);
-
-    const interval = setInterval(
-      triggerPulse,
-      baseInterval + Math.random() * randomVariance
-    );
-
-    return () => {
-      clearTimeout(timeout);
-      clearInterval(interval);
-    };
-  }, [index, fromId, toId, pulseFrequencyScale]);
+  useConnectionLinePulse(
+    index,
+    fromId,
+    toId,
+    pulseFrequencyScale,
+    isActiveRef,
+    pulseState,
+    onPulseDepartureRef
+  );
 
   useFrame((_, delta) => {
     // Lightsaber extend animation

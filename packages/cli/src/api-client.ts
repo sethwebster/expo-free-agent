@@ -3,6 +3,7 @@ import { createWriteStream } from 'fs';
 import { getControllerUrl, getApiKey } from './config.js';
 import { getBuildToken } from './build-tokens.js';
 import { z } from 'zod';
+import type { DiagnosticsResponse, DiagnosticReport } from './types.js';
 
 // Validation schemas
 const BuildSubmissionResponseSchema = z.object({
@@ -69,6 +70,10 @@ export class APIClient {
   constructor(baseUrl?: string, apiKey?: string) {
     this.baseUrl = baseUrl || '';
     this.apiKey = apiKey;
+  }
+
+  getBaseUrl(): string {
+    return this.baseUrl;
   }
 
   async init(): Promise<void> {
@@ -149,7 +154,7 @@ export class APIClient {
     }
   }
 
-  async submitBuild(submission: BuildSubmission): Promise<{ buildId: string }> {
+  async submitBuild(submission: BuildSubmission): Promise<{ buildId: string; accessToken: string }> {
     await this.init();
 
     // Validate inputs
@@ -190,7 +195,7 @@ export class APIClient {
     // Use native FormData (works with fetch)
     const form = new FormData();
     form.append('source', projectBlob, 'project.tar.gz');
-    form.append('platform', 'ios'); // TODO: detect from project or pass as param
+    form.append('platform', 'ios'); // TODO(@sethwebster 2026-01-30): detect from project or pass as param
 
     if (submission.certPath) {
       const certBuffer = await fs.promises.readFile(submission.certPath);
@@ -216,7 +221,7 @@ export class APIClient {
 
     const response = await this.fetchWithTimeout(`${this.baseUrl}/api/builds/submit`, {
       method: 'POST',
-      body: form as any,
+      body: form,
     });
 
     if (!response.ok) {
@@ -317,7 +322,10 @@ export class APIClient {
       fileStream.close();
       try {
         await fs.promises.unlink(resolvedPath);
-      } catch {}
+      } catch (unlinkError) {
+        // Partial file cleanup failed, but original error takes precedence
+        console.warn(`Failed to clean up partial download file ${resolvedPath}:`, unlinkError);
+      }
       throw error;
     }
   }
@@ -358,7 +366,7 @@ export class APIClient {
     }
   }
 
-  async getDiagnostics(workerId: string, limit?: number): Promise<any> {
+  async getDiagnostics(workerId: string, limit?: number): Promise<DiagnosticsResponse> {
     await this.init();
 
     if (!workerId || workerId.trim() === '') {
@@ -378,10 +386,10 @@ export class APIClient {
       throw new Error(`Failed to get diagnostics: ${response.statusText}`);
     }
 
-    return response.json();
+    return response.json() as Promise<DiagnosticsResponse>;
   }
 
-  async getLatestDiagnostic(workerId: string): Promise<any> {
+  async getLatestDiagnostic(workerId: string): Promise<DiagnosticReport> {
     await this.init();
 
     if (!workerId || workerId.trim() === '') {
@@ -397,7 +405,7 @@ export class APIClient {
       throw new Error(`Failed to get latest diagnostic: ${response.statusText}`);
     }
 
-    return response.json();
+    return response.json() as Promise<DiagnosticReport>;
   }
 }
 
@@ -408,20 +416,34 @@ export const apiClient = new APIClient();
 function validateOutputPath(outputPath: string): string {
   const path = require('path');
 
-  // Resolve to absolute path
-  const resolved = path.resolve(outputPath);
+  // Check for null bytes first (before any path operations)
+  // This prevents TypeError crashes in filesystem operations
+  if (outputPath.includes('\0')) {
+    throw new Error('Invalid output path: null bytes not allowed');
+  }
 
-  // Ensure path doesn't escape current working directory
+  // Check for suspicious patterns before resolution
+  if (outputPath.includes('..')) {
+    throw new Error('Invalid output path: path traversal detected');
+  }
+
   const cwd = process.cwd();
-  if (!resolved.startsWith(cwd)) {
+
+  // Determine if path is already absolute
+  let resolved: string;
+  if (path.isAbsolute(outputPath)) {
+    // Path is absolute - check if it's already within working directory
+    resolved = path.normalize(outputPath);
+  } else {
+    // Path is relative - resolve relative to working directory
+    resolved = path.resolve(cwd, outputPath);
+  }
+
+  // Ensure resolved path is within current working directory
+  if (!resolved.startsWith(cwd + path.sep) && resolved !== cwd) {
     throw new Error(
       `Invalid output path: must be within current directory. Got: ${resolved}, expected to start with: ${cwd}`
     );
-  }
-
-  // Check for suspicious patterns
-  if (outputPath.includes('..')) {
-    throw new Error('Invalid output path: path traversal detected');
   }
 
   return resolved;

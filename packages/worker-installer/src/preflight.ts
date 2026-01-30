@@ -198,14 +198,20 @@ export function getWorkerCapabilities(): WorkerCapabilities {
     const homeDir = process.env.HOME || '/Users';
     const stats = statfsSync(homeDir);
     diskGB = (stats.bavail * stats.bsize) / (1024 ** 3);
-  } catch {}
+  } catch (error) {
+    // Failed to query disk space; will report as 0
+    console.warn('Failed to query available disk space:', error);
+  }
 
   let xcodeVersion: string | undefined;
   try {
     const version = execSync('xcodebuild -version', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
     const match = version.match(/Xcode ([\d.]+)/);
     xcodeVersion = match ? match[1] : undefined;
-  } catch {}
+  } catch (error) {
+    // xcodebuild not found or failed; will report as undefined
+    console.warn('Failed to detect Xcode version:', error);
+  }
 
   let tartVersion: string | undefined;
   try {
@@ -213,7 +219,10 @@ export function getWorkerCapabilities(): WorkerCapabilities {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'ignore']
     }).trim();
-  } catch {}
+  } catch (error) {
+    // tart not found or failed; will report as undefined
+    console.warn('Failed to detect Tart version:', error);
+  }
 
   return {
     cpuCores,

@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { HeroVisualization } from '../components/HeroVisualization';
+import { useMousePosition } from '../hooks/useMousePosition';
 
 export function HeroGlobePage() {
   // Visualization settings
@@ -9,24 +10,8 @@ export function HeroGlobePage() {
   const [disappearanceRate, setDisappearanceRate] = useState(5); // 0-100%
 
   // Mouse position for spotlight
-  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Track mouse position
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setMousePos({
-          x: (e.clientX - rect.left) / rect.width,
-          y: (e.clientY - rect.top) / rect.height,
-        });
-      }
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+  const mousePos = useMousePosition(containerRef);
 
   // Generate a key to force remount when nodeCount changes
   const visualizationKey = useMemo(() => `viz-${nodeCount}`, [nodeCount]);

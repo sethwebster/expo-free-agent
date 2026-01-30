@@ -46,4 +46,5 @@ export interface InstallOptions {
   verbose?: boolean;
   forceReinstall?: boolean;
   autoAccept?: boolean;
+  autoRestart?: boolean;
 }

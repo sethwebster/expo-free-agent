@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { apiClient } from '../api-client.js';
 import chalk from 'chalk';
+import type { LogEntry, LogsCommandOptions } from '../types.js';
 
 export function createLogsCommand(): Command {
   const command = new Command('logs');
@@ -30,9 +31,10 @@ export function createLogsCommand(): Command {
   return command;
 }
 
-async function showLogs(buildId: string, options: any): Promise<void> {
+async function showLogs(buildId: string, options: LogsCommandOptions): Promise<void> {
+  const baseUrl = options.controllerUrl || await apiClient.init().then(() => apiClient.getBaseUrl());
   const response = await fetch(
-    `${options.controllerUrl || await apiClient.init().then(() => (apiClient as any).baseUrl)}/api/builds/${buildId}/logs`,
+    `${baseUrl}/api/builds/${buildId}/logs`,
     {
       headers: await getHeaders(buildId, options),
     }
@@ -43,12 +45,12 @@ async function showLogs(buildId: string, options: any): Promise<void> {
     throw new Error(`Failed to get logs: ${error}`);
   }
 
-  const data = await response.json();
+  const data = await response.json() as { logs: LogEntry[] };
   displayLogs(data.logs);
 }
 
-async function followLogs(buildId: string, options: any): Promise<void> {
-  const interval = parseInt(options.interval);
+async function followLogs(buildId: string, options: LogsCommandOptions): Promise<void> {
+  const interval = parseInt(options.interval || '2000');
   let lastLogCount = 0;
 
   console.log(chalk.bold('Following logs for build:'), buildId);
@@ -60,8 +62,9 @@ async function followLogs(buildId: string, options: any): Promise<void> {
   // Poll for new logs
   const pollInterval = setInterval(async () => {
     try {
+      const baseUrl = options.controllerUrl || await apiClient.init().then(() => apiClient.getBaseUrl());
       const response = await fetch(
-        `${options.controllerUrl || await apiClient.init().then(() => (apiClient as any).baseUrl)}/api/builds/${buildId}/logs`,
+        `${baseUrl}/api/builds/${buildId}/logs`,
         {
           headers: await getHeaders(buildId, options),
         }
@@ -72,7 +75,7 @@ async function followLogs(buildId: string, options: any): Promise<void> {
         throw new Error('Failed to get logs');
       }
 
-      const data = await response.json();
+      const data = await response.json() as { logs: LogEntry[] };
 
       // Only show new logs
       if (data.logs.length > lastLogCount) {
@@ -82,15 +85,16 @@ async function followLogs(buildId: string, options: any): Promise<void> {
       }
 
       // Check if build is complete
+      const statusUrl = options.controllerUrl || await apiClient.init().then(() => apiClient.getBaseUrl());
       const statusResponse = await fetch(
-        `${options.controllerUrl || await apiClient.init().then(() => (apiClient as any).baseUrl)}/api/builds/${buildId}/status`,
+        `${statusUrl}/api/builds/${buildId}/status`,
         {
           headers: await getHeaders(buildId, options),
         }
       );
 
       if (statusResponse.ok) {
-        const status = await statusResponse.json();
+        const status = await statusResponse.json() as { status: string };
         if (status.status === 'completed' || status.status === 'failed') {
           clearInterval(pollInterval);
           console.log();
@@ -106,7 +110,7 @@ async function followLogs(buildId: string, options: any): Promise<void> {
   }, interval);
 }
 
-async function getHeaders(buildId: string, options: any): Promise<Record<string, string>> {
+async function getHeaders(buildId: string, options: LogsCommandOptions): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
 
   // Try API key from options
@@ -140,7 +144,7 @@ async function getHeaders(buildId: string, options: any): Promise<Record<string,
   return headers;
 }
 
-function displayLogs(logs: any[], showHeader: boolean = true): void {
+function displayLogs(logs: LogEntry[], showHeader: boolean = true): void {
   if (showHeader && logs.length === 0) {
     console.log(chalk.dim('No logs yet'));
     return;

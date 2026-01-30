@@ -8,6 +8,7 @@ import { apiClient, APIClient } from '../api-client.js';
 import { saveBuildToken } from '../build-tokens.js';
 import chalk from 'chalk';
 import ora from 'ora';
+import { isTTY } from '../types.js';
 
 export function createSubmitCommand(): Command {
   const command = new Command('submit');
@@ -212,7 +213,9 @@ async function promptPassword(prompt: string): Promise<string> {
 
     // Hide input for password
     const stdin = process.stdin;
-    (stdin as any).setRawMode?.(true);
+    if (isTTY(stdin)) {
+      stdin.setRawMode(true);
+    }
 
     process.stdout.write(prompt);
 
@@ -223,7 +226,9 @@ async function promptPassword(prompt: string): Promise<string> {
 
       if (str === '\n' || str === '\r' || str === '\u0004') {
         // Enter or Ctrl+D
-        (stdin as any).setRawMode?.(false);
+        if (isTTY(stdin)) {
+          stdin.setRawMode(false);
+        }
         stdin.pause();
         process.stdout.write('\n');
         rl.close();

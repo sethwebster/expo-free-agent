@@ -3,7 +3,9 @@ import { HeroVisualization } from "./components/HeroVisualization";
 import { NetworkHUD } from "./components/NetworkHUD";
 import { NetworkGlobe } from "./components/NetworkGlobe";
 import { NetworkProvider, useNetworkContext } from "./contexts/NetworkContext";
-import { useState, useEffect } from "react";
+import { useGlowAnimation } from "./hooks/useGlowAnimation";
+import { useSmokeAnimation } from "./hooks/useSmokeAnimation";
+import { useScrollProgress } from "./hooks/useScrollProgress";
 
 function formatBuildTime(ms: number): string {
   const seconds = Math.floor(ms / 1000);
@@ -58,73 +60,9 @@ export default function App() {
 }
 
 function Hero() {
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [blurAmount, setBlurAmount] = useState(0);
-  const [titleScrollProgress, setTitleScrollProgress] = useState(0);
-  const [glowOpacity, setGlowOpacity] = useState(0);
-  const [smokeAnimation, setSmokeAnimation] = useState({ x: 0, y: 0, intensity: 1 });
-
-  useEffect(() => {
-    // Wait 2 seconds, then fade in glow over 1.5 seconds
-    const delayTimeout = setTimeout(() => {
-      const startTime = Date.now();
-      const fadeInDuration = 1500;
-
-      const fadeInterval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / fadeInDuration, 1);
-        setGlowOpacity(progress);
-
-        if (progress >= 1) {
-          clearInterval(fadeInterval);
-        }
-      }, 16);
-    }, 2000);
-
-    return () => clearTimeout(delayTimeout);
-  }, []);
-
-  useEffect(() => {
-    // Organic smoke-like animation
-    let animationFrame: number;
-    const startTime = Date.now();
-
-    const animate = () => {
-      const time = (Date.now() - startTime) / 1000;
-
-      // Multiple sine waves at different frequencies for organic movement
-      const x = Math.sin(time * 0.3) * 3 + Math.sin(time * 0.7) * 1.5;
-      const y = Math.cos(time * 0.4) * 2 + Math.cos(time * 0.8) * 1;
-
-      // Wax and wane intensity (breathing effect)
-      const intensity = 0.85 + Math.sin(time * 0.5) * 0.15;
-
-      setSmokeAnimation({ x, y, intensity });
-      animationFrame = requestAnimationFrame(animate);
-    };
-
-    animate();
-    return () => cancelAnimationFrame(animationFrame);
-  }, []);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollY = window.scrollY;
-      const viewportHeight = window.innerHeight;
-
-      // Phase 1: Scroll hero content with blur (0 to 0.8vh)
-      const heroScrollProgress = Math.min(scrollY / (viewportHeight * 0.8), 1);
-      setBlurAmount(heroScrollProgress * 20); // 0 to 20px blur
-      setTitleScrollProgress(heroScrollProgress); // 0 to 1 for character exit
-
-      // Phase 2: After hero scrolled away, move camera for globe reveal (after 0.8vh, over 2vh)
-      const cameraProgress = Math.max(0, Math.min(1, (scrollY - viewportHeight * 0.8) / (viewportHeight * 2)));
-      setScrollProgress(cameraProgress);
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const glowOpacity = useGlowAnimation();
+  const smokeAnimation = useSmokeAnimation();
+  const { scrollProgress, blurAmount, titleScrollProgress } = useScrollProgress();
 
   return (
     <>

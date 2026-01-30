@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { apiClient, APIClient } from '../api-client.js';
+import { apiClient, APIClient, type BuildStatus } from '../api-client.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import cliProgress from 'cli-progress';
@@ -43,13 +43,15 @@ export function createStatusCommand(): Command {
   return command;
 }
 
-function displayBuildStatus(status: any): void {
+function displayBuildStatus(status: BuildStatus): void {
   console.log();
   console.log(chalk.bold('Build ID:'), status.id);
   console.log(chalk.bold('Status:'), getStatusColor(status.status));
-  console.log(chalk.bold('Created:'), new Date(status.createdAt).toLocaleString());
+  if (status.createdAt) {
+    console.log(chalk.bold('Created:'), new Date(status.createdAt).toLocaleString());
+  }
 
-  if (status.completedAt) {
+  if (status.completedAt && status.createdAt) {
     console.log(chalk.bold('Completed:'), new Date(status.completedAt).toLocaleString());
     const duration = Math.round(
       (new Date(status.completedAt).getTime() - new Date(status.createdAt).getTime()) / 1000

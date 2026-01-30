@@ -81,7 +81,10 @@ export async function saveConfig(config: Partial<Config>): Promise<void> {
     // Clean up temp file on error
     try {
       await fs.unlink(tempFile);
-    } catch {}
+    } catch (unlinkError) {
+      // Temp file cleanup failed, but original error takes precedence
+      console.warn(`Failed to clean up temp config file ${tempFile}:`, unlinkError);
+    }
     throw error;
   }
 }

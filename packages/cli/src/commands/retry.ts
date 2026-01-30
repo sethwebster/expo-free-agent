@@ -42,7 +42,7 @@ export function createRetryCommand(): Command {
           }
         }
 
-        const baseUrl = options.controllerUrl || (apiClient as any).baseUrl;
+        const baseUrl = options.controllerUrl || apiClient.getBaseUrl();
         const response = await fetch(`${baseUrl}/api/builds/${buildId}/retry`, {
           method: 'POST',
           headers,
@@ -55,7 +55,7 @@ export function createRetryCommand(): Command {
           process.exit(1);
         }
 
-        const data = await response.json();
+        const data = await response.json() as { id: string; access_token: string };
 
         // Store the new build token
         await saveBuildToken(data.id, data.access_token);

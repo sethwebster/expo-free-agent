@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { apiClient, APIClient } from '../api-client.js';
 import chalk from 'chalk';
+import type { DiagnosticReport } from '../types.js';
 
 export function createDoctorCommand(): Command {
   const command = new Command('doctor');
@@ -48,7 +49,7 @@ export function createDoctorCommand(): Command {
   return command;
 }
 
-function displayDiagnosticReports(workerId: string, reports: any[]): void {
+function displayDiagnosticReports(workerId: string, reports: DiagnosticReport[]): void {
   console.log();
   console.log(chalk.bold('Diagnostics for worker:'), chalk.cyan(workerId));
   console.log();
@@ -70,7 +71,7 @@ function displayDiagnosticReports(workerId: string, reports: any[]): void {
   console.log();
 }
 
-function displayDiagnosticReport(report: any, showHeader = true): void {
+function displayDiagnosticReport(report: DiagnosticReport, showHeader = true): void {
   if (showHeader) {
     console.log();
     console.log(chalk.bold('Diagnostic Report'));

@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, useEffect, MutableRefObject } from 'react';
+import { useRef, useState, MutableRefObject, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -12,18 +12,12 @@ import {
   tempColor,
   tempColorB,
 } from './constants';
-import { getQualitySettings } from './quality';
-import { getGeometry, createEdgesGeometry, acquirePool, releasePool } from './geometryPool';
 import {
-  cloneGlassMaterial,
-  createEmissiveMaterial,
-  createLineMaterial,
-  createPointMaterial,
   applyGlowingState,
   applyObsidianState,
-  disposeMaterial,
   NodeMaterial,
 } from './materialPool';
+import { useMeshNodeGeometry } from '../../hooks/useMeshNodeGeometry';
 
 interface MeshNodeProps {
   node: NodeState;
@@ -94,79 +88,24 @@ export function MeshNode({
 
   const stats = useMemo(() => generateNodeStats(node.id), [node.id]);
 
-  // Acquire geometry pool reference on mount
-  useEffect(() => {
-    acquirePool();
-    return () => releasePool();
-  }, []);
-
-  // Get shared geometries from pool
-  const geometry = useMemo(() => getGeometry('icosahedron'), []);
-  const innerCoreGeometry = useMemo(() => getGeometry('innerCore'), []);
-  const bigBangGeometry = useMemo(() => getGeometry('sphereLarge'), []);
-
-  // Create edges geometry (depends on icosahedron, so not pooled)
-  const edgesGeometry = useMemo(() => createEdgesGeometry(geometry), [geometry]);
-
-  // Create materials (cloned so we can mutate per-instance)
-  const material = useMemo(() => cloneGlassMaterial(), []);
-  const edgeMaterial = useMemo(() => createLineMaterial(), []);
-  const innerCoreMaterial = useMemo(() => createEmissiveMaterial(COLORS.GLOW_GREEN, false), []);
-  const bigBangMaterial = useMemo(() => createEmissiveMaterial(COLORS.WHITE), []);
-  const particleRingMaterial = useMemo(() => createPointMaterial(COLORS.WHITE, 0.15), []);
-
-  // Get quality settings for particle count
-  const qualitySettings = useMemo(() => getQualitySettings(), []);
-  const particleCount = qualitySettings.particleCount;
-
-  // Particle ring geometry with velocities
-  const particleRingGeometry = useMemo(() => {
-    const geom = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    const velocities = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount; i++) {
-      const angle = (i / particleCount) * Math.PI * 2;
-      const radius = 1;
-      positions[i * 3] = Math.cos(angle) * radius;
-      positions[i * 3 + 1] = Math.sin(angle) * radius;
-      positions[i * 3 + 2] = 0;
-
-      const speed = 0.5 + Math.random() * 1.5;
-      const angleVariance = (Math.random() - 0.5) * 0.8;
-      velocities[i * 3] = Math.cos(angle + angleVariance) * speed;
-      velocities[i * 3 + 1] = Math.sin(angle + angleVariance) * speed;
-      velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
-    }
-
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    particleVelocities.current = velocities;
-    return geom;
-  }, [particleCount]);
-
-  // Inner core ref
-  const innerCoreRef = useRef<THREE.Mesh>(null);
-
-  // Dispose materials and non-pooled geometry on unmount
-  useEffect(() => {
-    return () => {
-      edgesGeometry.dispose();
-      particleRingGeometry.dispose();
-      disposeMaterial(material);
-      disposeMaterial(edgeMaterial);
-      disposeMaterial(innerCoreMaterial);
-      disposeMaterial(bigBangMaterial);
-      disposeMaterial(particleRingMaterial);
-    };
-  }, [
+  const {
+    geometry,
+    innerCoreGeometry,
+    bigBangGeometry,
     edgesGeometry,
-    particleRingGeometry,
     material,
     edgeMaterial,
     innerCoreMaterial,
     bigBangMaterial,
     particleRingMaterial,
-  ]);
+    particleRingGeometry,
+    particleVelocities: initialParticleVelocities,
+    particleCount,
+  } = useMeshNodeGeometry();
+
+  particleVelocities.current = initialParticleVelocities;
+
+  const innerCoreRef = useRef<THREE.Mesh>(null);
 
   useFrame((state, delta) => {
     const mesh = meshRef.current;
