@@ -12,6 +12,7 @@ public class TartVMManager {
     private var vmName: String?
     private var vmIP: String?
     private var resourceMonitor: VMResourceMonitor?
+    private var vmProcess: Process?  // Keep VM process alive in background
 
     // Timeouts from runbook
     private let ipTimeout: TimeInterval = 120
@@ -121,15 +122,23 @@ public class TartVMManager {
             logs += "✓ Config written to \(configFile.path)\n\n"
             print("✓ Config file created at \(configFile.path)")
 
-            // 3) Run headless, detached (using screen) with config mounted
-            print("Step 3: Starting VM with screen and config mount...")
+            // 3) Run headless in background (without screen, so tart ip works)
+            print("Step 3: Starting VM headless with config mount...")
             logs += "Starting VM headless with config...\n"
-            let runArgs = ["-d", "-m", tartPath, "run", vmName!, "--no-graphics", "--dir", "\(configDir.path):ro,tag=build-config"]
 
-            print("Executing: screen \(runArgs.joined(separator: " "))")
-            try await executeCommand("screen", runArgs)
-            logs += "✓ VM started\n\n"
-            print("✓ Screen command executed successfully")
+            // Run tart directly in background (not in screen) so `tart ip` can track it
+            vmProcess = Process()
+            vmProcess!.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            vmProcess!.arguments = [tartPath, "run", vmName!, "--no-graphics", "--dir", "\(configDir.path):ro,tag=build-config"]
+
+            // Redirect output to avoid blocking
+            vmProcess!.standardOutput = FileHandle.nullDevice
+            vmProcess!.standardError = FileHandle.nullDevice
+
+            print("Executing: \(tartPath) run \(vmName!) --no-graphics --dir \(configDir.path):ro,tag=build-config")
+            try vmProcess!.run()
+            logs += "✓ VM started (PID: \(vmProcess!.processIdentifier))\n\n"
+            print("✓ VM started in background (PID: \(vmProcess!.processIdentifier))")
 
             // 2.5) Start resource monitor if we have credentials
             print("Step 2.5: Starting resource monitor...")
@@ -345,6 +354,14 @@ public class TartVMManager {
             await monitor.stop()
             resourceMonitor = nil
             logs += "✓ Resource monitor stopped\n"
+        }
+
+        // Terminate VM process if still running
+        if let process = vmProcess, process.isRunning {
+            logs += "Terminating VM process...\n"
+            process.terminate()
+            vmProcess = nil
+            logs += "✓ VM process terminated\n"
         }
 
         guard created, let vm = vmName else { return }
