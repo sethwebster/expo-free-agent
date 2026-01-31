@@ -253,16 +253,26 @@ else
 fi
 
 # ========================================
-# Phase 6: Cleanup & Signal
+# Phase 6: Save VM Token for Monitor
 # ========================================
 
-log "Phase 6: Cleaning up sensitive files..."
+log "Phase 6: Saving VM token for monitor..."
+VM_TOKEN_FILE="/tmp/vm-token"
+echo "$VM_TOKEN" > "$VM_TOKEN_FILE"
+chmod 600 "$VM_TOKEN_FILE"
+log "✓ VM token saved to $VM_TOKEN_FILE"
+
+# ========================================
+# Phase 7: Cleanup & Signal
+# ========================================
+
+log "Phase 7: Cleaning up sensitive files..."
 secure_delete "$CERTS_FILE"
 unset VM_TOKEN  # Clear from memory
 unset OTP       # Clear from memory
 log "✓ Certificate files securely deleted"
 
-log "Phase 6: Signaling bootstrap completion..."
+log "Phase 7: Signaling bootstrap completion..."
 touch "$READY_SIGNAL"
 log "✓ Ready signal created: $READY_SIGNAL"
 

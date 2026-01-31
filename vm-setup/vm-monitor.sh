@@ -11,7 +11,7 @@
 #   CONTROLLER_URL=https://...
 #   BUILD_ID=abc123
 #   WORKER_ID=xyz789
-#   API_KEY=secret
+#   VM_TOKEN=secret
 #
 
 set -e
@@ -33,7 +33,7 @@ fi
 source "$CREDS_FILE"
 
 # Validate required variables
-if [ -z "$CONTROLLER_URL" ] || [ -z "$BUILD_ID" ] || [ -z "$WORKER_ID" ] || [ -z "$API_KEY" ]; then
+if [ -z "$CONTROLLER_URL" ] || [ -z "$BUILD_ID" ] || [ -z "$WORKER_ID" ] || [ -z "$VM_TOKEN" ]; then
   echo "ERROR: Missing required variables in credentials file"
   exit 1
 fi
@@ -61,7 +61,7 @@ EOF
   curl -s -X POST \
     "${CONTROLLER_URL}/api/builds/${BUILD_ID}/telemetry" \
     -H "Content-Type: application/json" \
-    -H "X-API-Key: ${API_KEY}" \
+    -H "X-VM-Token: ${VM_TOKEN}" \
     -H "X-Worker-Id: ${WORKER_ID}" \
     -H "X-Build-Id: ${BUILD_ID}" \
     -d "$payload" \

@@ -59,8 +59,10 @@ struct ActiveBuildsResponse: Codable {
 
 // MARK: - App Delegate
 
-let app = NSApplication.shared
+// Declare delegate before app to ensure proper lifetime
+// NSApplication.delegate is weak, so we must keep a strong reference
 let delegate = AppDelegate()
+let app = NSApplication.shared
 app.delegate = delegate
 app.run()
 
@@ -506,9 +508,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
 
     private func createConnectingIcon() -> NSImage {
         let size = NSSize(width: 18, height: 20)
+        let currentFrame = animationFrame  // Capture value, not self
+        let baseIcon = createTrayIcon()    // Create outside closure
+
         let image = NSImage(size: size, flipped: false) { rect in
             // Draw base logo
-            let baseIcon = self.createTrayIcon()
             baseIcon.draw(in: NSRect(x: 0, y: 4, width: 18, height: 18))
 
             // Draw animated dots below
@@ -517,7 +521,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
             let spacing: CGFloat = 3.0
 
             for i in 0..<3 {
-                let alpha: CGFloat = (i == self.animationFrame % 3) ? 1.0 : 0.3
+                let alpha: CGFloat = (i == currentFrame % 3) ? 1.0 : 0.3
                 NSColor.black.withAlphaComponent(alpha).setFill()
                 let dotX = 5.0 + CGFloat(i) * spacing
                 let dotRect = NSRect(x: dotX, y: dotY, width: dotSize, height: dotSize)
@@ -536,9 +540,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
 
     private func createBuildingIcon() -> NSImage {
         let size = NSSize(width: 22, height: 22)
+        let baseIcon = createTrayIcon()  // Create outside closure
+
         let image = NSImage(size: size, flipped: false) { rect in
             // Draw block icon
-            let baseIcon = self.createTrayIcon()
             baseIcon.draw(in: NSRect(x: 2, y: 2, width: 18, height: 18))
 
             // Draw bright green dot in bottom-right
@@ -559,9 +564,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
 
     private func createDownloadingIcon(percent: Double) -> NSImage {
         let size = NSSize(width: 26, height: 22)
+        let baseIcon = createTrayIcon()  // Create outside closure
+
         let image = NSImage(size: size, flipped: false) { rect in
             // Draw base logo
-            let baseIcon = self.createTrayIcon()
             baseIcon.draw(in: NSRect(x: 4, y: 2, width: 18, height: 18))
 
             // Draw orange pie chart in bottom-right

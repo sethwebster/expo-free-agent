@@ -237,30 +237,38 @@ public class TartVMManager {
             logs += "✓ Toolchain ready\n\n"
 
             // 8) Start build monitor (sends heartbeats to controller)
-            if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
+            if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL {
                 logs += "Starting build monitor...\n"
 
-                // Write credentials to temp file (avoid ps visibility)
-                let credFile = "/tmp/monitor-creds-\(UUID().uuidString)"
-                let createCredsCmd = """
-                cat > '\(credFile)' << 'EOFCREDS'
-                CONTROLLER_URL=\(controllerURL)
-                BUILD_ID=\(buildId)
-                WORKER_ID=\(workerId)
-                API_KEY=\(apiKey)
-                EOFCREDS
-                chmod 600 '\(credFile)'
-                """
-                _ = try await sshCommand(ip: vmIP!, command: createCredsCmd)
+                // Read VM token from bootstrap (saved to /tmp/vm-token)
+                let vmToken = try await sshCommand(ip: vmIP!, command: "cat /tmp/vm-token")
+                let vmTokenTrimmed = vmToken.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                // Start monitor with creds file (not visible in ps)
-                let monitorCommand = "/usr/local/bin/vm-monitor.sh '\(credFile)' 30 > /dev/null 2>&1 & echo $!"
-                let pidOutput = try await sshCommand(ip: vmIP!, command: monitorCommand)
-                if let pid = Int32(pidOutput.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                    monitorPID = pid
-                    logs += "✓ Monitor started (PID: \(pid))\n\n"
+                if vmTokenTrimmed.isEmpty {
+                    logs += "⚠️  No VM token found - monitor cannot start\n\n"
                 } else {
-                    logs += "⚠️  Could not start monitor\n\n"
+                    // Write credentials to temp file (avoid ps visibility)
+                    let credFile = "/tmp/monitor-creds-\(UUID().uuidString)"
+                    let createCredsCmd = """
+                    cat > '\(credFile)' << 'EOFCREDS'
+                    CONTROLLER_URL=\(controllerURL)
+                    BUILD_ID=\(buildId)
+                    WORKER_ID=\(workerId)
+                    VM_TOKEN=\(vmTokenTrimmed)
+                    EOFCREDS
+                    chmod 600 '\(credFile)'
+                    """
+                    _ = try await sshCommand(ip: vmIP!, command: createCredsCmd)
+
+                    // Start monitor with creds file (not visible in ps)
+                    let monitorCommand = "/usr/local/bin/vm-monitor.sh '\(credFile)' 30 > /dev/null 2>&1 & echo $!"
+                    let pidOutput = try await sshCommand(ip: vmIP!, command: monitorCommand)
+                    if let pid = Int32(pidOutput.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                        monitorPID = pid
+                        logs += "✓ Monitor started (PID: \(pid))\n\n"
+                    } else {
+                        logs += "⚠️  Could not start monitor\n\n"
+                    }
                 }
             }
 
