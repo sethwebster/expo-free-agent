@@ -10,6 +10,11 @@ public actor WorkerService {
     private var vmVerificationHandler: (@Sendable () async -> Bool)?
     private var isReregistering = false
 
+    // Exponential backoff state (resets on success)
+    private var currentBackoffDelay: UInt64 = 1_000_000_000 // 1 second in nanoseconds
+    private let minBackoffDelay: UInt64 = 1_000_000_000 // 1 second
+    private let maxBackoffDelay: UInt64 = 60_000_000_000 // 60 seconds
+
     public var isRunning: Bool { isActive }
 
     public init(configuration: WorkerConfiguration) {
@@ -26,13 +31,32 @@ public actor WorkerService {
 
         print("Worker service starting...")
 
-        // Register with controller - halt startup if registration fails
-        do {
-            try await registerWorker()
-        } catch {
-            print("FATAL: Registration failed: \(error)")
-            print("Worker service cannot start without valid registration")
-            return
+        // Register with controller - retry with exponential backoff on failure
+        var attempt = 0
+        let maxAttempts = 10
+
+        while attempt < maxAttempts {
+            do {
+                try await registerWorker()
+                print("✓ Worker registered successfully")
+                resetBackoff() // Reset backoff on success
+                break
+            } catch {
+                attempt += 1
+                if attempt >= maxAttempts {
+                    print("FATAL: Registration failed after \(maxAttempts) attempts: \(error)")
+                    print("Worker service cannot start without valid registration")
+                    return
+                }
+
+                // Log the failure and wait before retry
+                print("⚠️  Registration attempt \(attempt) failed: \(error)")
+                print("   Retrying in \(currentBackoffDelay / 1_000_000_000)s...")
+
+                try? await Task.sleep(nanoseconds: currentBackoffDelay)
+
+                increaseBackoff()
+            }
         }
 
         isActive = true
@@ -43,6 +67,14 @@ public actor WorkerService {
         }
 
         print("Worker service started")
+    }
+
+    private func resetBackoff() {
+        currentBackoffDelay = minBackoffDelay
+    }
+
+    private func increaseBackoff() {
+        currentBackoffDelay = min(currentBackoffDelay * 2, maxBackoffDelay)
     }
 
     public func stop() async {
@@ -92,17 +124,25 @@ public actor WorkerService {
                     }
 
                     if let job = try await pollForJob() {
+                        resetBackoff() // Reset backoff on successful poll
                         await executeJob(job)
+                    } else {
+                        resetBackoff() // Also reset on successful no-job response
                     }
+                } else {
+                    resetBackoff() // Reset when at capacity (not an error)
                 }
 
                 // Wait for next poll interval
                 try await Task.sleep(for: .seconds(configuration.pollIntervalSeconds))
             } catch {
                 if !Task.isCancelled {
-                    print("Poll error: \(error)")
+                    print("⚠️  Poll error: \(error)")
+                    print("   Retrying in \(currentBackoffDelay / 1_000_000_000)s...")
+
                     // Exponential backoff on error
-                    try? await Task.sleep(for: .seconds(5))
+                    try? await Task.sleep(nanoseconds: currentBackoffDelay)
+                    increaseBackoff()
                 }
             }
         }
@@ -302,9 +342,30 @@ public actor WorkerService {
         try? configuration.save()
 
         // Re-register with controller (will preserve state if workerID provided)
-        try await registerWorker()
+        // Retry with exponential backoff
+        var attempt = 0
+        let maxAttempts = 5
 
-        print("Re-registration complete")
+        while attempt < maxAttempts {
+            do {
+                try await registerWorker()
+                print("✓ Re-registration complete")
+                resetBackoff()
+                return
+            } catch {
+                attempt += 1
+                if attempt >= maxAttempts {
+                    print("⚠️  Re-registration failed after \(maxAttempts) attempts: \(error)")
+                    throw error
+                }
+
+                print("⚠️  Re-registration attempt \(attempt) failed: \(error)")
+                print("   Retrying in \(currentBackoffDelay / 1_000_000_000)s...")
+
+                try? await Task.sleep(nanoseconds: currentBackoffDelay)
+                increaseBackoff()
+            }
+        }
     }
 
     private func executeJob(_ job: BuildJob) async {
