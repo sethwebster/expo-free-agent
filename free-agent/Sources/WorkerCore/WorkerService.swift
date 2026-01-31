@@ -268,7 +268,6 @@ public actor WorkerService {
         print("Polling: \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
         request.setValue(accessToken, forHTTPHeaderField: "X-Worker-Token")
 
         let (data, response) = try await URLSession.shared.data(for: request)
