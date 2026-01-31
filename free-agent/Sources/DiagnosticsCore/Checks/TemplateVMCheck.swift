@@ -25,12 +25,14 @@ public actor TemplateVMCheck: DiagnosticCheck {
             let duration = Int(Date().timeIntervalSince(startTime) * 1000)
 
             if exitCode == 0 {
-                // Check if template exists in list
-                let images = output.components(separatedBy: .newlines)
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty }
+                // Check if template exists in list (tart list returns formatted table)
+                // Look for template image name within any line
+                let lines = output.components(separatedBy: .newlines)
+                let found = lines.contains { line in
+                    line.contains(templateImage)
+                }
 
-                if images.contains(templateImage) {
+                if found {
                     return CheckResult(
                         name: name,
                         status: .pass,
@@ -44,7 +46,7 @@ public actor TemplateVMCheck: DiagnosticCheck {
                         status: .fail,
                         message: "Template VM not found",
                         durationMs: duration,
-                        details: ["template": templateImage, "available": images.joined(separator: ", ")]
+                        details: ["template": templateImage, "available": output]
                     )
                 }
             } else {
