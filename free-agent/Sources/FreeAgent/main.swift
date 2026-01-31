@@ -52,6 +52,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var vmSyncService: VMSyncService?
     private var menu: NSMenu?
     private let hudManager = HUDNotificationManager()
+    private var lastProgressUpdateTime: Date?
+    private var lastProgressPercent: Double?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 Starting Free Agent")
@@ -67,30 +69,59 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             case .downloading:
                 let percent = progress.percentComplete ?? 0.0
-                print(String(format: "Downloading: %.0f%%", percent))
-                if percent == 0.0 {
-                    // Just started
-                    self.hudManager.show(
-                        type: .downloading(percent: 0),
-                        message: "Downloading base image..."
-                    )
-                } else {
-                    // Update progress
-                    self.hudManager.updateDownloadProgress(percent: percent)
+
+                // Throttle UI updates to once per 0.5s or when percent changes by >= 1%
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+
+                    let now = Date()
+                    var shouldUpdate = false
+
+                    if let lastUpdate = self.lastProgressUpdateTime, let lastPct = self.lastProgressPercent {
+                        let timeSince = now.timeIntervalSince(lastUpdate)
+                        let percentDiff = abs(percent - lastPct)
+                        shouldUpdate = timeSince >= 0.5 || percentDiff >= 1.0
+                    } else {
+                        shouldUpdate = true
+                    }
+
+                    if shouldUpdate {
+                        self.lastProgressUpdateTime = now
+                        self.lastProgressPercent = percent
+                        print(String(format: "Downloading: %.0f%%", percent))
+
+                        if percent == 0.0 {
+                            self.hudManager.show(
+                                type: .downloading(percent: 0),
+                                message: "Downloading base image..."
+                            )
+                        } else {
+                            self.hudManager.updateDownloadProgress(percent: percent)
+                        }
+                    }
                 }
 
             case .extracting:
                 let percent = progress.percentComplete ?? 0.0
-                print(String(format: "Extracting: %.0f%%", percent))
-                self.hudManager.updateDownloadProgress(percent: percent)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    print(String(format: "Extracting: %.0f%%", percent))
+                    self.hudManager.updateDownloadProgress(percent: percent)
+                }
 
             case .complete:
-                self.hudManager.dismiss()
-                print("✓ VM template ready")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    print("✓ VM template ready")
+                    self.hudManager.dismiss()
+                }
 
             case .failed:
-                self.hudManager.dismiss()
-                print("✗ VM template download failed: \(progress.message)")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    print("✗ VM template download failed: \(progress.message)")
+                    self.hudManager.dismiss()
+                }
             }
         }
 

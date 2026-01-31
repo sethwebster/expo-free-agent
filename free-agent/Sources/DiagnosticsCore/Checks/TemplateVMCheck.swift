@@ -1,5 +1,67 @@
 import Foundation
 
+// Thread-safe output collector for process streaming
+private final class OutputCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var allOutput: [String] = []
+    private var outBuffer = Data()
+    private var errBuffer = Data()
+
+    func processStdout(_ chunk: Data, onLine: (String) -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        outBuffer.append(chunk)
+
+        let newline = UInt8(0x0A)
+        let carriageReturn = UInt8(0x0D)
+        while let idx = outBuffer.firstIndex(where: { byte in byte == newline || byte == carriageReturn }) {
+            let lineData = outBuffer.subdata(in: outBuffer.startIndex..<idx)
+            outBuffer.removeSubrange(outBuffer.startIndex...idx)
+
+            if let line = String(data: lineData, encoding: .utf8), !line.isEmpty {
+                onLine(line)
+                allOutput.append(line)
+            }
+        }
+    }
+
+    func processStderr(_ chunk: Data, onLine: (String) -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        errBuffer.append(chunk)
+
+        let newline = UInt8(0x0A)
+        let carriageReturn = UInt8(0x0D)
+        while let idx = errBuffer.firstIndex(where: { byte in byte == newline || byte == carriageReturn }) {
+            let lineData = errBuffer.subdata(in: errBuffer.startIndex..<idx)
+            errBuffer.removeSubrange(errBuffer.startIndex...idx)
+
+            if let line = String(data: lineData, encoding: .utf8), !line.isEmpty {
+                onLine(line)
+                allOutput.append(line)
+            }
+        }
+    }
+
+    func finalize(onLine: (String) -> Void) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if !outBuffer.isEmpty, let line = String(data: outBuffer, encoding: .utf8), !line.isEmpty {
+            onLine(line)
+            allOutput.append(line)
+        }
+        if !errBuffer.isEmpty, let line = String(data: errBuffer, encoding: .utf8), !line.isEmpty {
+            onLine(line)
+            allOutput.append(line)
+        }
+
+        return allOutput.joined(separator: "\n")
+    }
+}
+
 /// Check if template VM exists (auto-fixable via tart pull)
 public actor TemplateVMCheck: DiagnosticCheck {
     public let name = "template_vm_exists"
@@ -145,119 +207,75 @@ public actor TemplateVMCheck: DiagnosticCheck {
         process.executableURL = URL(fileURLWithPath: command)
         process.arguments = arguments
 
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = errPipe
 
-        let outputHandle = outputPipe.fileHandleForReading
-        let errorHandle = errorPipe.fileHandleForReading
+        let collector = OutputCollector()
+        let handler = progressHandler
+
+        let outHandle = outPipe.fileHandleForReading
+        let errHandle = errPipe.fileHandleForReading
+
+        outHandle.readabilityHandler = { [collector, handler] handle in
+            let chunk = handle.availableData
+            guard !chunk.isEmpty else { return }
+
+            collector.processStdout(chunk) { line in
+                Self.parseProgressLineSync(line, handler: handler)
+            }
+        }
+
+        errHandle.readabilityHandler = { [collector, handler] handle in
+            let chunk = handle.availableData
+            guard !chunk.isEmpty else { return }
+
+            collector.processStderr(chunk) { line in
+                Self.parseProgressLineSync(line, handler: handler)
+            }
+        }
 
         try process.run()
 
-        // Read output asynchronously, handling both \n and \r as line terminators
-        let outputTask = Task {
-            var buffer = ""
-            var allLines: [String] = []
-            do {
-                for try await byte in outputHandle.bytes {
-                    let char = Character(UnicodeScalar(byte))
-                    if char == "\n" || char == "\r" {
-                        if !buffer.isEmpty {
-                            parseProgressLine(buffer)
-                            allLines.append(buffer)
-                            buffer = ""
-                        }
-                    } else {
-                        buffer.append(char)
-                    }
+        return await withCheckedContinuation { continuation in
+            process.terminationHandler = { [collector, handler] proc in
+                outHandle.readabilityHandler = nil
+                errHandle.readabilityHandler = nil
+
+                let output = collector.finalize { line in
+                    Self.parseProgressLineSync(line, handler: handler)
                 }
-                // Handle any remaining buffer
-                if !buffer.isEmpty {
-                    parseProgressLine(buffer)
-                    allLines.append(buffer)
-                }
-            } catch {
-                print("Error reading stdout: \(error)")
+
+                continuation.resume(returning: (proc.terminationStatus, output))
             }
-            return allLines.joined(separator: "\n")
         }
-
-        let errorTask = Task {
-            var buffer = ""
-            var allLines: [String] = []
-            do {
-                for try await byte in errorHandle.bytes {
-                    let char = Character(UnicodeScalar(byte))
-                    if char == "\n" || char == "\r" {
-                        if !buffer.isEmpty {
-                            parseProgressLine(buffer)
-                            allLines.append(buffer)
-                            buffer = ""
-                        }
-                    } else {
-                        buffer.append(char)
-                    }
-                }
-                // Handle any remaining buffer
-                if !buffer.isEmpty {
-                    parseProgressLine(buffer)
-                    allLines.append(buffer)
-                }
-            } catch {
-                print("Error reading stderr: \(error)")
-            }
-            return allLines.joined(separator: "\n")
-        }
-
-        // Wait for process to complete
-        process.waitUntilExit()
-
-        // Wait for all output to be read
-        let stdout = await outputTask.value
-        let stderr = await errorTask.value
-
-        let allOutput = [stdout, stderr].filter { !$0.isEmpty }.joined(separator: "\n")
-        return (process.terminationStatus, allOutput)
     }
 
-    private func parseProgressLine(_ line: String) {
-        // tart pull outputs progress like:
-        // "pulling manifest..."
-        // "pulling disk (69.0 GB compressed)..."
-        // "[1A[J37%" or "37%" (with optional ANSI escape codes)
-        // "pulling NVRAM..."
+    nonisolated private static func parseProgressLineSync(_ line: String, handler: (@Sendable (DownloadProgress) -> Void)?) {
+        guard let handler = handler else { return }
 
         let trimmedLine = line.trimmingCharacters(in: .whitespaces)
 
-        // Check if line contains a percentage (handles ANSI codes like [1A[J23%)
-        // Match any number followed by % anywhere in the line
+        // Check if line contains a percentage
         if let regex = try? NSRegularExpression(pattern: #"(\d+(?:\.\d+)?)\s*%"#),
            let match = regex.firstMatch(in: trimmedLine, range: NSRange(trimmedLine.startIndex..., in: trimmedLine)),
-           match.numberOfRanges > 1 {
-            let percentRange = Range(match.range(at: 1), in: trimmedLine)
-            if let percentRange = percentRange,
-               let percent = Double(trimmedLine[percentRange]) {
-                progressHandler?(DownloadProgress(
-                    status: .downloading,
-                    message: "Downloading base image...",
-                    percentComplete: percent
-                ))
-                return
-            }
+           match.numberOfRanges > 1,
+           let percentRange = Range(match.range(at: 1), in: trimmedLine),
+           let percent = Double(trimmedLine[percentRange]) {
+            handler(DownloadProgress(
+                status: .downloading,
+                message: "Downloading base image...",
+                percentComplete: percent
+            ))
+            return
         }
 
-        // Check for pulling/downloading messages
+        // Check for pulling/downloading/extracting messages
         if trimmedLine.contains("pulling") || trimmedLine.contains("downloading") || trimmedLine.contains("Downloading") {
-            progressHandler?(DownloadProgress(
-                status: .downloading,
-                message: trimmedLine
-            ))
+            handler(DownloadProgress(status: .downloading, message: trimmedLine))
         } else if trimmedLine.contains("extracting") || trimmedLine.contains("Extracting") {
-            progressHandler?(DownloadProgress(
-                status: .extracting,
-                message: trimmedLine
-            ))
+            handler(DownloadProgress(status: .extracting, message: trimmedLine))
         }
     }
 }
