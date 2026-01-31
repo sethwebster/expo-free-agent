@@ -113,6 +113,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
             let icon = createIconForState(.connecting)
             button.image = icon
             button.image?.isTemplate = true
+            button.toolTip = toolTipForState(.connecting)
             print("✓ Set status item icon")
         } else {
             print("✗ Failed to get status item button!")
@@ -373,7 +374,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     private func updateIconForCurrentState() {
         guard let button = statusItem?.button else { return }
         button.image = createIconForState(connectionState)
+        button.toolTip = toolTipForState(connectionState)
         // Template mode is now handled per-icon in creation methods
+    }
+
+    private func toolTipForState(_ state: ConnectionState) -> String {
+        switch state {
+        case .connecting:
+            return "Free Agent - Connecting..."
+        case .online:
+            return "Free Agent - Online"
+        case .building:
+            if currentBuilds.isEmpty {
+                return "Free Agent - Building"
+            } else {
+                let buildInfo = currentBuilds.map { "\($0.platform.uppercased())" }.joined(separator: ", ")
+                return "Free Agent - Building \(buildInfo)"
+            }
+        case .downloading(let percent):
+            return String(format: "Free Agent - Downloading base image (%.0f%%)", percent)
+        case .offline:
+            return "Free Agent - Offline"
+        }
     }
 
     private func createIconForState(_ state: ConnectionState) -> NSImage {
