@@ -131,7 +131,8 @@ public class TartVMManager {
             vmProcess!.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             vmProcess!.arguments = [tartPath, "run", vmName!, "--no-graphics", "--dir", "\(configDir.path):ro,tag=build-config"]
 
-            // Redirect output to avoid blocking
+            // Redirect I/O to prevent blocking and avoid terminal interaction
+            vmProcess!.standardInput = FileHandle.nullDevice
             vmProcess!.standardOutput = FileHandle.nullDevice
             vmProcess!.standardError = FileHandle.nullDevice
 
@@ -139,6 +140,17 @@ public class TartVMManager {
             try vmProcess!.run()
             logs += "✓ VM started (PID: \(vmProcess!.processIdentifier))\n\n"
             print("✓ VM started in background (PID: \(vmProcess!.processIdentifier))")
+
+            // Give VM process a moment to initialize
+            try await Task.sleep(for: .seconds(2))
+
+            // Verify process is still running
+            if vmProcess!.isRunning {
+                print("✓ VM process verified running")
+            } else {
+                print("✗ VM process already terminated!")
+                throw VMError.commandFailed("VM process terminated immediately after start")
+            }
 
             // 2.5) Start resource monitor if we have credentials
             print("Step 2.5: Starting resource monitor...")
@@ -420,19 +432,28 @@ public class TartVMManager {
     /// Wait for tart ip <vm> to return a valid IP
     private func waitForIP(_ vmName: String, timeout: TimeInterval) async throws -> String {
         let deadline = Date().addingTimeInterval(timeout)
+        var attemptCount = 0
 
         while Date() < deadline {
+            attemptCount += 1
             let (code, output) = try await executeCommandWithResult(tartPath, ["ip", vmName])
             let ip = output.trimmingCharacters(in: .whitespacesAndNewlines)
 
+            print("waitForIP attempt \(attemptCount): code=\(code), output='\(output)', ip='\(ip)'")
+
             if code == 0 && !ip.isEmpty {
+                print("✓ Got IP: \(ip)")
                 return ip
+            }
+
+            if attemptCount % 10 == 0 {
+                print("Still waiting for IP after \(attemptCount) attempts...")
             }
 
             try await Task.sleep(for: .seconds(1))
         }
 
-        throw VMError.timeout("Timed out waiting for VM IP")
+        throw VMError.timeout("Timed out waiting for VM IP after \(attemptCount) attempts")
     }
 
     /// Wait for SSH to be ready
