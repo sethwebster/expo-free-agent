@@ -45,7 +45,7 @@ if CommandLine.arguments.contains("doctor") {
 
 // MARK: - Data Models for Active Builds
 
-struct ActiveBuild: Codable {
+struct ActiveBuild: Codable, Equatable {
     let id: String
     let status: String
     let platform: String
@@ -98,6 +98,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
     private var animationFrame = 0
     private var downloadProgress: Double = 0.0
     @Published var currentVMDownloadProgress: DownloadProgress? = nil
+    private let hudManager = HUDNotificationManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Set activation policy for menu bar app with windows
@@ -135,15 +136,54 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
 
             // Update connection state based on download progress
             switch progress.status {
-            case .downloading, .extracting:
+            case .downloading:
                 let percent = progress.percentComplete ?? 0.0
                 self.connectionState = .downloading(percent: percent)
                 self.updateIconForCurrentState()
-            case .complete, .failed:
-                // VM template ready or failed, proceed to worker initialization
+
+                // Show/update HUD
+                if percent == 0.0 {
+                    // Just started
+                    self.hudManager.show(
+                        type: .downloading(percent: 0),
+                        message: "Downloading base image..."
+                    )
+                } else {
+                    // Update progress
+                    self.hudManager.updateDownloadProgress(percent: percent)
+                }
+
+            case .extracting:
+                let percent = progress.percentComplete ?? 0.0
+                self.connectionState = .downloading(percent: percent)
+                self.updateIconForCurrentState()
+
+            case .complete:
+                // Dismiss download HUD and show success
+                self.hudManager.dismiss()
+                self.hudManager.show(
+                    type: .success,
+                    message: "Base image ready",
+                    duration: 3.0
+                )
+                // VM template ready, proceed to worker initialization
                 Task {
                     await self.initializeWorker()
                 }
+
+            case .failed:
+                // Show error HUD
+                self.hudManager.dismiss()
+                self.hudManager.show(
+                    type: .error,
+                    message: "Failed to download base image",
+                    duration: 5.0
+                )
+                // Still try to initialize worker (might have cached version)
+                Task {
+                    await self.initializeWorker()
+                }
+
             case .idle:
                 break
             }
@@ -228,9 +268,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableOb
         updateMenuStatus(running: running)
 
         // Fetch and update active builds list
+        let previousBuilds = currentBuilds
         let builds = await fetchActiveBuilds()
         currentBuilds = builds  // Cache for menu delegate
         updateActiveBuildsMenu(builds: builds)
+
+        // Detect new builds and show HUD
+        if builds.count > previousBuilds.count {
+            let newBuilds = builds.filter { build in
+                !previousBuilds.contains(where: { $0.id == build.id })
+            }
+            if let newBuild = newBuilds.first {
+                let platform = newBuild.platform.uppercased()
+                hudManager.show(
+                    type: .info,
+                    message: "Building \(platform)...",
+                    duration: 3.0
+                )
+            }
+        }
 
         // Update connection state and icon
         let newState: ConnectionState
