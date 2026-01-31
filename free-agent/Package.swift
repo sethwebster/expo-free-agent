@@ -23,7 +23,8 @@ let package = Package(
         .target(
             name: "BuildVM",
             dependencies: [],
-            path: "Sources/BuildVM"
+            path: "Sources/BuildVM",
+            exclude: ["VMManager.swift", "XcodeBuildExecutor.swift", "CertificateManager.swift"]
         ),
         .target(
             name: "WorkerCore",

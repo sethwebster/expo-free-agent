@@ -3,6 +3,41 @@ import Foundation
 // Shared types for BuildVM
 // Avoids circular dependency with WorkerCore
 
+public enum VMError: Error, LocalizedError {
+    case virtualizationNotSupported
+    case vmNotInitialized
+    case invalidHardwareModel
+    case invalidMachineIdentifier
+    case installationFailed
+    case buildFailed
+    case artifactNotFound
+    case bootstrapTimeout
+    case invalidInput(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .virtualizationNotSupported:
+            return "Virtualization is not supported on this system"
+        case .vmNotInitialized:
+            return "VM not initialized"
+        case .invalidHardwareModel:
+            return "Invalid hardware model"
+        case .invalidMachineIdentifier:
+            return "Invalid machine identifier"
+        case .installationFailed:
+            return "Installation failed"
+        case .buildFailed:
+            return "Build failed"
+        case .artifactNotFound:
+            return "Artifact not found"
+        case .bootstrapTimeout:
+            return "VM bootstrap timed out - check /tmp/free-agent-bootstrap.log in VM"
+        case .invalidInput(let message):
+            return "Invalid input: \(message)"
+        }
+    }
+}
+
 public struct BuildResult: Sendable {
     public let success: Bool
     public let logs: String
