@@ -6,11 +6,20 @@ private final class OutputCollector: @unchecked Sendable {
     private var allOutput: [String] = []
     private var outBuffer = Data()
     private var errBuffer = Data()
+    private var isFinalized = false
+    private var isTerminating = false
+
+    func markTerminating() {
+        lock.lock()
+        defer { lock.unlock() }
+        isTerminating = true
+    }
 
     func processStdout(_ chunk: Data, onLine: (String) -> Void) {
         lock.lock()
         defer { lock.unlock() }
 
+        guard !isFinalized, !isTerminating else { return }
         outBuffer.append(chunk)
 
         let newline = UInt8(0x0A)
@@ -30,6 +39,7 @@ private final class OutputCollector: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
+        guard !isFinalized, !isTerminating else { return }
         errBuffer.append(chunk)
 
         let newline = UInt8(0x0A)
@@ -45,16 +55,17 @@ private final class OutputCollector: @unchecked Sendable {
         }
     }
 
-    func finalize(onLine: (String) -> Void) -> String {
+    func finalize() -> String {
         lock.lock()
         defer { lock.unlock() }
 
+        isFinalized = true
+
+        // Just collect remaining buffer data without parsing (no progress updates after termination)
         if !outBuffer.isEmpty, let line = String(data: outBuffer, encoding: .utf8), !line.isEmpty {
-            onLine(line)
             allOutput.append(line)
         }
         if !errBuffer.isEmpty, let line = String(data: errBuffer, encoding: .utf8), !line.isEmpty {
-            onLine(line)
             allOutput.append(line)
         }
 
@@ -240,14 +251,22 @@ public actor TemplateVMCheck: DiagnosticCheck {
 
         return await withCheckedContinuation { continuation in
             process.terminationHandler = { [collector, handler] proc in
-                outHandle.readabilityHandler = nil
-                errHandle.readabilityHandler = nil
+                // First, mark terminating to prevent new callbacks from processing
+                collector.markTerminating()
 
-                let output = collector.finalize { line in
-                    Self.parseProgressLineSync(line, handler: handler)
+                // Give any in-flight callbacks 100ms to complete
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.1) {
+                    // Now safe to clear handlers - callbacks won't process anymore
+                    outHandle.readabilityHandler = nil
+                    errHandle.readabilityHandler = nil
+
+                    // Brief additional delay to ensure handler cleanup
+                    Thread.sleep(forTimeInterval: 0.05)
+
+                    // Collect remaining output (no progress parsing - that's done)
+                    let output = collector.finalize()
+                    continuation.resume(returning: (proc.terminationStatus, output))
                 }
-
-                continuation.resume(returning: (proc.terminationStatus, output))
             }
         }
     }

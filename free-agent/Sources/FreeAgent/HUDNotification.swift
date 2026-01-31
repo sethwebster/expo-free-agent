@@ -52,14 +52,36 @@ enum HUDType {
     }
 }
 
+// MARK: - HUD View Model
+
+@MainActor
+class HUDViewModel: ObservableObject {
+    @Published var type: HUDType
+    @Published var message: String
+    @Published var isDismissed = false
+    let onDismiss: () -> Void
+
+    init(type: HUDType, message: String, onDismiss: @escaping () -> Void) {
+        self.type = type
+        self.message = message
+        self.onDismiss = onDismiss
+    }
+
+    func update(type: HUDType, message: String) {
+        guard !isDismissed else { return }
+        self.type = type
+        self.message = message
+    }
+}
+
 // MARK: - HUD View
 
 struct HUDNotificationView: View {
-    let type: HUDType
-    let message: String
-    let onDismiss: () -> Void
+    @ObservedObject var viewModel: HUDViewModel
 
     var body: some View {
+        let type = viewModel.type
+        let message = viewModel.message
         HStack(spacing: 12) {
             // Icon
             Image(systemName: type.icon)
@@ -84,7 +106,11 @@ struct HUDNotificationView: View {
             Spacer()
 
             // Dismiss button
-            Button(action: onDismiss) {
+            Button {
+                if !viewModel.isDismissed {
+                    viewModel.onDismiss()
+                }
+            } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
@@ -112,15 +138,20 @@ struct HUDNotificationView: View {
 class HUDNotificationManager {
     private var currentHUD: NSWindow?
     private var dismissTimer: Timer?
+    private var viewModel: HUDViewModel?
 
     func show(type: HUDType, message: String, duration: TimeInterval = 4.0) {
         // Dismiss existing HUD
         dismiss()
 
-        // Create HUD view
-        let hudView = HUDNotificationView(type: type, message: message) { [weak self] in
+        // Create view model
+        let vm = HUDViewModel(type: type, message: message) { [weak self] in
             self?.dismiss()
         }
+        viewModel = vm
+
+        // Create HUD view
+        let hudView = HUDNotificationView(viewModel: vm)
 
         let hostingView = NSHostingView(rootView: hudView)
         hostingView.layer?.backgroundColor = .clear
@@ -165,19 +196,13 @@ class HUDNotificationManager {
     }
 
     func updateDownloadProgress(percent: Double) {
-        guard let window = currentHUD else { return }
+        guard let vm = viewModel else { return }
 
-        // Update existing HUD if it's a download type
-        let hudView = HUDNotificationView(
+        // Update existing view model - SwiftUI will handle the UI update
+        vm.update(
             type: .downloading(percent: percent),
             message: String(format: "Downloading base image (%.0f%%)", percent)
-        ) { [weak self] in
-            self?.dismiss()
-        }
-
-        let hostingView = NSHostingView(rootView: hudView)
-        hostingView.layer?.backgroundColor = .clear
-        window.contentView = hostingView
+        )
     }
 
     func dismiss() {
@@ -186,13 +211,18 @@ class HUDNotificationManager {
 
         guard let window = currentHUD else { return }
 
+        // Mark as dismissed to prevent updates during animation
+        viewModel?.isDismissed = true
+
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             window.animator().alphaValue = 0
-        }, completionHandler: {
-            Task { @MainActor in
+        }, completionHandler: { [weak self] in
+            Task { @MainActor [weak self] in
                 window.close()
+                // Only nil the viewModel AFTER window is closed
+                self?.viewModel = nil
             }
         })
 
