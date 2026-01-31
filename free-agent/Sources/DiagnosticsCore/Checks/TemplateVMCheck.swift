@@ -70,6 +70,18 @@ public actor TemplateVMCheck: DiagnosticCheck {
     }
 
     public func autoFix() async throws -> Bool {
+        // First check if template already exists (avoid unnecessary pull)
+        let checkResult = await run()
+        if checkResult.status == .pass {
+            print("✓ Template VM already exists, skipping pull")
+            progressHandler?(DownloadProgress(
+                status: .complete,
+                message: "Template VM already exists",
+                percentComplete: 100.0
+            ))
+            return true
+        }
+
         print("Attempting to pull template VM: \(templateImage)...")
 
         // Notify starting
