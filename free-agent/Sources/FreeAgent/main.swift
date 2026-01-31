@@ -51,12 +51,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindow: NSWindow?
     private var vmSyncService: VMSyncService?
     private var menu: NSMenu?
+    private let hudManager = HUDNotificationManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 Starting Free Agent")
 
         // Initialize VM sync service to ensure template exists
         vmSyncService = VMSyncService()
+        vmSyncService?.setProgressHandler { [weak self] progress in
+            guard let self = self else { return }
+
+            switch progress.status {
+            case .idle:
+                break
+
+            case .downloading:
+                let percent = progress.percentComplete ?? 0.0
+                print(String(format: "Downloading: %.0f%%", percent))
+                if percent == 0.0 {
+                    // Just started
+                    self.hudManager.show(
+                        type: .downloading(percent: 0),
+                        message: "Downloading base image..."
+                    )
+                } else {
+                    // Update progress
+                    self.hudManager.updateDownloadProgress(percent: percent)
+                }
+
+            case .extracting:
+                let percent = progress.percentComplete ?? 0.0
+                print(String(format: "Extracting: %.0f%%", percent))
+                self.hudManager.updateDownloadProgress(percent: percent)
+
+            case .complete:
+                self.hudManager.dismiss()
+                print("✓ VM template ready")
+
+            case .failed:
+                self.hudManager.dismiss()
+                print("✗ VM template download failed: \(progress.message)")
+            }
+        }
+
         Task {
             await vmSyncService?.ensureTemplateExists()
             print("✓ VM template check complete")
