@@ -159,10 +159,10 @@ Every build runs in an isolated VM with:
 ```
 expo-free-agent/
 ├── packages/
-│   ├── controller/        # Central server (Express + SQLite + Web UI)
+│   ├── controller-elixir/ # Central server (Phoenix + SQLite + Web UI)
 │   ├── worker-installer/  # Worker installation CLI
+│   ├── cli/               # Build submission CLI
 │   └── landing-page/      # Marketing site (Vite + React + Tailwind)
-├── cli/                   # Build submission CLI
 ├── free-agent/           # macOS worker app (Swift)
 ├── docs/                 # Documentation
 │   ├── getting-started/  # Quickstart, setup guides
@@ -172,6 +172,15 @@ expo-free-agent/
 ├── scripts/              # Utility scripts
 └── test/                 # Test fixtures and utilities
 ```
+
+**Why is `free-agent/` at the root?**
+
+The Swift worker app lives outside `packages/` to avoid build system conflicts:
+- Swift Package Manager and Bun workspaces are incompatible
+- Xcode expects traditional Swift package layout
+- Prevents cross-contamination of build artifacts
+
+See [ADR-001: Monorepo Structure](./adr/adr-001-monorepo-structure.md) for full rationale.
 
 ---
 

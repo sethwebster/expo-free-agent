@@ -2,6 +2,7 @@
   "name": "expo-free-agent",
   "version": "0.1.23",
   "private": true,
+  "_comment_workspaces": "free-agent/ excluded - Swift Package Manager incompatible with Bun. See adr/adr-001-monorepo-structure.md",
   "workspaces": [
     "packages/*"
   ],
