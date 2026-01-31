@@ -8,8 +8,11 @@ defmodule ExpoControllerWeb.BuildController do
   # Build token required for build-specific operations (user access)
   plug ExpoControllerWeb.Plugs.BuildAuth when action in [:logs, :download, :download_default, :retry, :status]
 
-  # VM token required for VM operations (VM access after OTP auth)
-  plug ExpoControllerWeb.Plugs.VMAuth when action in [:download_source, :download_certs_worker, :download_certs_secure, :stream_logs, :heartbeat, :telemetry]
+  # Worker or VM token required for source download (workers download + mount, VMs can download directly)
+  plug ExpoControllerWeb.Plugs.WorkerOrVMAuth when action in [:download_source]
+
+  # VM token required for VM-only operations (VM access after OTP auth)
+  plug ExpoControllerWeb.Plugs.VMAuth when action in [:download_certs_worker, :download_certs_secure, :stream_logs, :heartbeat, :telemetry]
 
   @doc """
   POST /api/builds

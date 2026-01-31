@@ -28,15 +28,13 @@ defmodule ExpoControllerWeb.Plugs.VMAuth do
   """
   def call(conn, _opts), do: require_vm_token(conn)
 
-  @doc """
-  Requires valid VM token for the requested build.
-
-  ## Headers
-  - X-VM-Token: Time-limited VM access token (issued after OTP auth)
-
-  ## Path params
-  - id: Build ID (required)
-  """
+  # Requires valid VM token for the requested build.
+  #
+  # Headers:
+  # - X-VM-Token: Time-limited VM access token (issued after OTP auth)
+  #
+  # Path params:
+  # - id: Build ID (required)
   defp require_vm_token(conn) do
     vm_token = get_req_header(conn, "x-vm-token") |> List.first()
     build_id = conn.path_params["id"]

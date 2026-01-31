@@ -409,11 +409,12 @@ public actor WorkerService {
         print("Downloading build package from: \(url.absoluteString)")
 
         var request = URLRequest(url: url)
-        request.setValue(configuration.apiKey, forHTTPHeaderField: "X-API-Key")
-        // Controller requires X-Worker-Id header for source/certs downloads
-        if let workerID = configuration.workerID {
-            request.setValue(workerID, forHTTPHeaderField: "X-Worker-Id")
-            print("Using worker ID: \(workerID)")
+        // Use worker token for authentication (not API key - that was removed)
+        if let workerToken = configuration.accessToken {
+            request.setValue(workerToken, forHTTPHeaderField: "X-Worker-Token")
+            print("Using worker token for source download")
+        } else {
+            print("⚠️  No worker token available")
         }
 
         let (localURL, response) = try await URLSession.shared.download(for: request)

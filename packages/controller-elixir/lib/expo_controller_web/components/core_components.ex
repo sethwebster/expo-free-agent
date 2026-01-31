@@ -4,7 +4,6 @@ defmodule ExpoControllerWeb.CoreComponents do
   """
 
   use Phoenix.Component
-  import Phoenix.HTML
 
   @doc """
   Renders flash messages with support for phx-click and phx-disconnected events.

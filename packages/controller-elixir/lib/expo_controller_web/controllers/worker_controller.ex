@@ -290,23 +290,6 @@ defmodule ExpoControllerWeb.WorkerController do
 
   # Private functions
 
-  defp try_assign_build(worker_id) do
-    alias ExpoController.Repo
-
-    Repo.transaction(fn ->
-      case Builds.next_pending_for_update() do
-        nil ->
-          Repo.rollback(:no_pending_builds)
-
-        build ->
-          case Builds.assign_to_worker(build, worker_id) do
-            {:ok, assigned} -> assigned
-            {:error, reason} -> Repo.rollback(reason)
-          end
-      end
-    end, timeout: 5_000)
-  end
-
   defp get_build(build_id) do
     case Builds.get_build(build_id) do
       nil -> {:error, :not_found}

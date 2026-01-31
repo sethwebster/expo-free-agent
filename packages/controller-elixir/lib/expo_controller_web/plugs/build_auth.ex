@@ -26,15 +26,13 @@ defmodule ExpoControllerWeb.Plugs.BuildAuth do
   """
   def call(conn, _opts), do: require_build_or_admin_access(conn)
 
-  @doc """
-  Requires valid build token for the requested build.
-
-  ## Headers
-  - X-Build-Token: Build-specific access token (grants access to specific build)
-
-  ## Path params
-  - id: Build ID (required)
-  """
+  # Requires valid build token for the requested build.
+  #
+  # Headers:
+  # - X-Build-Token: Build-specific access token (grants access to specific build)
+  #
+  # Path params:
+  # - id: Build ID (required)
   defp require_build_or_admin_access(conn) do
     build_token = get_req_header(conn, "x-build-token") |> List.first()
     # Routes nested in resources use <singular>_id, non-nested routes use id

@@ -23,10 +23,8 @@ defmodule ExpoControllerWeb.Plugs.Auth do
   def call(conn, :require_worker_access), do: require_worker_access(conn)
   def call(conn, :require_worker_token), do: require_worker_token(conn)
 
-  @doc """
-  Validates the API key from the X-API-Key header.
-  Uses constant-time comparison to prevent timing attacks.
-  """
+  # Validates the API key from the X-API-Key header.
+  # Uses constant-time comparison to prevent timing attacks.
   defp require_api_key(conn) do
     api_key = Application.get_env(:expo_controller, :api_key)
     provided_key = get_req_header(conn, "x-api-key") |> List.first()
@@ -42,10 +40,8 @@ defmodule ExpoControllerWeb.Plugs.Auth do
     end
   end
 
-  @doc """
-  Validates worker access token from X-Worker-Token header.
-  Verifies that the token matches the stored token for the worker.
-  """
+  # Validates worker access token from X-Worker-Token header.
+  # Verifies that the token matches the stored token for the worker.
   defp require_worker_token(conn) do
     token = get_req_header(conn, "x-worker-token") |> List.first()
 
@@ -67,10 +63,8 @@ defmodule ExpoControllerWeb.Plugs.Auth do
     end
   end
 
-  @doc """
-  Validates worker access to a resource.
-  Requires X-Worker-Id header and optionally validates build ownership.
-  """
+  # Validates worker access to a resource.
+  # Requires X-Worker-Id header and optionally validates build ownership.
   defp require_worker_access(conn, opts \\ []) do
     require_build_id = Keyword.get(opts, :require_build_id, false)
     worker_id = get_req_header(conn, "x-worker-id") |> List.first()
