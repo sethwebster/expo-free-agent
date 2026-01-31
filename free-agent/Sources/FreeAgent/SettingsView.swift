@@ -34,7 +34,7 @@ struct SettingsView: View {
         isCheckingTemplate = true
 
         Task {
-            let check = TemplateVMCheck(templateImage: "ghcr.io/sethwebster/expo-free-agent-base:0.1.23")
+            let check = TemplateVMCheck(templateImage: "ghcr.io/sethwebster/expo-free-agent-base:0.1.26")
 
             // Set up progress handler
             await check.setProgressHandler { progress in
@@ -109,13 +109,6 @@ struct SettingsView: View {
                         Text("Controller URL:")
                             .frame(width: 120, alignment: .trailing)
                         TextField("https://expo-free-agent-controller.projects.sethwebster.com", text: $configuration.controllerURL)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    HStack {
-                        Text("API Key:")
-                            .frame(width: 120, alignment: .trailing)
-                        SecureField("Enter API key", text: $configuration.apiKey)
                             .textFieldStyle(.roundedBorder)
                     }
 

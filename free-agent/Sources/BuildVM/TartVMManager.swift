@@ -17,7 +17,7 @@ public class TartVMManager {
     private let ipTimeout: TimeInterval = 120
     private let sshTimeout: TimeInterval = 180
 
-    public init(configuration: VMConfiguration, templateImage: String = "ghcr.io/sethwebster/expo-free-agent-base:0.1.23", vmUser: String = "admin", tartPath: String = "/opt/homebrew/bin/tart") {
+    public init(configuration: VMConfiguration, templateImage: String = "ghcr.io/sethwebster/expo-free-agent-base:0.1.26", vmUser: String = "admin", tartPath: String = "/opt/homebrew/bin/tart") {
         self.configuration = configuration
         self.templateImage = templateImage
         self.vmUser = vmUser
@@ -97,32 +97,38 @@ public class TartVMManager {
             logs += "✓ VM cloned\n\n"
             print("✓ VM cloned successfully")
 
-            // 2) Run headless, detached (using screen) with env vars for bootstrap
-            print("Step 2: Starting VM with screen...")
-            logs += "Starting VM headless with secure bootstrap...\n"
-            var runArgs = ["-d", "-m", tartPath, "run", vmName!, "--no-graphics"]
+            // 2) Create config file for VM with build credentials
+            print("Step 2: Creating VM config...")
+            let configDir = FileManager.default.temporaryDirectory.appendingPathComponent("build-\(jobID)")
+            try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
 
-            // Add env vars for VM bootstrap (cert fetch)
+            let configFile = configDir.appendingPathComponent("config")
+            var configContent = ""
             if let buildId = buildId {
-                runArgs.append("--env")
-                runArgs.append("BUILD_ID=\(buildId)")
+                configContent += "BUILD_ID=\(buildId)\n"
             }
             if let workerId = workerId {
-                runArgs.append("--env")
-                runArgs.append("WORKER_ID=\(workerId)")
+                configContent += "WORKER_ID=\(workerId)\n"
             }
             if let controllerURL = controllerURL {
-                runArgs.append("--env")
-                runArgs.append("CONTROLLER_URL=\(controllerURL)")
+                configContent += "CONTROLLER_URL=\(controllerURL)\n"
             }
             if let apiKey = apiKey {
-                runArgs.append("--env")
-                runArgs.append("API_KEY=\(apiKey)")
+                configContent += "OTP=\(apiKey)\n"
             }
+
+            try configContent.write(to: configFile, atomically: true, encoding: .utf8)
+            logs += "✓ Config written to \(configFile.path)\n\n"
+            print("✓ Config file created at \(configFile.path)")
+
+            // 3) Run headless, detached (using screen) with config mounted
+            print("Step 3: Starting VM with screen and config mount...")
+            logs += "Starting VM headless with config...\n"
+            let runArgs = ["-d", "-m", tartPath, "run", vmName!, "--no-graphics", "--dir", "\(configDir.path):ro,tag=build-config"]
 
             print("Executing: screen \(runArgs.joined(separator: " "))")
             try await executeCommand("screen", runArgs)
-            logs += "✓ VM started with secure bootstrap env vars\n\n"
+            logs += "✓ VM started\n\n"
             print("✓ Screen command executed successfully")
 
             // 2.5) Start resource monitor if we have credentials
@@ -142,12 +148,9 @@ public class TartVMManager {
                 print("✓ Resource monitor started")
             }
 
-            // 3) Wait for bootstrap completion (password randomization + cert fetch)
-            print("Step 3: Waiting for VM bootstrap (timeout: 180s)...")
-            logs += "Waiting for VM bootstrap (password randomization + cert fetch)...\n"
-            try await waitForBootstrapComplete(vmName!, timeout: 180)
-            logs += "✓ Bootstrap complete - certs installed, SSH blocked\n\n"
-            print("✓ Bootstrap complete")
+            // 3) Wait for VM to boot and get SSH access (skip bootstrap for now)
+            print("Step 3: Waiting for VM to boot...")
+            logs += "Waiting for VM to boot...\n"
 
             // 4) Wait for IP
             logs += "Waiting for IP address...\n"
@@ -158,6 +161,25 @@ public class TartVMManager {
             logs += "Waiting for SSH...\n"
             try await waitForSSH(ip: vmIP!, timeout: sshTimeout)
             logs += "✓ SSH ready\n\n"
+
+            // 5.5) Run bootstrap with env vars via SSH (fetches certs, randomizes password)
+            if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
+                logs += "Running VM bootstrap with credentials...\n"
+                let bootstrapCmd = """
+                BUILD_ID=\(buildId) WORKER_ID=\(workerId) CONTROLLER_URL=\(controllerURL) API_KEY=\(apiKey) \
+                /usr/local/bin/free-agent-vm-bootstrap 2>&1 || true
+                """
+                let bootstrapOutput = try await sshCommand(ip: vmIP!, command: bootstrapCmd, timeout: 180)
+                logs += bootstrapOutput + "\n"
+
+                // Check if bootstrap succeeded
+                let checkReady = try await sshCommand(ip: vmIP!, command: "test -f /tmp/free-agent-ready && echo 'ready' || echo 'not ready'")
+                if checkReady.trimmingCharacters(in: .whitespacesAndNewlines) == "ready" {
+                    logs += "✓ Bootstrap complete - certs fetched\n\n"
+                } else {
+                    logs += "⚠️  Bootstrap may have failed, continuing anyway\n\n"
+                }
+            }
 
             // 6) Verify Xcode ready (hard fail if missing)
             logs += "Verifying Xcode...\n"

@@ -348,7 +348,7 @@ public actor WorkerService {
             )
 
             // Use baseImageId from controller (fallback to default if not provided)
-            let templateImage = job.baseImageId ?? "ghcr.io/sethwebster/expo-free-agent-base:0.1.23"
+            let templateImage = job.baseImageId ?? "ghcr.io/sethwebster/expo-free-agent-base:0.1.26"
             vmManager = TartVMManager(configuration: vmConfig, templateImage: templateImage)
             print("✓ Tart VM Manager created with template: \(templateImage)")
 
@@ -359,7 +359,7 @@ public actor WorkerService {
                 buildId: job.id,
                 workerId: configuration.workerID,
                 controllerURL: configuration.controllerURL,
-                apiKey: configuration.apiKey
+                apiKey: job.otp  // Pass OTP for VM authentication (not worker API key)
             )
             print("✓ Build execution completed")
 
@@ -568,11 +568,13 @@ public struct BuildJob: Codable, Sendable {
     public let source_url: String
     public let certs_url: String?
     public let baseImageId: String?
+    public let otp: String  // One-time password for VM authentication
 
     enum CodingKeys: String, CodingKey {
         case id
         case platform
         case source_url
+        case otp
         case certs_url
         case baseImageId
     }

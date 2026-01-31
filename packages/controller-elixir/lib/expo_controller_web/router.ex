@@ -71,8 +71,9 @@ defmodule ExpoControllerWeb.Router do
       post "/retry", BuildController, :retry
     end
 
-    # Worker-authenticated build endpoints
+    # VM/Worker-authenticated build endpoints
     scope "/builds/:id" do
+      post "/authenticate", BuildController, :authenticate  # OTP auth (no token required)
       post "/logs", BuildController, :stream_logs
       post "/heartbeat", BuildController, :heartbeat
       post "/telemetry", BuildController, :telemetry

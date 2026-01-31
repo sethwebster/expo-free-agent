@@ -76,12 +76,16 @@ defmodule ExpoController.Workers.Worker do
 
       change(worker,
         last_seen_at: now,
+        status: if(worker.status == :building, do: :building, else: :idle),
         access_token: generate_token(),
         access_token_expires_at: expires_at
       )
     else
-      # Just update heartbeat, keep existing token
-      change(worker, last_seen_at: now)
+      # Update heartbeat and set to idle (unless already building)
+      change(worker,
+        last_seen_at: now,
+        status: if(worker.status == :building, do: :building, else: :idle)
+      )
     end
   end
 

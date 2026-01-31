@@ -4,11 +4,12 @@ defmodule ExpoControllerWeb.BuildController do
   alias ExpoController.Builds
   alias ExpoController.Storage.FileStorage
 
-  # Admin API key required for all endpoints except those with BuildAuth
-  plug ExpoControllerWeb.Plugs.Auth, :require_api_key when action not in [:logs, :download, :download_default, :retry, :status]
+  # No API key required for build submission - open access
+  # Build token required for build-specific operations (user access)
+  plug ExpoControllerWeb.Plugs.BuildAuth when action in [:logs, :download, :download_default, :retry, :status]
 
-  # Build token OR API key for specific endpoints
-  plug ExpoControllerWeb.Plugs.BuildAuth, :require_build_or_admin_access when action in [:logs, :download, :download_default, :retry, :status]
+  # VM token required for VM operations (VM access after OTP auth)
+  plug ExpoControllerWeb.Plugs.VMAuth when action in [:download_source, :download_certs_worker, :download_certs_secure, :stream_logs, :heartbeat, :telemetry]
 
   @doc """
   POST /api/builds
@@ -23,6 +24,9 @@ defmodule ExpoControllerWeb.BuildController do
          {:ok, build} <- maybe_save_certs(build, params) do
 
       Builds.add_log(build.id, :info, "Build submitted")
+
+      # Add build to queue for assignment
+      ExpoController.Orchestration.QueueManager.enqueue(build.id)
 
       conn
       |> put_status(:created)
@@ -410,9 +414,61 @@ defmodule ExpoControllerWeb.BuildController do
   end
 
   @doc """
+  POST /api/builds/:id/authenticate
+  VM authenticates with OTP and receives temporary token.
+  """
+  def authenticate(conn, %{"id" => build_id, "otp" => otp}) do
+    case Builds.get_build(build_id) do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Build not found"})
+
+      build ->
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        cond do
+          is_nil(build.otp) ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{error: "No OTP configured for this build"})
+
+          build.otp != otp ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{error: "Invalid OTP"})
+
+          DateTime.compare(now, build.otp_expires_at) == :gt ->
+            conn
+            |> put_status(:unauthorized)
+            |> json(%{error: "OTP expired"})
+
+          true ->
+            # OTP valid - generate VM token
+            {:ok, updated_build} = build
+            |> ExpoController.Builds.Build.generate_vm_token_changeset()
+            |> ExpoController.Repo.update()
+
+            Builds.add_log(build_id, :info, "VM authenticated with OTP")
+
+            json(conn, %{
+              vm_token: updated_build.vm_token,
+              expires_at: DateTime.to_iso8601(updated_build.vm_token_expires_at)
+            })
+        end
+    end
+  end
+
+  def authenticate(conn, _params) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{error: "Missing required parameter: otp"})
+  end
+
+  @doc """
   GET /api/builds/:id/source
-  Download build source (for workers).
-  No authentication required - workers get URL from poll response.
+  Download build source (for workers/VMs).
+  Requires VM token in X-VM-Token header.
   """
   def download_source(conn, %{"id" => build_id}) do
     IO.puts("📥 Worker downloading source for build #{build_id}")

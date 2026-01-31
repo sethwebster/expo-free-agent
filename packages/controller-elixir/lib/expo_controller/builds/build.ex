@@ -18,6 +18,10 @@ defmodule ExpoController.Builds.Build do
     field :error_message, :string
     field :access_token, :string
     field :last_heartbeat_at, :utc_datetime
+    field :otp, :string
+    field :otp_expires_at, :utc_datetime
+    field :vm_token, :string
+    field :vm_token_expires_at, :utc_datetime
 
     belongs_to :worker, ExpoController.Workers.Worker, type: :string, foreign_key: :worker_id
     has_many :logs, ExpoController.Builds.BuildLog
@@ -38,12 +42,48 @@ defmodule ExpoController.Builds.Build do
       :error_message,
       :access_token,
       :worker_id,
-      :last_heartbeat_at
+      :last_heartbeat_at,
+      :otp,
+      :otp_expires_at,
+      :vm_token,
+      :vm_token_expires_at
     ])
     |> validate_required([:id, :platform])
     |> validate_inclusion(:platform, [:ios, :android])
     |> validate_inclusion(:status, [:pending, :assigned, :building, :completed, :failed, :cancelled])
     |> unique_constraint(:id, name: :builds_pkey)
+  end
+
+  @doc """
+  Generate a one-time password for VM authentication.
+  OTP expires in 10 minutes.
+  """
+  def generate_otp_changeset(build) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    otp_expires_at = DateTime.add(now, 600, :second) # 10 minutes
+
+    change(build,
+      otp: generate_token(),
+      otp_expires_at: otp_expires_at
+    )
+  end
+
+  @doc """
+  Generate a temporary VM token (after OTP authentication).
+  VM token expires in 2 hours.
+  """
+  def generate_vm_token_changeset(build) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    vm_token_expires_at = DateTime.add(now, 7200, :second) # 2 hours
+
+    change(build,
+      vm_token: generate_token(),
+      vm_token_expires_at: vm_token_expires_at
+    )
+  end
+
+  defp generate_token do
+    :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
   end
 
   @doc """
@@ -73,10 +113,19 @@ defmodule ExpoController.Builds.Build do
 
   @doc """
   Changeset for assigning a build to a worker.
+  Generates OTP for VM authentication.
   """
   def assign_changeset(build, worker_id) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    otp_expires_at = DateTime.add(now, 600, :second) # 10 minutes
+
     build
-    |> change(status: :assigned, worker_id: worker_id)
+    |> change(
+      status: :assigned,
+      worker_id: worker_id,
+      otp: generate_token(),
+      otp_expires_at: otp_expires_at
+    )
     |> validate_required([:worker_id])
   end
 

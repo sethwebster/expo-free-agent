@@ -4,7 +4,8 @@ defmodule ExpoControllerWeb.WorkerController do
   alias ExpoController.{Workers, Builds}
   alias ExpoController.Storage.FileStorage
 
-  plug ExpoControllerWeb.Plugs.Auth, :require_api_key when action in [:register, :stats]
+  # Workers self-register without API key
+  plug ExpoControllerWeb.Plugs.Auth, :require_api_key when action in [:stats]
   plug ExpoControllerWeb.Plugs.Auth, :require_worker_token when action in [:unregister]
 
   @doc """
@@ -172,21 +173,30 @@ defmodule ExpoControllerWeb.WorkerController do
         # Update heartbeat and conditionally rotate token
         {:ok, updated_worker} = Workers.heartbeat_worker(worker)
 
-        # Try to assign next pending build
-        case try_assign_build(worker.id) do
-          {:ok, build} ->
+        # Try to assign next pending build from queue
+        case ExpoController.Orchestration.QueueManager.next_for_worker(worker.id) do
+          {:ok, build} when not is_nil(build) ->
             json(conn, %{
               job: %{
                 id: build.id,
                 platform: build.platform,
                 source_url: "/api/builds/#{build.id}/source",
                 certs_url: if(build.certs_path, do: "/api/builds/#{build.id}/certs", else: nil),
-                submitted_at: DateTime.to_iso8601(build.submitted_at)
+                submitted_at: DateTime.to_iso8601(build.submitted_at),
+                otp: build.otp  # VM uses this to authenticate
               },
               access_token: updated_worker.access_token
             })
 
+          {:ok, nil} ->
+            # No builds available
+            json(conn, %{
+              job: nil,
+              access_token: updated_worker.access_token
+            })
+
           {:error, _reason} ->
+            # Assignment failed (worker busy, offline, etc.)
             json(conn, %{
               job: nil,
               access_token: updated_worker.access_token

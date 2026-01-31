@@ -17,9 +17,8 @@ config :expo_controller, ExpoController.Repo,
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
 config :expo_controller, ExpoControllerWeb.Endpoint,
-  # Binding to loopback ipv4 address prevents access from other machines.
-  # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}, port: 4444],
+  # Binding to all interfaces to allow VM access
+  http: [ip: {0, 0, 0, 0}, port: 4444],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,

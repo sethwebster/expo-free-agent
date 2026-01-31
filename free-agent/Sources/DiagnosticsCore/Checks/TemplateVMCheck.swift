@@ -181,39 +181,39 @@ public actor TemplateVMCheck: DiagnosticCheck {
 
     private func parseProgressLine(_ line: String) {
         // tart pull outputs progress like:
-        // "downloading layer sha256:abc123... 45.2 MB / 120.5 MB (37.5%)"
-        // or "extracting layer sha256:abc123..."
+        // "pulling manifest..."
+        // "pulling disk (69.0 GB compressed)..."
+        // "37%"
+        // "pulling NVRAM..."
 
-        if line.contains("downloading") || line.contains("Downloading") {
-            // Try to extract percentage if available
-            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+        let trimmedLine = line.trimmingCharacters(in: .whitespaces)
 
-            // Look for percentage pattern like (37.5%) or (100%)
-            if let _ = trimmedLine.range(of: #"\((\d+(?:\.\d+)?)\s*%\)"#, options: .regularExpression),
-               let regex = try? NSRegularExpression(pattern: #"\((\d+(?:\.\d+)?)\s*%\)"#),
-               let match = regex.firstMatch(in: trimmedLine, range: NSRange(trimmedLine.startIndex..., in: trimmedLine)),
-               match.numberOfRanges > 1 {
-                let percentRange = Range(match.range(at: 1), in: trimmedLine)
-                if let percentRange = percentRange,
-                   let percent = Double(trimmedLine[percentRange]) {
-                    progressHandler?(DownloadProgress(
-                        status: .downloading,
-                        message: trimmedLine,
-                        percentComplete: percent
-                    ))
-                    return
-                }
+        // Check if line is just a percentage (e.g., "37%" or "100%")
+        if let regex = try? NSRegularExpression(pattern: #"^(\d+(?:\.\d+)?)\s*%$"#),
+           let match = regex.firstMatch(in: trimmedLine, range: NSRange(trimmedLine.startIndex..., in: trimmedLine)),
+           match.numberOfRanges > 1 {
+            let percentRange = Range(match.range(at: 1), in: trimmedLine)
+            if let percentRange = percentRange,
+               let percent = Double(trimmedLine[percentRange]) {
+                progressHandler?(DownloadProgress(
+                    status: .downloading,
+                    message: "Downloading base image...",
+                    percentComplete: percent
+                ))
+                return
             }
+        }
 
-            // No percentage found, just report downloading
+        // Check for pulling/downloading messages
+        if trimmedLine.hasPrefix("pulling") || trimmedLine.contains("downloading") || trimmedLine.contains("Downloading") {
             progressHandler?(DownloadProgress(
                 status: .downloading,
                 message: trimmedLine
             ))
-        } else if line.contains("extracting") || line.contains("Extracting") {
+        } else if trimmedLine.contains("extracting") || trimmedLine.contains("Extracting") {
             progressHandler?(DownloadProgress(
                 status: .extracting,
-                message: line.trimmingCharacters(in: .whitespaces)
+                message: trimmedLine
             ))
         }
     }

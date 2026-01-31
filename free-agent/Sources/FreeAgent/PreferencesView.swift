@@ -76,7 +76,7 @@ struct PreferencesView: View {
                         Image(systemName: tab.icon)
                             .font(.system(size: 14, weight: .semibold))
                             .frame(width: 20)
-                            .foregroundColor(selectedTab == tab ? .white : tab.color.opacity(0.8))
+                            .foregroundColor(selectedTab == tab ? .primary : tab.color.opacity(0.8))
                         
                         Text(tab.rawValue)
                             .font(.system(size: 13, weight: .medium))
@@ -92,11 +92,7 @@ struct PreferencesView: View {
                 // Main Window Glass
                 VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
                     .ignoresSafeArea()
-                
-                // Dark Content Layer
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                
+
                 VStack(spacing: 0) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 32) {
@@ -136,15 +132,15 @@ struct PreferencesView: View {
                 Image(systemName: selectedTab.icon)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(selectedTab.color)
-                
+
                 Text(selectedTab.rawValue)
                     .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
             }
-            
+
             Text(descriptionForTab(selectedTab))
                 .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(.secondary)
         }
         .padding(.bottom, 12)
     }
@@ -178,7 +174,7 @@ struct PreferencesView: View {
             
             Text(progress.message)
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.secondary)
             
             if let percent = progress.percentComplete {
                 ProgressView(value: percent, total: 100.0)
@@ -196,9 +192,7 @@ struct PreferencesView: View {
             PremiumTextField(label: "Controller URL", text: $configuration.controllerURL, placeholder: "https://...") {
                 testConnectionButton
             }
-            
-            PremiumTextField(label: "API Key", text: $configuration.apiKey, placeholder: "Your secret key", isSecure: true)
-            
+
             HStack(alignment: .bottom, spacing: 12) {
                 PremiumTextField(label: "Poll Interval", text: Binding(
                     get: { String(configuration.pollIntervalSeconds) },
@@ -208,7 +202,7 @@ struct PreferencesView: View {
                 
                 Text("seconds")
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.secondary)
                     .padding(.bottom, 10)
                 
                 Spacer()
@@ -236,7 +230,7 @@ struct PreferencesView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.white.opacity(0.1))
+            .background(Color.primary.opacity(0.1))
             .cornerRadius(4)
         }
         .buttonStyle(.plain)
@@ -299,20 +293,20 @@ struct PreferencesView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Concurrent Builds")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
-                
+                    .foregroundColor(.secondary)
+
                 HStack {
                     Image(systemName: "square.3.layers.3d")
                         .foregroundColor(.purple)
-                    
+
                     Stepper(value: $configuration.maxConcurrentBuilds, in: 1...4) {
                         Text("\(configuration.maxConcurrentBuilds) Parallel Builds")
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                     }
                 }
                 .padding(12)
-                .background(Color.white.opacity(0.05))
+                .background(Color.primary.opacity(0.05))
                 .cornerRadius(10)
             }
         }
@@ -349,7 +343,7 @@ struct PreferencesView: View {
                 
                 Text("minutes")
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.secondary)
                     .padding(.bottom, 10)
                 
                 Spacer()
@@ -391,7 +385,7 @@ struct PreferencesView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.secondary)
                     .font(.system(size: 12))
 
                     Button("Cancel") {
