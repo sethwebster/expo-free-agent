@@ -113,7 +113,15 @@ async function followLogs(buildId: string, options: LogsCommandOptions): Promise
 async function getHeaders(buildId: string, options: LogsCommandOptions): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
 
-  // Try API key from options
+  // Try build token first (most specific - build-level access)
+  const { getBuildToken } = await import('../build-tokens.js');
+  const token = await getBuildToken(buildId);
+  if (token) {
+    headers['X-Build-Token'] = token;
+    return headers;
+  }
+
+  // Fallback to API key from options
   if (options.apiKey) {
     headers['X-API-Key'] = options.apiKey;
     return headers;
@@ -132,13 +140,6 @@ async function getHeaders(buildId: string, options: LogsCommandOptions): Promise
   if (configKey) {
     headers['X-API-Key'] = configKey;
     return headers;
-  }
-
-  // Try build token
-  const { getBuildToken } = await import('../build-tokens.js');
-  const token = await getBuildToken(buildId);
-  if (token) {
-    headers['X-Build-Token'] = token;
   }
 
   return headers;
