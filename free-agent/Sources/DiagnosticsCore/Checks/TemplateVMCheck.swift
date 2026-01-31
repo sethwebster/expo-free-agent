@@ -211,13 +211,14 @@ public actor TemplateVMCheck: DiagnosticCheck {
         // tart pull outputs progress like:
         // "pulling manifest..."
         // "pulling disk (69.0 GB compressed)..."
-        // "37%"
+        // "[1A[J37%" or "37%" (with optional ANSI escape codes)
         // "pulling NVRAM..."
 
         let trimmedLine = line.trimmingCharacters(in: .whitespaces)
 
-        // Check if line is just a percentage (e.g., "37%" or "100%")
-        if let regex = try? NSRegularExpression(pattern: #"^(\d+(?:\.\d+)?)\s*%$"#),
+        // Check if line contains a percentage (handles ANSI codes like [1A[J23%)
+        // Match any number followed by % anywhere in the line
+        if let regex = try? NSRegularExpression(pattern: #"(\d+(?:\.\d+)?)\s*%"#),
            let match = regex.firstMatch(in: trimmedLine, range: NSRange(trimmedLine.startIndex..., in: trimmedLine)),
            match.numberOfRanges > 1 {
             let percentRange = Range(match.range(at: 1), in: trimmedLine)
@@ -233,7 +234,7 @@ public actor TemplateVMCheck: DiagnosticCheck {
         }
 
         // Check for pulling/downloading messages
-        if trimmedLine.hasPrefix("pulling") || trimmedLine.contains("downloading") || trimmedLine.contains("Downloading") {
+        if trimmedLine.contains("pulling") || trimmedLine.contains("downloading") || trimmedLine.contains("Downloading") {
             progressHandler?(DownloadProgress(
                 status: .downloading,
                 message: trimmedLine
