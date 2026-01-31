@@ -141,31 +141,59 @@ public actor TemplateVMCheck: DiagnosticCheck {
 
         try process.run()
 
-        // Read output asynchronously with proper task management
+        // Read output asynchronously, handling both \n and \r as line terminators
         let outputTask = Task {
-            var lines: [String] = []
+            var buffer = ""
+            var allLines: [String] = []
             do {
-                for try await line in outputHandle.bytes.lines {
-                    lines.append(line)
-                    parseProgressLine(line)
+                for try await byte in outputHandle.bytes {
+                    let char = Character(UnicodeScalar(byte))
+                    if char == "\n" || char == "\r" {
+                        if !buffer.isEmpty {
+                            parseProgressLine(buffer)
+                            allLines.append(buffer)
+                            buffer = ""
+                        }
+                    } else {
+                        buffer.append(char)
+                    }
+                }
+                // Handle any remaining buffer
+                if !buffer.isEmpty {
+                    parseProgressLine(buffer)
+                    allLines.append(buffer)
                 }
             } catch {
                 print("Error reading stdout: \(error)")
             }
-            return lines.joined(separator: "\n")
+            return allLines.joined(separator: "\n")
         }
 
         let errorTask = Task {
-            var lines: [String] = []
+            var buffer = ""
+            var allLines: [String] = []
             do {
-                for try await line in errorHandle.bytes.lines {
-                    lines.append(line)
-                    parseProgressLine(line)
+                for try await byte in errorHandle.bytes {
+                    let char = Character(UnicodeScalar(byte))
+                    if char == "\n" || char == "\r" {
+                        if !buffer.isEmpty {
+                            parseProgressLine(buffer)
+                            allLines.append(buffer)
+                            buffer = ""
+                        }
+                    } else {
+                        buffer.append(char)
+                    }
+                }
+                // Handle any remaining buffer
+                if !buffer.isEmpty {
+                    parseProgressLine(buffer)
+                    allLines.append(buffer)
                 }
             } catch {
                 print("Error reading stderr: \(error)")
             }
-            return lines.joined(separator: "\n")
+            return allLines.joined(separator: "\n")
         }
 
         // Wait for process to complete
