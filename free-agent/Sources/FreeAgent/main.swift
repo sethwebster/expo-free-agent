@@ -46,12 +46,21 @@ if CommandLine.arguments.contains("doctor") {
 // MARK: - Minimal App Delegate
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
+    private var vmSyncService: VMSyncService?
+    private var menu: NSMenu?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 Starting Free Agent")
+
+        // Initialize VM sync service to ensure template exists
+        vmSyncService = VMSyncService()
+        Task {
+            await vmSyncService?.ensureTemplateExists()
+            print("✓ VM template check complete")
+        }
 
         // Create status bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -69,17 +78,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Create menu
         let menu = NSMenu()
-
-        // Launch VM menu item
-        let launchVMItem = NSMenuItem(
-            title: "Launch Test VM",
-            action: #selector(launchTestVM),
-            keyEquivalent: ""
-        )
-        launchVMItem.target = self
-        menu.addItem(launchVMItem)
-
-        menu.addItem(NSMenuItem.separator())
+        menu.delegate = self
+        self.menu = menu
 
         // Preferences menu item
         let settingsItem = NSMenuItem(
@@ -145,6 +145,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } catch {
                 print("✗ Error launching VM: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        // Check if Option key is pressed
+        let optionKeyPressed = NSEvent.modifierFlags.contains(.option)
+
+        // Find if Launch Test VM item already exists
+        let existingItem = menu.items.first { $0.action == #selector(launchTestVM) }
+
+        if optionKeyPressed && existingItem == nil {
+            // Add Launch Test VM item at the top
+            let launchVMItem = NSMenuItem(
+                title: "Launch Test VM",
+                action: #selector(launchTestVM),
+                keyEquivalent: ""
+            )
+            launchVMItem.target = self
+            menu.insertItem(launchVMItem, at: 0)
+            menu.insertItem(NSMenuItem.separator(), at: 1)
+        } else if !optionKeyPressed && existingItem != nil {
+            // Remove Launch Test VM item and its separator
+            if let index = menu.items.firstIndex(where: { $0.action == #selector(launchTestVM) }) {
+                menu.removeItem(at: index)
+                // Remove separator if it's right after
+                if index < menu.items.count && menu.items[index].isSeparatorItem {
+                    menu.removeItem(at: index)
+                }
             }
         }
     }
