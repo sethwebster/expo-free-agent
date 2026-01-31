@@ -131,10 +131,14 @@ public class TartVMManager {
             vmProcess!.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             vmProcess!.arguments = [tartPath, "run", vmName!, "--no-graphics", "--dir", "\(configDir.path):ro,tag=build-config"]
 
-            // Redirect I/O to prevent blocking and avoid terminal interaction
-            vmProcess!.standardInput = FileHandle.nullDevice
-            vmProcess!.standardOutput = FileHandle.nullDevice
-            vmProcess!.standardError = FileHandle.nullDevice
+            // Redirect I/O to pipes (not nullDevice - that causes immediate exit)
+            // Keep pipe handles alive to prevent process termination
+            let inputPipe = Pipe()
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            vmProcess!.standardInput = inputPipe
+            vmProcess!.standardOutput = outputPipe
+            vmProcess!.standardError = errorPipe
 
             print("Executing: \(tartPath) run \(vmName!) --no-graphics --dir \(configDir.path):ro,tag=build-config")
             try vmProcess!.run()
@@ -149,6 +153,11 @@ public class TartVMManager {
                 print("✓ VM process verified running")
             } else {
                 print("✗ VM process already terminated!")
+                // Read any error output
+                let errorData = errorPipe.fileHandleForReading.availableData
+                if let errorMsg = String(data: errorData, encoding: .utf8), !errorMsg.isEmpty {
+                    print("✗ VM error output: \(errorMsg)")
+                }
                 throw VMError.commandFailed("VM process terminated immediately after start")
             }
 
