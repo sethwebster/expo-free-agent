@@ -389,6 +389,25 @@ public actor WorkerService {
             buildPackagePath = try await downloadBuildPackage(job)
             print("✓ Created build config directory")
 
+            // Write versioned bootstrap script
+            guard let bootstrapURL = Bundle.workerCoreResources.url(
+                forResource: "free-agent-bootstrap",
+                withExtension: "sh"
+            ) else {
+                throw WorkerError.resourceNotFound("free-agent-bootstrap.sh")
+            }
+
+            let bootstrapDestination = buildPackagePath!.appendingPathComponent("bootstrap.sh")
+            try FileManager.default.copyItem(at: bootstrapURL, to: bootstrapDestination)
+
+            // Make executable
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: bootstrapDestination.path
+            )
+
+            print("✓ Wrote bootstrap script to \(bootstrapDestination.path)")
+
             // Step 4: Create and launch VM
             print("Step 4: Creating and launching VM...")
 
@@ -425,21 +444,15 @@ public actor WorkerService {
             print("Executing: \(tartPath) run \(vmName) --dir build-config:\(buildPackagePath!.path):ro")
             try runProcess.run()
             print("✓ VM launched with graphics (PID: \(runProcess.processIdentifier))")
-            print("✓ Build config should mount at /Volumes/My Shared Files/build-config")
+            print("✓ Build config mounted at /Volumes/My Shared Files/build-config")
 
-            // TEMPORARY: Abandon build but leave VM open
-            print("⚠️  Abandoning build (VM remains open for testing)")
-            await reportJobAbandoned(job.id, reason: "Testing VM creation and launch")
+            // Wait for VM bootstrap to complete
+            let vmToken = try await waitForVMReady(buildDir: buildPackagePath!, timeout: 300)
+            print("✓ VM bootstrap complete (token: \(vmToken.prefix(8))...)")
 
-            // DO NOT cleanup - leave VM and config directory for testing
-            print("⚠️  VM \(vmName) left running for manual testing")
-            print("⚠️  Config directory preserved at: \(buildPackagePath!.path)")
-
-            // TEMPORARY: Take worker offline after first VM launch
-            print("⚠️  TEMPORARY: Taking worker offline for testing")
-            await stop()
-            print("⚠️  Worker stopped")
-
+            // TODO: Continue with build execution
+            print("⚠️  Build execution not yet implemented")
+            await reportJobAbandoned(job.id, reason: "Build execution not implemented")
             return
 
         } catch {
@@ -641,6 +654,42 @@ public actor WorkerService {
             print("Failed to report job abandonment: \(error)")
         }
     }
+
+    private func waitForVMReady(buildDir: URL, timeout: TimeInterval = 300) async throws -> String {
+        let readyFile = buildDir.appendingPathComponent("vm-ready")
+        let deadline = Date().addingTimeInterval(timeout)
+
+        print("Waiting for VM ready signal at \(readyFile.path)")
+
+        while Date() < deadline {
+            if FileManager.default.fileExists(atPath: readyFile.path) {
+                let data = try Data(contentsOf: readyFile)
+                let response = try JSONDecoder().decode(VMReadyResponse.self, from: data)
+
+                if response.status == "ready" {
+                    guard let token = response.vm_token, !token.isEmpty else {
+                        throw WorkerError.vmBootstrapFailed("VM token missing")
+                    }
+                    print("✓ VM ready (token: \(token.prefix(8))...)")
+                    return token
+                } else if response.status == "failed" {
+                    throw WorkerError.vmBootstrapFailed(response.error ?? "Unknown error")
+                } else {
+                    throw WorkerError.vmBootstrapFailed("Invalid status: \(response.status)")
+                }
+            }
+
+            try await Task.sleep(for: .seconds(1))
+        }
+
+        throw WorkerError.timeout("VM did not signal ready within \(timeout)s")
+    }
+}
+
+struct VMReadyResponse: Codable {
+    let status: String
+    let vm_token: String?
+    let error: String?
 }
 
 // MARK: - Models
@@ -674,6 +723,9 @@ enum WorkerError: Error {
     case uploadFailed(statusCode: Int)
     case downloadFailed
     case buildFailed(reason: String)
+    case resourceNotFound(String)
+    case vmBootstrapFailed(String)
+    case timeout(String)
 }
 
 // MARK: - Data Extension

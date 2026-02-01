@@ -9,7 +9,7 @@
     <!-- Program Configuration -->
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/free-agent-auto-update</string>
+        <string>/usr/local/bin/free-agent-stub.sh</string>
     </array>
 
     <!-- Execution Timing -->
@@ -18,9 +18,9 @@
 
     <!-- Logging -->
     <key>StandardOutPath</key>
-    <string>/tmp/free-agent-bootstrap.log</string>
+    <string>/var/log/free-agent-stub.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/free-agent-bootstrap.log</string>
+    <string>/var/log/free-agent-stub.log</string>
 
     <!-- Environment Variables (populated by Tart --env) -->
     <!-- These are passed from the host via: tart run --env KEY=VALUE -->
