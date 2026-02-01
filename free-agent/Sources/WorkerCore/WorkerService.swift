@@ -392,7 +392,17 @@ public actor WorkerService {
         do {
             // Download build package
             buildPackagePath = try await downloadBuildPackage(job)
-            print("✓ Downloaded build package")
+            print("✓ Created build config directory")
+
+            // TEMPORARY: Stop here and abandon build
+            print("⚠️  Abandoning build (temporary for testing)")
+            await reportJobAbandoned(job.id, reason: "Testing build config creation")
+
+            // Cleanup
+            if let path = buildPackagePath {
+                try? FileManager.default.removeItem(at: path)
+            }
+            return
 
             // NO CERT DOWNLOAD - VM fetches directly via bootstrap now
             print("Skipping cert download - VM will fetch certs securely via bootstrap")
@@ -589,6 +599,35 @@ public actor WorkerService {
             }
         } catch {
             print("Failed to report job failure: \(error)")
+        }
+    }
+
+    private func reportJobAbandoned(_ jobID: String, reason: String) async {
+        // Report abandonment - controller will requeue the build
+        do {
+            let url = URL(string: "\(configuration.controllerURL)/api/workers/abandon")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(configuration.accessToken, forHTTPHeaderField: "X-Worker-Token")
+
+            let payload: [String: Any] = [
+                "build_id": jobID,
+                "worker_id": configuration.workerID ?? "",
+                "reason": reason
+            ]
+
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                print("✓ Reported job abandoned for \(jobID)")
+            } else {
+                print("⚠️  Failed to report abandonment (status \((response as? HTTPURLResponse)?.statusCode ?? -1))")
+            }
+        } catch {
+            print("Failed to report job abandonment: \(error)")
         }
     }
 }
