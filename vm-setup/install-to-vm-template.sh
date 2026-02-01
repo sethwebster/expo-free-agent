@@ -76,11 +76,9 @@ log_info "✓ VM found and stopped"
 # Step 3: Verify required scripts exist
 log_step "Verifying script files..."
 REQUIRED_FILES=(
-    "free-agent-auto-update"
-    "free-agent-vm-bootstrap"
+    "free-agent-stub.sh"
     "install-signing-certs"
     "vm-monitor.sh"
-    "free-agent-run-job"
     "com.expo.free-agent.bootstrap.plist"
     "VERSION"
 )
@@ -145,15 +143,10 @@ copy_file_to_vm() {
     fi
 }
 
-# Auto-update script
-copy_file_to_vm "$SCRIPT_DIR/free-agent-auto-update" "/tmp/free-agent-auto-update" "0755"
-tart exec "$VM_NAME" sudo mv /tmp/free-agent-auto-update /usr/local/bin/
-log_info "✓ Installed free-agent-auto-update"
-
-# Bootstrap script
-copy_file_to_vm "$SCRIPT_DIR/free-agent-vm-bootstrap" "/tmp/free-agent-vm-bootstrap" "0755"
-tart exec "$VM_NAME" sudo mv /tmp/free-agent-vm-bootstrap /usr/local/bin/
-log_info "✓ Installed free-agent-vm-bootstrap"
+# Stub script (minimal security, then execs worker-provided bootstrap)
+copy_file_to_vm "$SCRIPT_DIR/free-agent-stub.sh" "/tmp/free-agent-stub.sh" "0755"
+tart exec "$VM_NAME" sudo mv /tmp/free-agent-stub.sh /usr/local/bin/
+log_info "✓ Installed free-agent-stub.sh"
 
 # Cert installer
 copy_file_to_vm "$SCRIPT_DIR/install-signing-certs" "/tmp/install-signing-certs" "0755"
@@ -211,7 +204,7 @@ log_step "Verifying installation..."
 VERIFICATION_FAILED=false
 
 # Check scripts exist with correct permissions
-for script in free-agent-auto-update free-agent-vm-bootstrap install-signing-certs free-agent-run-job vm-monitor.sh; do
+for script in free-agent-stub.sh install-signing-certs free-agent-run-job vm-monitor.sh; do
     if ! tart exec "$VM_NAME" test -x "/usr/local/bin/$script"; then
         log_error "Script not executable: $script"
         VERIFICATION_FAILED=true
@@ -277,17 +270,18 @@ log_info "✓ VM stopped cleanly"
 # Success!
 echo ""
 log_info "=== Installation Complete ==="
-log_info "VM template '$VM_NAME' is now ready for secure certificate handling"
+log_info "VM template '$VM_NAME' is now ready with extensible bootstrap architecture"
+echo ""
+log_info "Architecture:"
+echo "  • VM contains minimal security stub (free-agent-stub.sh)"
+echo "  • Stub randomizes password, deletes SSH keys, then execs worker bootstrap"
+echo "  • Worker provides versioned bootstrap.sh via mount"
+echo "  • Bootstrap updates without VM image rebuilds"
 echo ""
 log_info "Next steps:"
 echo "  1. Test the template:"
 echo "     ./vm-setup/test-vm-bootstrap.sh $VM_NAME"
 echo ""
-echo "  2. Clone to production template:"
-echo "     tart clone $VM_NAME expo-free-agent-tahoe-26.2-xcode-expo-54-secure"
+echo "  2. Push to registry via release script"
 echo ""
-echo "  3. Update controller BASE_IMAGE_ID:"
-echo "     export BASE_IMAGE_ID=expo-free-agent-tahoe-26.2-xcode-expo-54-secure"
-echo ""
-log_info "Secure bootstrap will activate on next VM boot with env vars:"
-log_info "  BUILD_ID, WORKER_ID, API_KEY, CONTROLLER_URL"
+log_info "On boot, stub will exec /Volumes/My Shared Files/build-config/bootstrap.sh"
