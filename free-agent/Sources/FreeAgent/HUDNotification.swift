@@ -211,20 +211,24 @@ class HUDNotificationManager {
 
         guard let window = currentHUD else { return }
 
-        // Mark as dismissed to prevent updates during animation
+        // Mark as dismissed to block any updates
         viewModel?.isDismissed = true
 
-        NSAnimationContext.runAnimationGroup({ context in
+        // Clear manager's references immediately (prevents re-entrant dismiss)
+        let vmToCleanup = viewModel
+        viewModel = nil
+        currentHUD = nil
+
+        // Animation block and completion keep window/viewModel alive
+        NSAnimationContext.runAnimationGroup({ [vmToCleanup] context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             window.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            Task { @MainActor [weak self] in
-                window.close()
-                // Clear references only AFTER animation and close complete
-                self?.viewModel = nil
-                self?.currentHUD = nil
-            }
+            _ = vmToCleanup  // Keep alive during animation
+        }, completionHandler: { [vmToCleanup] in
+            // Synchronous cleanup on main thread
+            window.close()
+            _ = vmToCleanup  // Released when block exits
         })
     }
 }
