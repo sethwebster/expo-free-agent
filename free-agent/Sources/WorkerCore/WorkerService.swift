@@ -462,49 +462,28 @@ public actor WorkerService {
 
     private func downloadBuildPackage(_ job: BuildJob) async throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
-        let packagePath = tempDir.appendingPathComponent("build-\(job.id).zip")
+        let buildDir = tempDir.appendingPathComponent("fa-build-\(job.id)")
 
-        // Use source_url from job (relative URL like /api/builds/{id}/source)
-        let url = URL(string: "\(configuration.controllerURL)\(job.source_url)")!
-        print("Downloading build package from: \(url.absoluteString)")
-
-        var request = URLRequest(url: url)
-        // Use worker token for authentication (not API key - that was removed)
-        if let workerToken = configuration.accessToken {
-            request.setValue(workerToken, forHTTPHeaderField: "X-Worker-Token")
-            print("Using worker token for source download")
-        } else {
-            print("⚠️  No worker token available")
+        // Create build directory
+        if FileManager.default.fileExists(atPath: buildDir.path) {
+            try FileManager.default.removeItem(at: buildDir)
         }
+        try FileManager.default.createDirectory(at: buildDir, withIntermediateDirectories: true)
 
-        let (localURL, response) = try await URLSession.shared.download(for: request)
+        // Create build-config.json
+        let buildConfig: [String: Any] = [
+            "build_token": job.otp,
+            "build_id": job.id,
+            "controller_url": configuration.controllerURL,
+            "platform": job.platform
+        ]
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            print("✗ Download failed: Invalid response type")
-            throw WorkerError.downloadFailed
-        }
+        let configPath = buildDir.appendingPathComponent("build-config.json")
+        let configData = try JSONSerialization.data(withJSONObject: buildConfig, options: .prettyPrinted)
+        try configData.write(to: configPath)
 
-        print("Download response status: \(httpResponse.statusCode)")
-
-        guard httpResponse.statusCode == 200 else {
-            print("✗ Download failed with status \(httpResponse.statusCode)")
-            // Try to read error body
-            if let data = try? Data(contentsOf: localURL),
-               let errorBody = String(data: data, encoding: .utf8) {
-                print("Error response: \(errorBody)")
-            }
-            throw WorkerError.downloadFailed
-        }
-
-        // Remove existing file if present
-        if FileManager.default.fileExists(atPath: packagePath.path) {
-            try FileManager.default.removeItem(at: packagePath)
-        }
-
-        try FileManager.default.moveItem(at: localURL, to: packagePath)
-        print("✓ Downloaded build package to \(packagePath.path)")
-
-        return packagePath
+        print("✓ Created build config at \(configPath.path)")
+        return buildDir
     }
 
 
