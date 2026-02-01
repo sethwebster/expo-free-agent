@@ -493,6 +493,12 @@ public actor WorkerService {
         try configData.write(to: configPath)
 
         print("✓ Created build config at \(configPath.path)")
+
+        // Log build config contents
+        if let configString = String(data: configData, encoding: .utf8) {
+            print("Build config contents:\n\(configString)")
+        }
+
         return buildDir
     }
 
