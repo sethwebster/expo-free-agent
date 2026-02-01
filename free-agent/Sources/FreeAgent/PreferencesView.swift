@@ -1,6 +1,7 @@
 import SwiftUI
 import WorkerCore
 import DiagnosticsCore
+import ServiceManagement
 
 struct PreferencesView: View {
     @State private var configuration: WorkerConfiguration
@@ -10,6 +11,7 @@ struct PreferencesView: View {
 
     @State private var showingSaveConfirmation = false
     @State private var selectedTab: Tab = .statistics
+    @State private var startAtLogin = false
 
     private var hasChanges: Bool {
         configuration != initialConfiguration
@@ -61,6 +63,27 @@ struct PreferencesView: View {
         case checking
         case success
         case failed(String)
+    }
+
+    private func checkLoginItemStatus() {
+        if #available(macOS 13.0, *) {
+            startAtLogin = SMAppService.mainApp.status == .enabled
+        }
+    }
+
+    private func toggleLoginItem(enabled: Bool) {
+        if #available(macOS 13.0, *) {
+            do {
+                if enabled {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                print("Failed to toggle login item: \(error)")
+                startAtLogin = !enabled
+            }
+        }
     }
 
     var body: some View {
@@ -122,6 +145,9 @@ struct PreferencesView: View {
             }
         }
         .frame(minWidth: 800, minHeight: 600)
+        .onAppear {
+            checkLoginItemStatus()
+        }
     }
 
     private var headerView: some View {
@@ -326,6 +352,10 @@ struct PreferencesView: View {
     private var workerSection: some View {
         PremiumSectionCard(title: "Worker Behavior", icon: "bolt.fill", color: .yellow) {
             VStack(spacing: 16) {
+                PremiumToggle(label: "Start at Login", isOn: $startAtLogin, description: "Launch Free Agent when you log in")
+                    .onChange(of: startAtLogin) { _, newValue in
+                        toggleLoginItem(enabled: newValue)
+                    }
                 PremiumToggle(label: "Auto-start on launch", isOn: $configuration.autoStart)
                 PremiumToggle(label: "Only run when system is idle", isOn: $configuration.onlyWhenIdle, description: "Pause if user activity is detected")
             }
