@@ -50,6 +50,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var vmSyncService: VMSyncService?
+    private var workerService: WorkerService?
     private var menu: NSMenu?
     private var lastProgressUpdateTime: Date?
     private var lastProgressPercent: Double?
@@ -118,6 +119,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             await vmSyncService?.ensureTemplateExists()
             print("✓ VM template check complete")
+
+            // Start worker service
+            let config = WorkerConfiguration.load()
+            let service = WorkerService(configuration: config)
+            await service.start()
+
+            // Store reference to prevent deallocation
+            await MainActor.run {
+                self.workerService = service
+            }
         }
 
         // Create status bar item
@@ -162,6 +173,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         print("✓ Minimal app initialized")
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Stop worker service before terminating
+        if let service = workerService {
+            Task {
+                await service.stop()
+            }
+        }
     }
 
     @objc private func launchTestVM() {
