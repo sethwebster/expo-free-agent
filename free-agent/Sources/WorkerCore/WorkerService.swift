@@ -390,7 +390,7 @@ public actor WorkerService {
             print("✓ Created build config directory")
 
             // Write versioned bootstrap script
-            guard let bootstrapURL = Bundle.workerCoreResources.url(
+            guard let bootstrapURL = Bundle.module.url(
                 forResource: "free-agent-bootstrap",
                 withExtension: "sh"
             ) else {

@@ -29,7 +29,10 @@ let package = Package(
         .target(
             name: "WorkerCore",
             dependencies: ["BuildVM"],
-            path: "Sources/WorkerCore"
+            path: "Sources/WorkerCore",
+            resources: [
+                .copy("Resources/free-agent-bootstrap.sh")
+            ]
         ),
         .target(
             name: "DiagnosticsCore",
