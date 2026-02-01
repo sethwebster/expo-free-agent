@@ -117,7 +117,6 @@ defmodule ExpoController.Builds do
     |> Repo.update_all(set: [
       status: :pending,
       worker_id: nil,
-      assigned_at: nil,
       updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
     ])
   end
