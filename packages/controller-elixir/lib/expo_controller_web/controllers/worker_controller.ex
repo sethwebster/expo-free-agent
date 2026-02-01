@@ -6,7 +6,7 @@ defmodule ExpoControllerWeb.WorkerController do
 
   # Workers self-register without API key
   plug ExpoControllerWeb.Plugs.Auth, :require_api_key when action in [:stats]
-  plug ExpoControllerWeb.Plugs.Auth, :require_worker_token when action in [:unregister]
+  plug ExpoControllerWeb.Plugs.Auth, :require_worker_token when action in [:unregister, :abandon]
 
   @doc """
   POST /api/workers/register
@@ -128,6 +128,35 @@ defmodule ExpoControllerWeb.WorkerController do
         conn
         |> put_status(:internal_server_error)
         |> json(%{error: "Failed to unregister worker"})
+    end
+  end
+
+  @doc """
+  POST /api/workers/abandon
+  Worker abandons a build (requeues it for another worker).
+  Requires X-Worker-Token header (validated by auth plug).
+  """
+  def abandon(conn, %{"build_id" => build_id, "reason" => reason} = params) do
+    worker_id = params["worker_id"]
+
+    IO.puts("Worker #{worker_id} abandoning build #{build_id}: #{reason}")
+
+    case Builds.requeue_build(build_id) do
+      {:ok, _build} ->
+        json(conn, %{
+          success: true,
+          message: "Build requeued successfully"
+        })
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Build not found"})
+
+      {:error, _changeset} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{error: "Failed to requeue build"})
     end
   end
 

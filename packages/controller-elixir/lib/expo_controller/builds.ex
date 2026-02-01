@@ -122,6 +122,26 @@ defmodule ExpoController.Builds do
   end
 
   @doc """
+  Requeues a build that was abandoned by a worker.
+  Sets status back to pending and clears worker assignment.
+  """
+  def requeue_build(build_id) do
+    case get_build(build_id) do
+      nil ->
+        {:error, :not_found}
+
+      build ->
+        build
+        |> Ecto.Changeset.change(
+          status: :pending,
+          worker_id: nil,
+          updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+        |> Repo.update()
+    end
+  end
+
+  @doc """
   Records a heartbeat for a build.
   """
   def record_heartbeat(build_id) do

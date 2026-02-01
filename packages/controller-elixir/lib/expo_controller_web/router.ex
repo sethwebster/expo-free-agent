@@ -55,6 +55,7 @@ defmodule ExpoControllerWeb.Router do
     post "/workers/upload", WorkerController, :upload_result  # TS compatibility alias
     post "/workers/fail", WorkerController, :report_failure
     post "/workers/heartbeat", WorkerController, :heartbeat
+    post "/workers/abandon", WorkerController, :abandon
     get "/workers/:id/stats", WorkerController, :stats
 
     # Build endpoints
