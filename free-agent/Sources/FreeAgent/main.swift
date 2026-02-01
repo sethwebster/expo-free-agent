@@ -55,6 +55,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lastProgressUpdateTime: Date?
     private var lastProgressPercent: Double?
     private let appState = AppState.shared
+    private var workerStatus: WorkerStatus = .stopped
+    private var workerID: String?
+
+    enum WorkerStatus {
+        case stopped
+        case connecting
+        case online
+        case offline
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 Starting Free Agent")
@@ -121,6 +130,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             print("✓ VM template check complete")
 
             // Start worker service
+            await MainActor.run {
+                self.workerStatus = .connecting
+                self.buildMenu()
+            }
+
             let config = WorkerConfiguration.load()
             let service = WorkerService(configuration: config)
             await service.start()
@@ -128,6 +142,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Store reference to prevent deallocation
             await MainActor.run {
                 self.workerService = service
+                self.workerStatus = .online
+                self.workerID = config.workerID
+                self.buildMenu()
             }
         }
 
@@ -150,24 +167,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         self.menu = menu
 
-        // Preferences menu item
-        let settingsItem = NSMenuItem(
-            title: "Preferences...",
-            action: #selector(showSettings),
-            keyEquivalent: ","
-        )
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // Quit menu item
-        let quitItem = NSMenuItem(
-            title: "Quit",
-            action: #selector(NSApplication.terminate(_:)),
-            keyEquivalent: "q"
-        )
-        menu.addItem(quitItem)
+        // Build initial menu
+        buildMenu()
 
         // Attach menu to status item
         statusItem.menu = menu
@@ -178,6 +179,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Stop worker service before terminating
         if let service = workerService {
+            workerStatus = .stopped
+            buildMenu()
             Task {
                 await service.stop()
             }
@@ -251,6 +254,108 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // Remove separator if it's right after
                 if index < menu.items.count && menu.items[index].isSeparatorItem {
                     menu.removeItem(at: index)
+                }
+            }
+        }
+    }
+
+    private func buildMenu() {
+        guard let menu = menu else { return }
+        menu.removeAllItems()
+
+        // Status item
+        let statusText = statusMenuTitle()
+        let statusItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
+        statusItem.isEnabled = false
+        menu.addItem(statusItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Start/Stop Worker
+        if workerStatus == .stopped {
+            let startItem = NSMenuItem(
+                title: "Start Worker",
+                action: #selector(startWorker),
+                keyEquivalent: ""
+            )
+            startItem.target = self
+            menu.addItem(startItem)
+        } else {
+            let stopItem = NSMenuItem(
+                title: "Stop Worker",
+                action: #selector(stopWorker),
+                keyEquivalent: ""
+            )
+            stopItem.target = self
+            menu.addItem(stopItem)
+        }
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Preferences
+        let settingsItem = NSMenuItem(
+            title: "Preferences...",
+            action: #selector(showSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Quit
+        let quitItem = NSMenuItem(
+            title: "Quit",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
+        menu.addItem(quitItem)
+    }
+
+    private func statusMenuTitle() -> String {
+        switch workerStatus {
+        case .stopped:
+            return "🔴 Stopped"
+        case .connecting:
+            return "🟡 Connecting"
+        case .online:
+            if let id = workerID {
+                return "🟢 Online [\(id.prefix(8))]"
+            }
+            return "🟢 Online"
+        case .offline:
+            return "Offline"
+        }
+    }
+
+    @objc private func startWorker() {
+        Task {
+            workerStatus = .connecting
+            buildMenu()
+
+            let config = WorkerConfiguration.load()
+            let service = WorkerService(configuration: config)
+            await service.start()
+
+            // Store reference
+            await MainActor.run {
+                self.workerService = service
+                self.workerStatus = .online
+                self.workerID = config.workerID
+                buildMenu()
+            }
+        }
+    }
+
+    @objc private func stopWorker() {
+        Task {
+            if let service = workerService {
+                await service.stop()
+                await MainActor.run {
+                    self.workerService = nil
+                    self.workerStatus = .stopped
+                    self.workerID = nil
+                    buildMenu()
                 }
             }
         }
