@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.expo.virtiofs-automount</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>
+            # Wait for virtiofs to be available
+            for i in $(seq 1 30); do
+                if mount_virtiofs 2>&amp;1 | grep -q "usage"; then
+                    break
+                fi
+                sleep 1
+            done
+
+            # Create mount point
+            mkdir -p "/Volumes/My Shared Folders"
+
+            # Mount build-config if available
+            mount_virtiofs build-config "/Volumes/My Shared Folders/build-config" || true
+        </string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/virtiofs-automount.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/virtiofs-automount.log</string>
+</dict>
+</plist>

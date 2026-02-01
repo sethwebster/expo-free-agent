@@ -1,5 +1,4 @@
 import Foundation
-import Virtualization
 
 @available(macOS 14.0, *)
 public class VMManager: NSObject {

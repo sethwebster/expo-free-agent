@@ -221,12 +221,11 @@ class HUDNotificationManager {
         }, completionHandler: { [weak self] in
             Task { @MainActor [weak self] in
                 window.close()
-                // Only nil the viewModel AFTER window is closed
+                // Clear references only AFTER animation and close complete
                 self?.viewModel = nil
+                self?.currentHUD = nil
             }
         })
-
-        currentHUD = nil
     }
 }
 

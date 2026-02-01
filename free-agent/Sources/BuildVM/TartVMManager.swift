@@ -187,29 +187,11 @@ public class TartVMManager {
             vmIP = try await waitForIP(vmName!, timeout: ipTimeout)
             logs += "✓ IP: \(vmIP!)\n\n"
 
-            // 5) Wait for SSH ready
-            logs += "Waiting for SSH...\n"
-            try await waitForSSH(ip: vmIP!, timeout: sshTimeout)
-            logs += "✓ SSH ready\n\n"
-
-            // 5.5) Run bootstrap with env vars via SSH (fetches certs, randomizes password)
-            if let buildId = buildId, let workerId = workerId, let controllerURL = controllerURL, let apiKey = apiKey {
-                logs += "Running VM bootstrap with credentials...\n"
-                let bootstrapCmd = """
-                BUILD_ID=\(buildId) WORKER_ID=\(workerId) CONTROLLER_URL=\(controllerURL) API_KEY=\(apiKey) \
-                /usr/local/bin/free-agent-vm-bootstrap 2>&1 || true
-                """
-                let bootstrapOutput = try await sshCommand(ip: vmIP!, command: bootstrapCmd, timeout: 180)
-                logs += bootstrapOutput + "\n"
-
-                // Check if bootstrap succeeded
-                let checkReady = try await sshCommand(ip: vmIP!, command: "test -f /tmp/free-agent-ready && echo 'ready' || echo 'not ready'")
-                if checkReady.trimmingCharacters(in: .whitespacesAndNewlines) == "ready" {
-                    logs += "✓ Bootstrap complete - certs fetched\n\n"
-                } else {
-                    logs += "⚠️  Bootstrap may have failed, continuing anyway\n\n"
-                }
-            }
+            // 5) Wait for bootstrap completion (LaunchDaemon runs automatically on boot)
+            // Bootstrap reads config from virtiofs mount at /Volumes/My Shared Folders/build-config/config
+            // It randomizes password, deletes SSH keys, fetches certs, then creates /tmp/free-agent-ready
+            logs += "Waiting for bootstrap completion...\n"
+            try await waitForBootstrapComplete(vmName!, timeout: 300)
 
             // 6) Verify Xcode ready (hard fail if missing)
             logs += "Verifying Xcode...\n"

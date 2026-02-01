@@ -33,7 +33,7 @@ set -o pipefail
 LOG_FILE="/tmp/free-agent-bootstrap.log"
 READY_SIGNAL="/tmp/free-agent-ready"
 CERTS_FILE="/tmp/certs-secure.json"
-CONFIG_FILE="/Volumes/My Shared Files/build-config.json"
+CONFIG_FILE="/Volumes/My Shared Folders/build-config/config"
 MAX_RETRIES=3
 RETRY_DELAYS=(5 15 45)  # Exponential backoff: 5s, 15s, 45s
 
@@ -103,29 +103,37 @@ log "Phase 1: Security lockdown complete"
 # Phase 2: Load Configuration
 # ========================================
 
-log "Phase 2: Loading configuration from $CONFIG_FILE..."
+log "Phase 2: Loading configuration..."
 
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    error_exit "Configuration file not found: $CONFIG_FILE" 1
-fi
+# Check if env vars are already set (passed via SSH from TartVMManager)
+if [[ -n "$BUILD_ID" ]] && [[ -n "$CONTROLLER_URL" ]] && [[ -n "$OTP" ]]; then
+    log "✓ Configuration loaded from environment variables"
+else
+    # Fallback: Load from mounted config file
+    log "Loading configuration from $CONFIG_FILE..."
 
-# Validate JSON
-if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
-    error_exit "Invalid JSON in configuration file" 1
-fi
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        error_exit "Configuration file not found: $CONFIG_FILE (and env vars not set)" 1
+    fi
 
-# Extract required fields
-BUILD_ID=$(jq -r '.buildId // empty' "$CONFIG_FILE")
-CONTROLLER_URL=$(jq -r '.controllerUrl // empty' "$CONFIG_FILE")
-OTP=$(jq -r '.otp // empty' "$CONFIG_FILE")
+    # Validate JSON
+    if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+        error_exit "Invalid JSON in configuration file" 1
+    fi
 
-MISSING_FIELDS=()
-[[ -z "$BUILD_ID" ]] && MISSING_FIELDS+=("buildId")
-[[ -z "$CONTROLLER_URL" ]] && MISSING_FIELDS+=("controllerUrl")
-[[ -z "$OTP" ]] && MISSING_FIELDS+=("otp")
+    # Extract required fields
+    BUILD_ID=$(jq -r '.buildId // empty' "$CONFIG_FILE")
+    CONTROLLER_URL=$(jq -r '.controllerUrl // empty' "$CONFIG_FILE")
+    OTP=$(jq -r '.otp // empty' "$CONFIG_FILE")
 
-if [[ ${#MISSING_FIELDS[@]} -gt 0 ]]; then
-    error_exit "Missing required fields in config: ${MISSING_FIELDS[*]}" 1
+    MISSING_FIELDS=()
+    [[ -z "$BUILD_ID" ]] && MISSING_FIELDS+=("buildId")
+    [[ -z "$CONTROLLER_URL" ]] && MISSING_FIELDS+=("controllerUrl")
+    [[ -z "$OTP" ]] && MISSING_FIELDS+=("otp")
+
+    if [[ ${#MISSING_FIELDS[@]} -gt 0 ]]; then
+        error_exit "Missing required fields in config: ${MISSING_FIELDS[*]}" 1
+    fi
 fi
 
 # Validate format to prevent shell injection

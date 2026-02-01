@@ -176,19 +176,35 @@ copy_file_to_vm "$SCRIPT_DIR/VERSION" "/tmp/free-agent-version" "0644"
 tart exec "$VM_NAME" sudo mv /tmp/free-agent-version /usr/local/etc/free-agent-version
 log_info "✓ Installed VERSION file"
 
-# Step 7: Install LaunchDaemon
-log_step "Installing LaunchDaemon..."
+# Step 7: Install LaunchDaemons
+log_step "Installing LaunchDaemons..."
+
+# Bootstrap daemon
 copy_file_to_vm "$SCRIPT_DIR/com.expo.free-agent.bootstrap.plist" "/tmp/com.expo.free-agent.bootstrap.plist" "0644"
 tart exec "$VM_NAME" sudo mv /tmp/com.expo.free-agent.bootstrap.plist /Library/LaunchDaemons/
 tart exec "$VM_NAME" sudo chown root:wheel /Library/LaunchDaemons/com.expo.free-agent.bootstrap.plist
-log_info "✓ LaunchDaemon installed"
 
-# Step 8: Load LaunchDaemon
-log_step "Loading LaunchDaemon..."
-tart exec "$VM_NAME" sudo launchctl load /Library/LaunchDaemons/com.expo.free-agent.bootstrap.plist || {
-    log_warn "LaunchDaemon load failed - may already be loaded or will auto-load on next boot"
+# Virtiofs auto-mount daemon
+copy_file_to_vm "$SCRIPT_DIR/com.expo.virtiofs-automount.plist" "/tmp/com.expo.virtiofs-automount.plist" "0644"
+tart exec "$VM_NAME" sudo mv /tmp/com.expo.virtiofs-automount.plist /Library/LaunchDaemons/
+tart exec "$VM_NAME" sudo chown root:wheel /Library/LaunchDaemons/com.expo.virtiofs-automount.plist
+
+log_info "✓ LaunchDaemons installed"
+
+# Step 8: Load LaunchDaemons
+log_step "Loading LaunchDaemons..."
+
+# Load virtiofs automount first (bootstrap depends on it)
+tart exec "$VM_NAME" sudo launchctl load /Library/LaunchDaemons/com.expo.virtiofs-automount.plist || {
+    log_warn "Virtiofs automount LaunchDaemon load failed - will auto-load on next boot"
 }
-log_info "✓ LaunchDaemon configured"
+
+# Load bootstrap daemon
+tart exec "$VM_NAME" sudo launchctl load /Library/LaunchDaemons/com.expo.free-agent.bootstrap.plist || {
+    log_warn "Bootstrap LaunchDaemon load failed - may already be loaded or will auto-load on next boot"
+}
+
+log_info "✓ LaunchDaemons configured"
 
 # Step 9: Verify installation
 log_step "Verifying installation..."
@@ -208,9 +224,14 @@ if ! tart exec "$VM_NAME" test -f /usr/local/etc/free-agent-version; then
     VERIFICATION_FAILED=true
 fi
 
-# Check LaunchDaemon
+# Check LaunchDaemons
 if ! tart exec "$VM_NAME" test -f /Library/LaunchDaemons/com.expo.free-agent.bootstrap.plist; then
-    log_error "LaunchDaemon plist not found"
+    log_error "Bootstrap LaunchDaemon plist not found"
+    VERIFICATION_FAILED=true
+fi
+
+if ! tart exec "$VM_NAME" test -f /Library/LaunchDaemons/com.expo.virtiofs-automount.plist; then
+    log_error "Virtiofs automount LaunchDaemon plist not found"
     VERIFICATION_FAILED=true
 fi
 
@@ -233,8 +254,8 @@ echo ""
 echo "Version:"
 cat /usr/local/etc/free-agent-version || echo "WARNING: Version file not found"
 echo ""
-echo "LaunchDaemon:"
-ls -lh /Library/LaunchDaemons/com.expo.free-agent.bootstrap.plist
+echo "LaunchDaemons:"
+ls -lh /Library/LaunchDaemons/com.expo.*.plist
 echo ""
 echo "Dependencies:"
 which jq || echo "WARNING: jq not found"
