@@ -107,10 +107,19 @@ defmodule ExpoController.Builds do
   @doc """
   Reassigns all active builds from a worker back to pending status.
   Called when a worker gracefully shuts down.
-  Returns count of reassigned builds.
+  Returns {count, build_ids}.
   """
   def reassign_worker_builds(worker_id) do
-    from(b in Build,
+    # Get build IDs before updating (for re-enqueueing)
+    build_ids = from(b in Build,
+      where: b.worker_id == ^worker_id,
+      where: b.status in [:assigned, :building],
+      select: b.id
+    )
+    |> Repo.all()
+
+    # Update all builds
+    {count, _} = from(b in Build,
       where: b.worker_id == ^worker_id,
       where: b.status in [:assigned, :building]
     )
@@ -119,6 +128,8 @@ defmodule ExpoController.Builds do
       worker_id: nil,
       updated_at: DateTime.utc_now() |> DateTime.truncate(:second)
     ])
+
+    {count, build_ids}
   end
 
   @doc """

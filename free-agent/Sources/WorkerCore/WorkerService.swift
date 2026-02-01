@@ -192,11 +192,6 @@ public actor WorkerService {
             throw WorkerError.buildFailed(reason: "Registration failed with status \(httpResponse.statusCode): \(body)")
         }
 
-        // Debug: Print raw JSON response
-        if let rawJson = String(data: data, encoding: .utf8) {
-            print("Registration response JSON: \(rawJson)")
-        }
-
         // Controller returns { id, access_token, status } - save both
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let assignedId = json["id"] as? String,
@@ -390,52 +385,62 @@ public actor WorkerService {
         var vmManager: TartVMManager?
 
         do {
-            // Download build package
+            // Step 3: Create build config directory
             buildPackagePath = try await downloadBuildPackage(job)
             print("✓ Created build config directory")
 
-            // TEMPORARY: Stop here and abandon build
-            print("⚠️  Abandoning build (temporary for testing)")
-            await reportJobAbandoned(job.id, reason: "Testing build config creation")
-
-            // Cleanup
-            if let path = buildPackagePath {
-                try? FileManager.default.removeItem(at: path)
-            }
-            return
-
-            // NO CERT DOWNLOAD - VM fetches directly via bootstrap now
-            print("Skipping cert download - VM will fetch certs securely via bootstrap")
-
-            // Create VM and execute build
-            let vmConfig = VMConfiguration(
-                maxCPUPercent: configuration.maxCPUPercent,
-                maxMemoryGB: configuration.maxMemoryGB,
-                vmDiskSizeGB: configuration.vmDiskSizeGB,
-                reuseVMs: configuration.reuseVMs,
-                cleanupAfterBuild: configuration.cleanupAfterBuild,
-                buildTimeoutMinutes: configuration.buildTimeoutMinutes
-            )
+            // Step 4: Create and launch VM
+            print("Step 4: Creating and launching VM...")
 
             // Use baseImageId from controller (fallback to default if not provided)
             let templateImage = job.baseImageId ?? "ghcr.io/sethwebster/expo-free-agent-base:0.1.27"
-            vmManager = TartVMManager(configuration: vmConfig, templateImage: templateImage)
-            print("✓ Tart VM Manager created with template: \(templateImage)")
+            let tartPath = "/opt/homebrew/bin/tart"
 
-            let buildResult = try await vmManager!.executeBuild(
-                sourceCodePath: buildPackagePath!,
-                signingCertsPath: nil, // VM fetches via API now
-                buildTimeout: TimeInterval(configuration.buildTimeoutMinutes * 60),
-                buildId: job.id,
-                workerId: configuration.workerID,
-                controllerURL: configuration.controllerURL,
-                apiKey: job.otp  // Pass OTP for VM authentication (not worker API key)
-            )
-            print("✓ Build execution completed")
+            // Clone VM
+            let jobID = UUID().uuidString.prefix(8)
+            let vmName = "fa-\(jobID)"
+            print("Cloning template \(templateImage) to \(vmName)...")
 
-            // Upload results
-            try await uploadBuildResult(job.id, result: buildResult)
-            print("✓ Results uploaded")
+            let cloneProcess = Process()
+            cloneProcess.executableURL = URL(fileURLWithPath: tartPath)
+            cloneProcess.arguments = ["clone", templateImage, vmName]
+            try cloneProcess.run()
+            cloneProcess.waitUntilExit()
+
+            guard cloneProcess.terminationStatus == 0 else {
+                throw WorkerError.buildFailed(reason: "Failed to clone VM template")
+            }
+            print("✓ VM cloned: \(vmName)")
+
+            // Launch VM with graphics and build config mounted
+            print("Launching VM with graphics and build config mounted...")
+            let runProcess = Process()
+            runProcess.executableURL = URL(fileURLWithPath: tartPath)
+            runProcess.arguments = [
+                "run",
+                vmName,
+                "--dir", "build-config:\(buildPackagePath!.path):ro"
+            ]
+
+            print("Executing: \(tartPath) run \(vmName) --dir build-config:\(buildPackagePath!.path):ro")
+            try runProcess.run()
+            print("✓ VM launched with graphics (PID: \(runProcess.processIdentifier))")
+            print("✓ Build config should mount at /Volumes/My Shared Files/build-config")
+
+            // TEMPORARY: Abandon build but leave VM open
+            print("⚠️  Abandoning build (VM remains open for testing)")
+            await reportJobAbandoned(job.id, reason: "Testing VM creation and launch")
+
+            // DO NOT cleanup - leave VM and config directory for testing
+            print("⚠️  VM \(vmName) left running for manual testing")
+            print("⚠️  Config directory preserved at: \(buildPackagePath!.path)")
+
+            // TEMPORARY: Take worker offline after first VM launch
+            print("⚠️  TEMPORARY: Taking worker offline for testing")
+            await stop()
+            print("⚠️  Worker stopped")
+
+            return
 
         } catch {
             print("✗ Build error: \(error)")

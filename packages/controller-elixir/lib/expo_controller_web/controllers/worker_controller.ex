@@ -49,13 +49,20 @@ defmodule ExpoControllerWeb.WorkerController do
       )
       |> Repo.one!()
 
-      # Update heartbeat and rotate token (preserves status and assigned builds)
+      # Update heartbeat and rotate token
       {:ok, updated_worker} = Workers.heartbeat_worker(locked_worker)
 
-      # Log if worker has active builds during re-registration
+      # If worker has zero active builds but is marked as building, reset to idle
       active_count = params["active_build_count"] || 0
-      if active_count > 0 do
-        IO.puts("Worker #{worker.id} re-registering with #{active_count} in-flight builds")
+      updated_worker = if active_count == 0 && updated_worker.status == :building do
+        IO.puts("Worker #{worker.id} re-registering with 0 builds, resetting status to idle")
+        {:ok, idle_worker} = Workers.mark_idle(updated_worker)
+        idle_worker
+      else
+        if active_count > 0 do
+          IO.puts("Worker #{worker.id} re-registering with #{active_count} in-flight builds")
+        end
+        updated_worker
       end
 
       updated_worker
@@ -113,8 +120,13 @@ defmodule ExpoControllerWeb.WorkerController do
     worker = conn.assigns.worker
 
     # Reassign any active builds back to pending
-    {reassigned_count, _} = Builds.reassign_worker_builds(worker.id)
+    {reassigned_count, build_ids} = Builds.reassign_worker_builds(worker.id)
     IO.puts("Reassigned #{reassigned_count} builds from worker #{worker.id}")
+
+    # Re-enqueue reassigned builds
+    Enum.each(build_ids, fn build_id ->
+      ExpoController.Orchestration.QueueManager.enqueue(build_id)
+    end)
 
     case Workers.mark_offline(worker) do
       {:ok, _worker} ->
@@ -137,12 +149,18 @@ defmodule ExpoControllerWeb.WorkerController do
   Requires X-Worker-Token header (validated by auth plug).
   """
   def abandon(conn, %{"build_id" => build_id, "reason" => reason} = params) do
-    worker_id = params["worker_id"]
+    worker = conn.assigns.worker
 
-    IO.puts("Worker #{worker_id} abandoning build #{build_id}: #{reason}")
+    IO.puts("Worker #{worker.id} abandoning build #{build_id}: #{reason}")
 
     case Builds.requeue_build(build_id) do
       {:ok, _build} ->
+        # Mark worker as idle (no longer building)
+        Workers.mark_idle(worker)
+
+        # Re-add to queue manager's in-memory queue
+        ExpoController.Orchestration.QueueManager.enqueue(build_id)
+
         json(conn, %{
           success: true,
           message: "Build requeued successfully"
