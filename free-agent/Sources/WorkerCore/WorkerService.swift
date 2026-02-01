@@ -412,7 +412,7 @@ public actor WorkerService {
             print("Step 4: Creating and launching VM...")
 
             // Use baseImageId from controller (fallback to default if not provided)
-            let templateImage = job.baseImageId ?? "ghcr.io/sethwebster/expo-free-agent-base:0.1.29"
+            let templateImage = job.baseImageId ?? "ghcr.io/sethwebster/expo-free-agent-base:0.1.30"
             let tartPath = "/opt/homebrew/bin/tart"
 
             // Clone VM

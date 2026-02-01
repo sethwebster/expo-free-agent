@@ -9,7 +9,7 @@ class VMSyncService {
     private var lastVerifiedAt: Date?
     private let maxVerificationAge: TimeInterval = 5 * 60  // 5 minutes
 
-    init(templateImage: String = "ghcr.io/sethwebster/expo-free-agent-base:0.1.29") {
+    init(templateImage: String = "ghcr.io/sethwebster/expo-free-agent-base:0.1.30") {
         self.templateImage = templateImage
     }
 

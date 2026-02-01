@@ -18,14 +18,14 @@
 set -euo pipefail
 
 # Configuration
-LOG_FILE="/var/log/free-agent-stub.log"
 MOUNT_POINT="/Volumes/My Shared Files/build-config"
+TEMP_LOG_FILE="/tmp/free-agent-stub.log"
 BOOTSTRAP_SCRIPT="${MOUNT_POINT}/bootstrap.sh"
 MOUNT_TIMEOUT=60
 
-# Logging helper
+# Logging helper (logs to /tmp until mount is ready)
 log() {
-    echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" | tee -a "$LOG_FILE"
+    echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" | tee -a "$TEMP_LOG_FILE"
 }
 
 # Error handler
@@ -47,7 +47,7 @@ log "Phase 1: Security lockdown..."
 # 1.1. Randomize admin password
 log "Randomizing admin password..."
 NEW_PASSWORD=$(openssl rand -base64 32)
-if echo "admin:${NEW_PASSWORD}" | sudo chpasswd 2>/dev/null; then
+if dscl . -passwd /Users/admin "$NEW_PASSWORD" 2>/dev/null; then
     log "✓ Admin password randomized (32 bytes)"
     # Clear password from memory
     unset NEW_PASSWORD
@@ -103,6 +103,11 @@ chmod +x "$BOOTSTRAP_SCRIPT" || fail "Failed to make bootstrap executable"
 
 log "✓ Bootstrap script verified"
 
+# Copy stub log to mount for host visibility
+if [[ -f "$TEMP_LOG_FILE" ]]; then
+    cp "$TEMP_LOG_FILE" "${MOUNT_POINT}/stub.log" 2>/dev/null || true
+fi
+
 # ========================================
 # Phase 4: Exec Versioned Bootstrap
 # ========================================
@@ -110,6 +115,11 @@ log "✓ Bootstrap script verified"
 log "Phase 4: Executing versioned bootstrap..."
 log "Replacing this process with: ${BOOTSTRAP_SCRIPT}"
 log "=========================================="
+
+# Copy final log state before exec
+if [[ -f "$TEMP_LOG_FILE" ]]; then
+    cp "$TEMP_LOG_FILE" "${MOUNT_POINT}/stub.log" 2>/dev/null || true
+fi
 
 # Exec bootstrap (replaces current process)
 # LaunchDaemon will monitor the bootstrap process

@@ -21,7 +21,7 @@ if CommandLine.arguments.contains("doctor") {
             workerId: workerId,
             controllerURL: config.controllerURL,
             apiKey: config.apiKey,
-            templateImage: "ghcr.io/sethwebster/expo-free-agent-base:0.1.29"
+            templateImage: "ghcr.io/sethwebster/expo-free-agent-base:0.1.30"
         )
 
         // Run diagnostics with auto-fix
