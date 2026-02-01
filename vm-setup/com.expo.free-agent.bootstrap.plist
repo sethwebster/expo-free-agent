@@ -48,11 +48,7 @@
     <key>ExitTimeOut</key>
     <integer>300</integer>
 
-    <!-- Run as user (will inherit from Tart VM context) -->
-    <key>UserName</key>
-    <string>admin</string>
-    <key>GroupName</key>
-    <string>staff</string>
+    <!-- Run as root (required for password randomization and /var/log write access) -->
 
     <!-- Disable throttling for immediate execution -->
     <key>ThrottleInterval</key>

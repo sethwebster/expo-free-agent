@@ -258,6 +258,15 @@ EOF
 
 log "✓ Ready signal written to ${READY_FILE}"
 
+# Write completion marker for verification
+cat > "${MOUNT_POINT}/bootstrap-complete" <<EOF
+Bootstrap completed successfully at $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+Build ID: ${BUILD_ID}
+Platform: ${PLATFORM}
+EOF
+
+log "✓ Bootstrap completion marker written"
+
 log "=========================================="
 log "Bootstrap complete! VM ready for builds."
 log "=========================================="
