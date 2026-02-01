@@ -6,7 +6,7 @@ struct PreferencesView: View {
     @State private var configuration: WorkerConfiguration
     @State private var initialConfiguration: WorkerConfiguration
     let onSave: (WorkerConfiguration) -> Void
-    @Binding var downloadProgress: DownloadProgress?
+    @ObservedObject var appState = AppState.shared
 
     @State private var showingSaveConfirmation = false
     @State private var selectedTab: Tab = .statistics
@@ -47,12 +47,10 @@ struct PreferencesView: View {
 
     init(
         configuration: WorkerConfiguration,
-        downloadProgress: Binding<DownloadProgress?>,
         onSave: @escaping (WorkerConfiguration) -> Void
     ) {
         _configuration = State(initialValue: configuration)
         _initialConfiguration = State(initialValue: configuration)
-        _downloadProgress = downloadProgress
         self.onSave = onSave
     }
 
@@ -98,7 +96,7 @@ struct PreferencesView: View {
                         VStack(alignment: .leading, spacing: 32) {
                             headerView
                  
-                            if let progress = downloadProgress, progress.status != .idle && progress.status != .complete {
+                            if let progress = appState.downloadProgress, progress.status != .idle && progress.status != .complete {
                                 downloadProgressView(progress)
                                     .transition(.move(edge: .top).combined(with: .opacity))
                             }
@@ -443,7 +441,6 @@ struct PreferencesView: View {
 #Preview {
     PreferencesView(
         configuration: .default,
-        downloadProgress: .constant(nil),
         onSave: { _ in }
     )
 }

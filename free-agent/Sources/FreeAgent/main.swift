@@ -54,6 +54,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let hudManager = HUDNotificationManager()
     private var lastProgressUpdateTime: Date?
     private var lastProgressPercent: Double?
+    private let appState = AppState.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 Starting Free Agent")
@@ -62,6 +63,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         vmSyncService = VMSyncService()
         vmSyncService?.setProgressHandler { [weak self] progress in
             guard let self = self else { return }
+
+            // Update centralized app state (for preferences pane, etc.)
+            DispatchQueue.main.async { [weak self] in
+                self?.appState.updateProgress(progress)
+            }
 
             switch progress.status {
             case .idle:
@@ -255,7 +261,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let preferencesView = PreferencesView(
             configuration: WorkerConfiguration.load(),
-            downloadProgress: .constant(nil),
             onSave: { config in
                 do {
                     try config.save()
