@@ -51,7 +51,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsWindow: NSWindow?
     private var vmSyncService: VMSyncService?
     private var menu: NSMenu?
-    private let hudManager = HUDNotificationManager()
     private var lastProgressUpdateTime: Date?
     private var lastProgressPercent: Double?
     private let appState = AppState.shared
@@ -95,38 +94,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.lastProgressUpdateTime = now
                         self.lastProgressPercent = percent
                         print(String(format: "Downloading: %.0f%%", percent))
-
-                        if percent == 0.0 {
-                            self.hudManager.show(
-                                type: .downloading(percent: 0),
-                                message: "Downloading base image..."
-                            )
-                        } else {
-                            self.hudManager.updateDownloadProgress(percent: percent)
-                        }
                     }
                 }
 
             case .extracting:
                 let percent = progress.percentComplete ?? 0.0
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
+                DispatchQueue.main.async {
                     print(String(format: "Extracting: %.0f%%", percent))
-                    self.hudManager.updateDownloadProgress(percent: percent)
                 }
 
             case .complete:
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
+                DispatchQueue.main.async {
                     print("✓ VM template ready")
-                    self.hudManager.dismiss()
                 }
 
             case .failed:
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
+                DispatchQueue.main.async {
                     print("✗ VM template download failed: \(progress.message)")
-                    self.hudManager.dismiss()
                 }
             }
         }
