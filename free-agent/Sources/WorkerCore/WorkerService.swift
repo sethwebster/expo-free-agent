@@ -382,7 +382,9 @@ public actor WorkerService {
 
     private func performBuild(_ job: BuildJob) async throws {
         var buildPackagePath: URL?
-        var vmManager: TartVMManager?
+        var runProcess: Process?
+        var vmName: String?
+        var tartPath: String?
 
         do {
             // Step 3: Create build config directory
@@ -411,59 +413,93 @@ public actor WorkerService {
             // Step 4: Create and launch VM
             print("Step 4: Creating and launching VM...")
 
-            // Use baseImageId from controller (fallback to default if not provided)
-            let templateImage = job.baseImageId ?? "ghcr.io/sethwebster/expo-free-agent-base:0.1.30"
-            let tartPath = "/opt/homebrew/bin/tart"
+            // Use baseImageId from controller, then config override, then default
+            let templateImage = job.baseImageId
+                ?? configuration.templateImage
+                ?? "ghcr.io/sethwebster/expo-free-agent-base:0.1.31"
+            tartPath = "/opt/homebrew/bin/tart"
 
             // Clone VM
             let jobID = UUID().uuidString.prefix(8)
-            let vmName = "fa-\(jobID)"
-            print("Cloning template \(templateImage) to \(vmName)...")
+            vmName = "fa-\(jobID)"
+            print("Cloning template \(templateImage) to \(vmName!)...")
 
             let cloneProcess = Process()
-            cloneProcess.executableURL = URL(fileURLWithPath: tartPath)
-            cloneProcess.arguments = ["clone", templateImage, vmName]
+            cloneProcess.executableURL = URL(fileURLWithPath: tartPath!)
+            cloneProcess.arguments = ["clone", templateImage, vmName!]
             try cloneProcess.run()
             cloneProcess.waitUntilExit()
 
             guard cloneProcess.terminationStatus == 0 else {
                 throw WorkerError.buildFailed(reason: "Failed to clone VM template")
             }
-            print("✓ VM cloned: \(vmName)")
+            print("✓ VM cloned: \(vmName!)")
 
             // Launch VM with graphics and build config mounted
             print("Launching VM with graphics and build config mounted...")
-            let runProcess = Process()
-            runProcess.executableURL = URL(fileURLWithPath: tartPath)
-            runProcess.arguments = [
+            runProcess = Process()
+            runProcess!.executableURL = URL(fileURLWithPath: tartPath!)
+            runProcess!.arguments = [
                 "run",
-                vmName,
-                "--dir", "build-config:\(buildPackagePath!.path):ro"
+                vmName!,
+                "--dir", "build-config:\(buildPackagePath!.path)"
             ]
 
-            print("Executing: \(tartPath) run \(vmName) --dir build-config:\(buildPackagePath!.path):ro")
-            try runProcess.run()
-            print("✓ VM launched with graphics (PID: \(runProcess.processIdentifier))")
+            print("Executing: \(tartPath!) run \(vmName!) --dir build-config:\(buildPackagePath!.path)")
+            try runProcess!.run()
+            print("✓ VM launched with graphics (PID: \(runProcess!.processIdentifier))")
             print("✓ Build config mounted at /Volumes/My Shared Files/build-config")
 
             // Wait for VM bootstrap to complete
             let vmToken = try await waitForVMReady(buildDir: buildPackagePath!, timeout: 300)
             print("✓ VM bootstrap complete (token: \(vmToken.prefix(8))...)")
 
-            // TODO: Continue with build execution
-            print("⚠️  Build execution not yet implemented")
-            await reportJobAbandoned(job.id, reason: "Build execution not implemented")
-            return
+            // Step 5: Monitor build progress
+            print("Step 5: Monitoring build progress...")
+
+            let buildStatus = try await monitorBuildProgress(
+                buildDir: buildPackagePath!,
+                vmProcess: runProcess!,
+                timeout: TimeInterval(configuration.buildTimeoutMinutes * 60)
+            )
+
+            // Report result to controller
+            if buildStatus.success {
+                print("✓ Build succeeded, reporting to controller...")
+                try await uploadBuildResult(job.id, result: BuildResult(
+                    success: true,
+                    logs: "Build completed successfully",
+                    artifactPath: nil  // Artifact already uploaded by VM
+                ))
+            } else {
+                print("✗ Build failed, reporting to controller...")
+                await reportJobFailure(job.id, error: WorkerError.buildFailed(
+                    reason: buildStatus.error ?? "Build failed"
+                ))
+            }
+
+            // Cleanup
+            await stopVMProcess(runProcess!)
+            if configuration.cleanupAfterBuild {
+                try await deleteVMClone(vmName!, tartPath: tartPath!)
+            }
 
         } catch {
             print("✗ Build error: \(error)")
 
             // Cleanup on error
             do {
-                if configuration.cleanupAfterBuild, let vm = vmManager {
-                    try await vm.cleanup()
+                // Stop VM process if it was started
+                if let process = runProcess {
+                    await stopVMProcess(process)
                 }
 
+                // Delete VM clone if it was created
+                if configuration.cleanupAfterBuild, let name = vmName, let path = tartPath {
+                    try? await deleteVMClone(name, tartPath: path)
+                }
+
+                // Delete build directory
                 if let path = buildPackagePath {
                     try FileManager.default.removeItem(at: path)
                 }
@@ -474,12 +510,9 @@ public actor WorkerService {
             throw error
         }
 
-        // Cleanup on success
+        // Cleanup build directory on success
+        // (VM cleanup already done in Step 5)
         do {
-            if configuration.cleanupAfterBuild, let vm = vmManager {
-                try await vm.cleanup()
-            }
-
             if let path = buildPackagePath {
                 try FileManager.default.removeItem(at: path)
             }
@@ -684,11 +717,105 @@ public actor WorkerService {
 
         throw WorkerError.timeout("VM did not signal ready within \(timeout)s")
     }
+
+    private func monitorBuildProgress(
+        buildDir: URL,
+        vmProcess: Process,
+        timeout: TimeInterval
+    ) async throws -> BuildCompletionStatus {
+        let completeFile = buildDir.appendingPathComponent("build-complete")
+        let errorFile = buildDir.appendingPathComponent("build-error")
+        let deadline = Date().addingTimeInterval(timeout)
+
+        print("Monitoring build progress...")
+
+        while Date() < deadline {
+            // Check if VM process is still running
+            if !vmProcess.isRunning {
+                throw WorkerError.buildFailed(reason: "VM process terminated unexpectedly")
+            }
+
+            // Check for completion
+            if FileManager.default.fileExists(atPath: completeFile.path) {
+                let data = try Data(contentsOf: completeFile)
+                let _ = try JSONDecoder().decode(BuildCompletionSignal.self, from: data)
+                print("✓ Build completed successfully")
+                return BuildCompletionStatus(success: true, error: nil)
+            }
+
+            // Check for error
+            if FileManager.default.fileExists(atPath: errorFile.path) {
+                let data = try Data(contentsOf: errorFile)
+                let signal = try JSONDecoder().decode(BuildCompletionSignal.self, from: data)
+                print("✗ Build failed: \(signal.error ?? "Unknown error")")
+                return BuildCompletionStatus(success: false, error: signal.error)
+            }
+
+            // Poll every 5 seconds
+            try await Task.sleep(for: .seconds(5))
+        }
+
+        throw WorkerError.timeout("Build did not complete within \(timeout)s")
+    }
+
+    private func stopVMProcess(_ process: Process) async {
+        guard process.isRunning else {
+            print("VM process already stopped")
+            return
+        }
+
+        print("Stopping VM process...")
+        process.terminate()
+
+        // Wait up to 30 seconds for graceful shutdown
+        for _ in 0..<30 {
+            if !process.isRunning {
+                print("✓ VM process stopped gracefully")
+                return
+            }
+            try? await Task.sleep(for: .seconds(1))
+        }
+
+        // Force kill if still running
+        if process.isRunning {
+            print("⚠️  Force killing VM process")
+            kill(process.processIdentifier, SIGKILL)
+        }
+    }
+
+    private func deleteVMClone(_ vmName: String, tartPath: String) async throws {
+        print("Deleting VM clone: \(vmName)")
+
+        let deleteProcess = Process()
+        deleteProcess.executableURL = URL(fileURLWithPath: tartPath)
+        deleteProcess.arguments = ["delete", vmName]
+
+        try deleteProcess.run()
+        deleteProcess.waitUntilExit()
+
+        guard deleteProcess.terminationStatus == 0 else {
+            throw WorkerError.buildFailed(reason: "VM deletion failed (exit code: \(deleteProcess.terminationStatus))")
+        }
+
+        print("✓ VM clone deleted")
+    }
 }
 
 struct VMReadyResponse: Codable {
     let status: String
     let vm_token: String?
+    let error: String?
+}
+
+struct BuildCompletionSignal: Codable {
+    let status: String
+    let completed_at: String
+    let error: String?
+    let artifact_uploaded: Bool
+}
+
+struct BuildCompletionStatus {
+    let success: Bool
     let error: String?
 }
 

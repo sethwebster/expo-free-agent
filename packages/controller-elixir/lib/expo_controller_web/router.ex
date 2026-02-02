@@ -76,6 +76,7 @@ defmodule ExpoControllerWeb.Router do
     scope "/builds/:id" do
       post "/authenticate", BuildController, :authenticate  # OTP auth (no token required)
       post "/logs", BuildController, :stream_logs
+      post "/artifact", BuildController, :upload_artifact
       post "/heartbeat", BuildController, :heartbeat
       post "/telemetry", BuildController, :telemetry
       get "/source", BuildController, :download_source

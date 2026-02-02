@@ -12,7 +12,7 @@ defmodule ExpoControllerWeb.BuildController do
   plug ExpoControllerWeb.Plugs.WorkerOrVMAuth when action in [:download_source]
 
   # VM token required for VM-only operations (VM access after OTP auth)
-  plug ExpoControllerWeb.Plugs.VMAuth when action in [:download_certs_worker, :download_certs_secure, :stream_logs, :heartbeat, :telemetry]
+  plug ExpoControllerWeb.Plugs.VMAuth when action in [:download_certs_worker, :download_certs_secure, :stream_logs, :upload_artifact, :heartbeat, :telemetry]
 
   @doc """
   POST /api/builds
@@ -417,6 +417,29 @@ defmodule ExpoControllerWeb.BuildController do
   end
 
   @doc """
+  POST /api/builds/:id/artifact
+  Upload build artifact (IPA, APK) from VM.
+  Requires X-VM-Token header.
+  """
+  def upload_artifact(conn, %{"id" => build_id} = params) do
+    with {:ok, upload} <- get_upload(params, "artifact"),
+         {:ok, path} <- FileStorage.save_result(build_id, upload),
+         {:ok, _build} <- Builds.complete_build(build_id, path) do
+      json(conn, %{success: true})
+    else
+      {:error, :no_source} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "No artifact file provided"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{error: "Failed to save artifact: #{inspect(reason)}"})
+    end
+  end
+
+  @doc """
   POST /api/builds/:id/authenticate
   VM authenticates with OTP and receives temporary token.
   """
@@ -692,8 +715,10 @@ defmodule ExpoControllerWeb.BuildController do
   # Private helpers for worker endpoints
 
   defp read_and_unzip_certs(certs_path) do
-    # Read zip file
-    {:ok, zip_data} = File.read(certs_path)
+    # Read zip file (join with storage root)
+    storage_root = Application.get_env(:expo_controller, :storage_root, "./storage")
+    full_path = Path.join(storage_root, certs_path)
+    {:ok, zip_data} = File.read(full_path)
 
     # Unzip and extract
     {:ok, file_list} = :zip.unzip(zip_data, [:memory])
