@@ -3,6 +3,12 @@ import SwiftUI
 import WorkerCore
 import DiagnosticsCore
 
+// MARK: - Command-Line Arguments
+
+// Parse flags
+let useLocalVM = CommandLine.arguments.contains("--local-vm")
+let templateImage = useLocalVM ? "expo-free-agent-base" : "ghcr.io/sethwebster/expo-free-agent-base:0.1.31"
+
 // MARK: - Doctor Mode
 
 // Check for doctor command before starting GUI
@@ -21,7 +27,7 @@ if CommandLine.arguments.contains("doctor") {
             workerId: workerId,
             controllerURL: config.controllerURL,
             apiKey: config.apiKey,
-            templateImage: "ghcr.io/sethwebster/expo-free-agent-base:0.1.30"
+            templateImage: templateImage
         )
 
         // Run diagnostics with auto-fix
@@ -69,7 +75,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         print("🚀 Starting Free Agent")
 
         // Initialize VM sync service to ensure template exists
-        vmSyncService = VMSyncService()
+        vmSyncService = VMSyncService(templateImage: templateImage)
         vmSyncService?.setProgressHandler { [weak self] progress in
             guard let self = self else { return }
 
@@ -135,7 +141,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.buildMenu()
             }
 
-            let config = WorkerConfiguration.load()
+            var config = WorkerConfiguration.load()
+            config.templateImage = templateImage
             let service = WorkerService(configuration: config)
             await service.start()
 
@@ -333,7 +340,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             workerStatus = .connecting
             buildMenu()
 
-            let config = WorkerConfiguration.load()
+            var config = WorkerConfiguration.load()
+            config.templateImage = templateImage
             let service = WorkerService(configuration: config)
             await service.start()
 

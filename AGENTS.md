@@ -1,5 +1,7 @@
 # Agent Development Guide
 
+**🤖 AGENTS: READ THIS FILE FIRST, THEN READ [AGENT-WORKSPACE.md](./AGENT-WORKSPACE.md) FOR WORKSPACE-SPECIFIC INFORMATION.**
+
 Enterprise-grade guidelines for building production systems with AI agents.
 
 ## Core Principles
@@ -27,6 +29,217 @@ Enterprise-grade guidelines for building production systems with AI agents.
 - External APIs will fail in unexpected ways
 - Database constraints are your last line of defense
 - Type systems prevent bugs, runtime checks prevent disasters
+
+### 5. Critical Thinking Over Agreement
+- Challenge assumptions rather than reflexively agreeing
+- Question proposed solutions instead of praising them
+- "You're right!" means you actually verified, not just acknowledged
+- "Great idea!" requires explaining why it's great
+- Disagreement and alternative approaches show engagement, not opposition
+- Technical conversations require scrutiny, not cheerleading
+
+## Communication and Collaboration Style
+
+### No Sycophantic Behavior
+
+**CRITICAL**: Agents must engage critically with developer suggestions, not reflexively agree or praise.
+
+**Forbidden Patterns**:
+- ❌ "You're absolutely right!" (Did you verify? What evidence?)
+- ❌ "Great idea!" (Why is it great? What are the trade-offs?)
+- ❌ "Perfect!" (Nothing is perfect, what are the edge cases?)
+- ❌ "Excellent point!" (What makes it excellent? What did you learn?)
+- ❌ Immediate agreement without analysis
+
+**Required Patterns**:
+- ✅ "Let me verify that approach..." (then actually verify)
+- ✅ "That could work, but have you considered X?" (explore alternatives)
+- ✅ "I see a potential issue with..." (identify problems proactively)
+- ✅ "What about this edge case..." (stress-test the idea)
+- ✅ "Here's a different approach..." (propose alternatives)
+- ✅ "The trade-off here is..." (analyze costs and benefits)
+
+**Examples**:
+
+**Bad - Sycophantic**:
+```
+Developer: "Let's just add a try-catch around everything"
+Agent: "Great idea! That will definitely solve the error handling!"
+```
+
+**Good - Critical**:
+```
+Developer: "Let's just add a try-catch around everything"
+Agent: "That would hide failures rather than handle them. Instead, let's
+identify specific failure modes and handle each appropriately. What
+errors are you seeing that need handling?"
+```
+
+**Bad - Reflexive Agreement**:
+```
+Developer: "We should cache this API call"
+Agent: "You're right! Caching will make it faster!"
+```
+
+**Good - Analytical**:
+```
+Developer: "We should cache this API call"
+Agent: "What's the current latency? How often does the data change?
+We need to balance speed against staleness. If it's user-specific
+data that changes frequently, caching might cause inconsistencies."
+```
+
+### When to Agree
+
+Agreement is appropriate when:
+- You've actually verified the approach
+- You've considered alternatives and this is best
+- You can articulate specific reasons why it's sound
+- You've identified and accepted the trade-offs
+
+Even then, phrase it analytically:
+- ✅ "That approach works because X, and the trade-off of Y is acceptable here"
+- ❌ "Perfect! Let's do it!"
+
+### Respectful Disagreement
+
+Disagreement should be:
+- Specific: Point to exact concerns
+- Constructive: Offer alternatives
+- Technical: Focus on code/architecture, not person
+- Evidence-based: Reference docs, benchmarks, patterns
+
+**Example**:
+```
+"Polling every 100ms will create excessive load. WebSockets or
+Server-Sent Events would be more efficient for real-time updates.
+Here's why..."
+```
+
+## Agent Orchestration
+
+### Parallel Execution for Efficiency
+
+**CRITICAL**: When facing multiple independent tasks, spawn parallel agents rather than executing sequentially.
+
+**Workflow**:
+1. Identify tasks that can run concurrently (no dependencies between them)
+2. Spawn separate agents for each independent task
+3. Agents communicate progress via files (not direct messaging)
+4. Monitor spawned agents through their output files
+5. Aggregate results when all agents complete
+
+**Benefits**:
+- Dramatically reduced total execution time
+- Better resource utilization
+- Clear separation of concerns
+- Easier debugging (each agent has isolated scope)
+
+### Agent Communication via Files
+
+Spawned agents MUST communicate through files, not direct API calls or shared memory:
+
+- **Status updates**: Write to `agents/{agent-name}/status.md`
+- **Progress logs**: Write to `agents/{agent-name}/progress.log`
+- **Results**: Write to `agents/{agent-name}/results.json` or `results.md`
+- **Errors**: Write to `agents/{agent-name}/errors.log`
+
+**Pattern**:
+```typescript
+// ✅ CORRECT - File-based communication
+async function spawnAgent(name: string, task: string) {
+  const agentDir = `agents/${name}`
+  await fs.mkdir(agentDir, { recursive: true })
+
+  // Agent writes status updates to file
+  await fs.writeFile(`${agentDir}/status.md`, `# ${name}\n\nStatus: Starting...`)
+
+  // Spawn agent with task
+  // Agent updates file as it progresses
+}
+
+// ❌ WRONG - Direct communication
+async function spawnAgent(name: string, task: string) {
+  // Don't rely on shared state or callbacks
+  const sharedState = {} // Bad!
+}
+```
+
+### Agent Naming Conventions
+
+**REQUIRED**: Every spawned agent MUST have a memorable, themed name. Never use generic identifiers.
+
+**Naming Rules**:
+- ❌ Never use: "Agent 1", "Agent A", "Worker 1", "Task-123"
+- ✅ Always use: Themed, memorable names
+
+**Themes** (pick one per spawning session):
+- **Colors**: Chartreuse, Vermillion, Cerulean, Magenta
+- **Simpsons Characters**: Homer, Marge, Bart, Lisa, Maggie
+- **Famous Actors**: Bill, Meryl, Denzel, Viola
+- **Cities**: Tokyo, Paris, Cairo, Sydney
+- **Planets**: Mercury, Venus, Mars, Jupiter
+- **Elements**: Helium, Neon, Argon, Krypton
+- **Mythology**: Athena, Apollo, Hermes, Artemis
+
+**Examples**:
+```typescript
+// ✅ CORRECT - Themed names
+const agents = [
+  { name: 'Chartreuse', task: 'Refactor auth service' },
+  { name: 'Vermillion', task: 'Optimize database queries' },
+  { name: 'Cerulean', task: 'Write integration tests' }
+]
+
+// ✅ CORRECT - Different theme
+const agents = [
+  { name: 'Homer', task: 'Build dashboard UI' },
+  { name: 'Marge', task: 'Implement API endpoints' },
+  { name: 'Bart', task: 'Fix bug in payment flow' }
+]
+
+// ❌ WRONG - Generic names
+const agents = [
+  { name: 'Agent 1', task: '...' },
+  { name: 'Worker A', task: '...' },
+  { name: 'Task-123', task: '...' }
+]
+```
+
+**Theme Selection**:
+- Choose a theme that fits the work context (e.g., colors for UI work, mythology for complex systems)
+- Use the same theme for all agents spawned in a single session
+- Document the theme choice in the spawning agent's notes
+- Keep names short (1-2 words) and easy to reference
+
+### Monitoring Spawned Agents
+
+Check agent status by reading their status files:
+
+```typescript
+async function checkAgentStatus(name: string) {
+  const statusFile = `agents/${name}/status.md`
+  if (await fs.exists(statusFile)) {
+    const status = await fs.readFile(statusFile, 'utf-8')
+    return parseStatus(status)
+  }
+  return { status: 'not_started' }
+}
+
+async function waitForAgents(names: string[]) {
+  while (true) {
+    const statuses = await Promise.all(
+      names.map(name => checkAgentStatus(name))
+    )
+
+    if (statuses.every(s => s.status === 'completed' || s.status === 'failed')) {
+      return statuses
+    }
+
+    await sleep(5000) // Check every 5 seconds
+  }
+}
+```
 
 ## Feature Development Process
 
@@ -341,9 +554,11 @@ Before accepting ADR:
 - [ ] Code reviewer approved
 - [ ] Links to related ADRs/issues
 
-## React Best Practices
+## Language-Specific Guidelines
 
-### Component Hierarchy
+### React
+
+#### Component Hierarchy
 ```typescript
 // ❌ WRONG - Business logic in component
 function UserProfile() {
@@ -377,14 +592,14 @@ function UserProfile() {
 }
 ```
 
-### Hook Guidelines
+#### Hook Guidelines
 - Never call `useEffect` directly in components
 - One hook per concern (don't combine unrelated logic)
 - Hooks must be pure (no side effects except in useEffect)
 - Always specify exhaustive dependencies
 - Extract complex effects to custom hooks
 
-### State Management
+#### State Management
 ```typescript
 // ❌ WRONG - Prop drilling
 <Parent>
@@ -409,12 +624,44 @@ function Parent() {
 }
 ```
 
-### Performance Rules
+#### Performance Rules
 - Memo only after profiling shows need
 - Don't optimize prematurely
 - `useCallback` for props passed to memoized components
 - `useMemo` for expensive computations only
 - Virtual scrolling for lists >100 items
+
+### Elixir
+
+#### Naming Conventions
+Elixir uses `snake_case` for variables, function names, and atoms, following the convention inherited from Erlang and common in Ruby:
+
+```elixir
+# ✅ CORRECT - Variables and functions
+my_variable = "value"
+calculate_total(items)
+:some_atom
+
+# ✅ CORRECT - Module names use PascalCase
+defmodule MyModule do
+  def my_function(param_name) do
+    # ...
+  end
+end
+
+defmodule GenServer do
+  # ...
+end
+
+# ❌ WRONG - Using camelCase
+myVariable = "value"
+calculateTotal(items)
+
+# ❌ WRONG - Using snake_case for modules
+defmodule my_module do
+  # ...
+end
+```
 
 ## TypeScript Standards
 

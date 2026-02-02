@@ -34,7 +34,7 @@ struct SettingsView: View {
         isCheckingTemplate = true
 
         Task {
-            let check = TemplateVMCheck(templateImage: "ghcr.io/sethwebster/expo-free-agent-base:0.1.30")
+            let check = TemplateVMCheck(templateImage: "ghcr.io/sethwebster/expo-free-agent-base:0.1.31")
 
             // Set up progress handler
             await check.setProgressHandler { progress in

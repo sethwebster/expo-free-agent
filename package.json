@@ -13,6 +13,7 @@
     "landing-page:build": "bun --cwd packages/landing-page build",
     "landing-page:preview": "bun --cwd packages/landing-page preview",
     "landing-page:deploy": "bun --cwd packages/landing-page deploy",
+    "start:agent": "cd free-agent && swift run",
     "test": "bun test",
     "test:controller": "cd packages/controller-elixir && mix test",
     "test:cli": "bun test packages/cli/src/__tests__",

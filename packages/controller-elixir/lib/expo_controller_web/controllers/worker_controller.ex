@@ -148,7 +148,7 @@ defmodule ExpoControllerWeb.WorkerController do
   Worker abandons a build (requeues it for another worker).
   Requires X-Worker-Token header (validated by auth plug).
   """
-  def abandon(conn, %{"build_id" => build_id, "reason" => reason} = params) do
+  def abandon(conn, %{"build_id" => build_id, "reason" => reason} = _params) do
     worker = conn.assigns.worker
 
     IO.puts("Worker #{worker.id} abandoning build #{build_id}: #{reason}")
