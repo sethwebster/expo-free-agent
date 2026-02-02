@@ -15,6 +15,7 @@ public struct WorkerConfiguration: Codable, Sendable, Equatable {
     public var vmDiskSizeGB: Double
     public var reuseVMs: Bool
     public var cleanupAfterBuild: Bool
+    public var templateImage: String?  // Optional override for VM base image
 
     // Worker preferences
     public var autoStart: Bool
@@ -37,6 +38,7 @@ public struct WorkerConfiguration: Codable, Sendable, Equatable {
         vmDiskSizeGB: 50,
         reuseVMs: false,
         cleanupAfterBuild: true,
+        templateImage: nil,
         autoStart: false,
         onlyWhenIdle: true,
         buildTimeoutMinutes: 120,

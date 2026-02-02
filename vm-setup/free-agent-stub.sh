@@ -47,12 +47,20 @@ log "Phase 1: Security lockdown..."
 # 1.1. Randomize admin password
 log "Randomizing admin password..."
 NEW_PASSWORD=$(openssl rand -base64 32)
+
+# Try without old password first (works if running as root)
 if dscl . -passwd /Users/admin "$NEW_PASSWORD" 2>/dev/null; then
     log "✓ Admin password randomized (32 bytes)"
-    # Clear password from memory
     unset NEW_PASSWORD
 else
-    fail "Failed to randomize admin password"
+    # Fallback: try with default password (VM template has 'admin' as default)
+    log "Retrying with default password..."
+    if dscl . -passwd /Users/admin admin "$NEW_PASSWORD" 2>/dev/null; then
+        log "✓ Admin password randomized (32 bytes)"
+        unset NEW_PASSWORD
+    else
+        fail "Failed to randomize admin password"
+    fi
 fi
 
 # 1.2. Delete SSH authorized_keys
