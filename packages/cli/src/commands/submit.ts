@@ -6,6 +6,7 @@ import os from 'os';
 import readline from 'readline';
 import { apiClient, APIClient } from '../api-client.js';
 import { saveBuildToken } from '../build-tokens.js';
+import { discoverAndExportCertificate } from '../certificates.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import { isTTY } from '../types.js';
@@ -21,8 +22,10 @@ export function createSubmitCommand(): Command {
     .option('--apple-id <email>', 'Apple ID email')
     .option('--api-key <key>', 'API key for authentication')
     .option('--controller-url <url>', 'Controller URL')
+    .option('--no-certs', 'Skip automatic certificate discovery')
     .action(async (projectPath: string, options) => {
       const spinner = ora('Preparing project for submission').start();
+      let certsTempDir: string | undefined;
 
       try {
         // Validate project path
@@ -65,13 +68,39 @@ export function createSubmitCommand(): Command {
         const zipSize = (await fs.promises.stat(zipPath)).size;
         spinner.succeed(chalk.green(`Project zipped (${formatBytes(zipSize)})`));
 
-        // Validate cert and profile if provided
+        // Certificate handling
+        let certsPath: string | undefined;
+
         if (options.cert) {
+          // User provided explicit cert path
           const certPath = path.resolve(options.cert);
           try {
             await fs.promises.access(certPath);
+            certsPath = certPath;
           } catch {
             console.error(chalk.red(`Certificate not found: ${certPath}`));
+            process.exit(1);
+          }
+        } else if (options.certs !== false) {
+          // Automatic certificate discovery (unless --no-certs)
+          spinner.stop();
+          console.log();
+          console.log(chalk.bold('iOS Certificate Discovery'));
+          console.log(chalk.dim('Discovering signing certificates from keychain...'));
+
+          try {
+            const result = await discoverAndExportCertificate(resolvedPath, true);
+            certsPath = result.certsPath;
+            certsTempDir = result.tempDir;
+
+            console.log(chalk.green('✓'), 'Certificate exported successfully');
+            spinner.start('Preparing submission');
+          } catch (error) {
+            console.error(chalk.red('Certificate discovery failed'));
+            console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+            console.log();
+            console.log(chalk.dim('To skip certificate discovery, use --no-certs'));
+            console.log(chalk.dim('To manually specify certificates, use --cert <path>'));
             process.exit(1);
           }
         }
@@ -117,7 +146,7 @@ export function createSubmitCommand(): Command {
 
         const { buildId, accessToken } = await client.submitBuild({
           projectPath: zipPath,
-          certPath: options.cert ? path.resolve(options.cert) : undefined,
+          certPath: certsPath,
           profilePath: options.profile ? path.resolve(options.profile) : undefined,
           appleId: options.appleId,
         });
@@ -136,9 +165,20 @@ export function createSubmitCommand(): Command {
 
         // Cleanup
         await fs.promises.rm(tempDir, { recursive: true, force: true });
+
+        // Cleanup temporary certificates
+        if (certsTempDir) {
+          await fs.promises.rm(certsTempDir, { recursive: true, force: true });
+        }
       } catch (error) {
         spinner.fail(chalk.red('Build submission failed'));
         console.error(chalk.red(error instanceof Error ? error.message : String(error)));
+
+        // Cleanup on error
+        if (certsTempDir) {
+          await fs.promises.rm(certsTempDir, { recursive: true, force: true }).catch(() => {});
+        }
+
         process.exit(1);
       }
     });
