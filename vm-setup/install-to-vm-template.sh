@@ -121,11 +121,26 @@ fi
 log_info "✓ VM IP: $VM_IP"
 
 # Step 5: Install dependencies
-log_step "Installing dependencies (jq)..."
+log_step "Installing dependencies (jq, node)..."
 tart exec "$VM_NAME" bash -c "brew list jq &>/dev/null || brew install jq" || {
     log_warn "Failed to install jq - you may need to install manually"
 }
-log_info "✓ Dependencies installed"
+tart exec "$VM_NAME" bash -c "brew list node &>/dev/null || brew install node" || {
+    log_warn "Failed to install node - you may need to install manually"
+}
+
+# Verify Node.js installation
+NODE_VERSION=$(tart exec "$VM_NAME" bash -c "node --version 2>/dev/null || echo 'not installed'")
+NPM_VERSION=$(tart exec "$VM_NAME" bash -c "npm --version 2>/dev/null || echo 'not installed'")
+
+if [[ "$NODE_VERSION" == "not installed" ]] || [[ "$NPM_VERSION" == "not installed" ]]; then
+    log_error "Node.js/npm installation failed"
+    log_error "Node: $NODE_VERSION, npm: $NPM_VERSION"
+    tart stop "$VM_NAME"
+    exit 1
+fi
+
+log_info "✓ Dependencies installed (Node.js $NODE_VERSION, npm $NPM_VERSION)"
 
 # Step 6: Copy scripts to VM via base64 encoding
 log_step "Copying scripts to VM..."
@@ -260,6 +275,8 @@ echo "Dependencies:"
 which jq || echo "WARNING: jq not found"
 which curl || echo "ERROR: curl not found"
 which security || echo "ERROR: security not found"
+which node && echo "Node.js: $(node --version)" || echo "ERROR: Node.js not found"
+which npm && echo "npm: $(npm --version)" || echo "ERROR: npm not found"
 echo ""
 echo "✓ VM template ready for secure certificate handling with auto-update"
 EOF
