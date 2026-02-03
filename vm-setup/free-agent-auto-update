@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# free-agent-auto-update
+#
+# Launch wrapper that checks for mounted bootstrap scripts
+# or downloads latest from GitHub releases.
+#
+# Called by LaunchDaemon at VM boot.
+#
+
+set -euo pipefail
+
+LOG_FILE="/tmp/free-agent-bootstrap.log"
+MOUNT_POINT="/Volumes/My Shared Files/build-config"
+BOOTSTRAP_SCRIPT="${MOUNT_POINT}/bootstrap.sh"
+TIMEOUT=60
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+log "=========================================="
+log "Expo Free Agent - Auto Bootstrap"
+log "=========================================="
+
+# Check if build config is mounted (worker-provided bootstrap)
+if [ -d "$MOUNT_POINT" ]; then
+    log "Found mounted build config at $MOUNT_POINT"
+
+    # Wait for bootstrap script to appear (mount might take a moment)
+    ELAPSED=0
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+        if [ -f "$BOOTSTRAP_SCRIPT" ]; then
+            log "✓ Bootstrap script found: $BOOTSTRAP_SCRIPT"
+
+            # Make executable
+            chmod +x "$BOOTSTRAP_SCRIPT"
+
+            # Execute bootstrap script
+            log "Executing worker-provided bootstrap..."
+            exec "$BOOTSTRAP_SCRIPT"
+        fi
+
+        sleep 1
+        ELAPSED=$((ELAPSED + 1))
+    done
+
+    log "ERROR: Bootstrap script not found after ${TIMEOUT}s"
+    exit 1
+fi
+
+# No mounted config - use GitHub release auto-update (production mode)
+log "No mounted config found - checking for updates from GitHub..."
+
+# TODO: Implement GitHub release download logic
+# For now, exec the existing bootstrap if available
+if [ -x /usr/local/bin/free-agent-vm-bootstrap ]; then
+    log "Executing installed bootstrap..."
+    exec /usr/local/bin/free-agent-vm-bootstrap
+fi
+
+log "ERROR: No bootstrap method available"
+exit 1

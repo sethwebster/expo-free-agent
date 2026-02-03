@@ -33,9 +33,11 @@ Expo Free Agent is a self-hosted alternative to cloud build services. Instead of
 |--------------|---------|
 | **Try it in 5 minutes** | [5-Minute Start](./docs/getting-started/5-minute-start.md) |
 | **Deploy to production** | [Setup Remote](./docs/getting-started/setup-remote.md) |
-| **Understand the architecture** | [Architecture Diagrams](./docs/architecture/diagrams.md) |
+| **Understand the architecture** | [Complete Architecture Guide](./ARCHITECTURE.md) |
+| **See visual diagrams** | [Architecture Diagrams](./docs/architecture/diagrams.md) |
 | **Learn about security** | [Security Model](./docs/architecture/security.md) |
 | **Contribute code** | [Contributing Guide](./CLAUDE.md) |
+| **Agent workspace guide** | [Agent Workspace](./AGENT-WORKSPACE.md) |
 | **Browse all docs** | [Documentation Index](./docs/INDEX.md) |
 
 ---

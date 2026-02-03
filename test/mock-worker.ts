@@ -25,6 +25,7 @@ interface MockWorkerConfig {
 class MockWorker {
   private config: MockWorkerConfig;
   private workerId: string | null = null;
+  private accessToken: string | null = null;
   private workDir: string;
   private running = false;
   private currentBuild: string | null = null;
@@ -92,6 +93,7 @@ class MockWorker {
 
     const data = await response.json();
     this.workerId = data.id;
+    this.accessToken = data.access_token;
 
     console.log(`[${this.config.workerName}] Registered with ID: ${this.workerId}`);
   }
@@ -110,15 +112,15 @@ class MockWorker {
   }
 
   private async poll() {
-    if (!this.workerId) {
+    if (!this.workerId || !this.accessToken) {
       throw new Error('Worker not registered');
     }
 
     const response = await fetch(
-      `${this.config.controllerUrl}/api/workers/poll?worker_id=${this.workerId}`,
+      `${this.config.controllerUrl}/api/workers/poll`,
       {
         headers: {
-          'X-API-Key': this.config.apiKey,
+          'X-Worker-Token': this.accessToken,
         },
       }
     );
@@ -128,6 +130,11 @@ class MockWorker {
     }
 
     const data = await response.json();
+
+    // Update access token (controller rotates it on each poll)
+    if (data.access_token) {
+      this.accessToken = data.access_token;
+    }
 
     if (data.job) {
       await this.handleJob(data.job);
@@ -194,8 +201,7 @@ class MockWorker {
 
     const response = await fetch(fullUrl, {
       headers: {
-        'X-API-Key': this.config.apiKey,
-        'X-Worker-Id': this.workerId!,
+        'X-Worker-Token': this.accessToken!,
       },
     });
 
@@ -250,7 +256,7 @@ class MockWorker {
     const response = await fetch(`${this.config.controllerUrl}/api/workers/upload`, {
       method: 'POST',
       headers: {
-        'X-API-Key': this.config.apiKey,
+        'X-Worker-Token': this.accessToken!,
       },
       body: form,
     });
@@ -271,7 +277,7 @@ class MockWorker {
     const response = await fetch(`${this.config.controllerUrl}/api/workers/upload`, {
       method: 'POST',
       headers: {
-        'X-API-Key': this.config.apiKey,
+        'X-Worker-Token': this.accessToken!,
       },
       body: form,
     });

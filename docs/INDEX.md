@@ -25,7 +25,9 @@ Essential guides for new users and contributors.
 
 System design, component structure, and technical decisions.
 
-- [Architecture](./architecture/architecture.md) - Overall system design and prototype plan
+- **[Complete Architecture Guide](../ARCHITECTURE.md)** - Comprehensive system architecture (START HERE)
+- **[Agent Workspace Guide](../AGENT-WORKSPACE.md)** - For AI agents working on the codebase
+- [Architecture](./architecture/architecture.md) - Overall system design and prototype plan (historical)
 - [Diagrams](./architecture/diagrams.md) - Visual architecture diagrams and flows
 - [Security](./architecture/security.md) - Security model, threat mitigation, and isolation
 - [Build Pickup Flow](./architecture/build-pickup-flow.md) - Complete build assignment transaction lifecycle
@@ -211,9 +213,11 @@ expo-free-agent/
 **I want to...**
 - **...get started quickly** → [Quickstart](./getting-started/quickstart.md)
 - **...set up my local environment** → [Setup Local](./getting-started/setup-local.md)
-- **...understand the architecture** → [Architecture](./architecture/architecture.md)
+- **...understand the complete architecture** → [Complete Architecture Guide](../ARCHITECTURE.md)
+- **...see visual diagrams** → [Architecture Diagrams](./architecture/diagrams.md)
 - **...understand security** → [Security](./architecture/security.md)
 - **...understand build assignment** → [Build Pickup Flow](./architecture/build-pickup-flow.md)
+- **...work as an AI agent** → [Agent Workspace](../AGENT-WORKSPACE.md)
 - **...release a new version** → [Release](./operations/release.md)
 - **...run tests** → [Testing](./testing/testing.md)
 - **...deploy to production** → [Setup Remote](./getting-started/setup-remote.md)

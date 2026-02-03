@@ -77,6 +77,7 @@ log_info "✓ VM found and stopped"
 log_step "Verifying script files..."
 REQUIRED_FILES=(
     "free-agent-stub.sh"
+    "free-agent-auto-update"
     "install-signing-certs"
     "vm-monitor.sh"
     "com.expo.free-agent.bootstrap.plist"
@@ -147,6 +148,11 @@ copy_file_to_vm() {
 copy_file_to_vm "$SCRIPT_DIR/free-agent-stub.sh" "/tmp/free-agent-stub.sh" "0755"
 tart exec "$VM_NAME" sudo mv /tmp/free-agent-stub.sh /usr/local/bin/
 log_info "✓ Installed free-agent-stub.sh"
+
+# Auto-update launcher (checks for mounted bootstrap or downloads from GitHub)
+copy_file_to_vm "$SCRIPT_DIR/free-agent-auto-update" "/tmp/free-agent-auto-update" "0755"
+tart exec "$VM_NAME" sudo mv /tmp/free-agent-auto-update /usr/local/bin/
+log_info "✓ Installed free-agent-auto-update"
 
 # Cert installer
 copy_file_to_vm "$SCRIPT_DIR/install-signing-certs" "/tmp/install-signing-certs" "0755"

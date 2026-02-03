@@ -256,69 +256,77 @@ if [[ "$PLATFORM" == "ios" ]]; then
         --max-time 30 \
         "$CERT_URL" 2>&1 | tail -n 1 || echo "000")
 
-    if [[ "$HTTP_CODE" != "200" ]]; then
+    if [[ "$HTTP_CODE" == "404" ]]; then
+        log "⚠ No certificates provided - build will not be signed"
+        secure_delete "$CERT_RESPONSE"
+
+        # Skip to Phase 5 - continue without certificates
+        # This is OK for testing or builds that don't require signing
+    elif [[ "$HTTP_CODE" != "200" ]]; then
         ERROR_MSG=$(cat "$CERT_RESPONSE" 2>/dev/null || echo "No response")
         secure_delete "$CERT_RESPONSE"
         fail "Certificate fetch failed (HTTP ${HTTP_CODE}): ${ERROR_MSG}"
-    fi
-
-    # Validate JSON response
-    if ! jq empty "$CERT_RESPONSE" 2>/dev/null; then
-        secure_delete "$CERT_RESPONSE"
-        fail "Invalid JSON in certificate response"
-    fi
-
-    log "✓ Certificates fetched successfully"
-
-    # ========================================
-    # Phase 4: Install Certificates
-    # ========================================
-
-    log "Phase 4: Installing certificates..."
-
-    # Create temp directory for cert files
-    TEMP_DIR=$(mktemp -d)
-
-    # Extract and decode certificate data
-    jq -r '.p12' "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/cert.p12"
-    P12_PASSWORD=$(jq -r '.p12Password' "$CERT_RESPONSE")
-    KEYCHAIN_PASSWORD=$(jq -r '.keychainPassword' "$CERT_RESPONSE" | base64 -d)
-
-    # Extract provisioning profiles
-    PROFILE_COUNT=$(jq -r '.provisioningProfiles | length' "$CERT_RESPONSE")
-    log "Extracting ${PROFILE_COUNT} provisioning profiles..."
-
-    for i in $(seq 0 $((PROFILE_COUNT - 1))); do
-        jq -r ".provisioningProfiles[$i]" "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/profile${i}.mobileprovision"
-    done
-
-    # Clear cert response from disk
-    secure_delete "$CERT_RESPONSE"
-
-    # Call install-signing-certs helper
-    if [[ ! -x /usr/local/bin/install-signing-certs ]]; then
-        rm -rf "$TEMP_DIR"
-        fail "Certificate installer not found: /usr/local/bin/install-signing-certs"
-    fi
-
-    # Install certificates
-    if /usr/local/bin/install-signing-certs \
-        --p12 "${TEMP_DIR}/cert.p12" \
-        --p12-password "$P12_PASSWORD" \
-        --keychain-password "$KEYCHAIN_PASSWORD" \
-        --profiles "${TEMP_DIR}"/*.mobileprovision \
-        >> "$LOG_FILE" 2>&1; then
-        log "✓ Certificates installed successfully"
     else
-        EXIT_CODE=$?
-        log "⚠️  Certificate installation failed (exit code: ${EXIT_CODE})"
-        log "⚠️  Continuing anyway for testing purposes..."
-    fi
+        # HTTP 200 - certificates available, proceed with installation
 
-    # Securely delete temp files
-    secure_delete "${TEMP_DIR}/cert.p12"
-    rm -rf "$TEMP_DIR"
-    log "✓ Temporary certificate files deleted"
+        # Validate JSON response
+        if ! jq empty "$CERT_RESPONSE" 2>/dev/null; then
+            secure_delete "$CERT_RESPONSE"
+            fail "Invalid JSON in certificate response"
+        fi
+
+        log "✓ Certificates fetched successfully"
+
+        # ========================================
+        # Phase 4: Install Certificates
+        # ========================================
+
+        log "Phase 4: Installing certificates..."
+
+        # Create temp directory for cert files
+        TEMP_DIR=$(mktemp -d)
+
+        # Extract and decode certificate data
+        jq -r '.p12' "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/cert.p12"
+        P12_PASSWORD=$(jq -r '.p12Password' "$CERT_RESPONSE")
+        KEYCHAIN_PASSWORD=$(jq -r '.keychainPassword' "$CERT_RESPONSE" | base64 -d)
+
+        # Extract provisioning profiles
+        PROFILE_COUNT=$(jq -r '.provisioningProfiles | length' "$CERT_RESPONSE")
+        log "Extracting ${PROFILE_COUNT} provisioning profiles..."
+
+        for i in $(seq 0 $((PROFILE_COUNT - 1))); do
+            jq -r ".provisioningProfiles[$i]" "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/profile${i}.mobileprovision"
+        done
+
+        # Clear cert response from disk
+        secure_delete "$CERT_RESPONSE"
+
+        # Call install-signing-certs helper
+        if [[ ! -x /usr/local/bin/install-signing-certs ]]; then
+            rm -rf "$TEMP_DIR"
+            fail "Certificate installer not found: /usr/local/bin/install-signing-certs"
+        fi
+
+        # Install certificates
+        if /usr/local/bin/install-signing-certs \
+            --p12 "${TEMP_DIR}/cert.p12" \
+            --p12-password "$P12_PASSWORD" \
+            --keychain-password "$KEYCHAIN_PASSWORD" \
+            --profiles "${TEMP_DIR}"/*.mobileprovision \
+            >> "$LOG_FILE" 2>&1; then
+            log "✓ Certificates installed successfully"
+        else
+            EXIT_CODE=$?
+            log "⚠️  Certificate installation failed (exit code: ${EXIT_CODE})"
+            log "⚠️  Continuing anyway for testing purposes..."
+        fi
+
+        # Securely delete temp files
+        secure_delete "${TEMP_DIR}/cert.p12"
+        rm -rf "$TEMP_DIR"
+        log "✓ Temporary certificate files deleted"
+    fi
 
 else
     log "Phase 3-4: Skipping certificate installation (platform: ${PLATFORM})"
