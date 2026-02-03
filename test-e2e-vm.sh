@@ -268,56 +268,19 @@ fi
 
 echo ""
 
-# Step 2: Create test Expo project
-log_info "Step 2: Creating test Expo project"
+# Step 2: Copy minimal test app from fixtures
+log_info "Step 2: Copying minimal test app from fixtures"
 cd "$ORIGINAL_DIR/$TEST_DIR"
-mkdir -p test-project/ios test-project/android
 
-# Create basic Expo app structure
-cat > test-project/app.json <<EOF
-{
-  "expo": {
-    "name": "E2E VM Test App",
-    "slug": "e2e-vm-test-app",
-    "version": "1.0.0",
-    "platforms": ["ios", "android"],
-    "ios": {
-      "bundleIdentifier": "com.example.e2evmtest"
-    },
-    "android": {
-      "package": "com.example.e2evmtest"
-    }
-  }
-}
-EOF
+MINIMAL_APP="$ORIGINAL_DIR/test/fixtures/minimal-test-app"
+if [ ! -d "$MINIMAL_APP" ]; then
+    log_error "Minimal test app not found at: $MINIMAL_APP"
+    log_error "Test fixture is missing from repository"
+    exit 1
+fi
 
-cat > test-project/package.json <<EOF
-{
-  "name": "e2e-vm-test-app",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "ios": "react-native run-ios",
-    "android": "react-native run-android"
-  },
-  "dependencies": {
-    "react": "^18.0.0",
-    "react-native": "^0.72.0"
-  }
-}
-EOF
-
-echo 'console.log("Hello from E2E VM test");' > test-project/index.js
-
-# Create minimal iOS workspace (for testing)
-cat > test-project/ios/Podfile <<EOF
-platform :ios, '13.0'
-target 'E2EVMTest' do
-  # Minimal pod setup for testing
-end
-EOF
-
-log_success "Test project created"
+cp -R "$MINIMAL_APP" test-project
+log_success "Test project copied from fixtures"
 echo ""
 
 # Step 3: Submit build via API

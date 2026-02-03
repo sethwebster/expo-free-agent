@@ -24,6 +24,55 @@ const zipPath = join(testDir, 'project.zip');
 await zipDirectory(projectDir, zipPath);
 ```
 
+## Minimal Test App (E2E VM Testing)
+
+A complete Expo Router app for E2E VM testing with real builds.
+
+**Location:** `./minimal-test-app/`
+
+**Contents:**
+- `app/` - Expo Router app directory with navigation
+- `assets/` - Images, fonts, and static assets
+- `components/` - React components (EditScreenInfo, ExternalLink, etc.)
+- `constants/` - App constants and configuration
+- `app.json` - Expo configuration with iOS/Android settings
+- `package.json` - Full dependency tree
+- `tsconfig.json` - TypeScript configuration
+
+**Usage:**
+```bash
+# Used automatically by E2E VM test script
+./test-e2e-vm.sh
+
+# The script copies this fixture and submits it to the controller
+# for a complete end-to-end test including:
+# - Certificate discovery and upload
+# - VM bootstrap and configuration
+# - Real xcodebuild execution
+# - Artifact generation and upload
+```
+
+**Key Features:**
+- Complete Expo Router setup (not just a placeholder)
+- Can be built successfully with xcodebuild
+- Includes proper iOS/Android bundle identifiers
+- Has all necessary dependencies for a real build
+- Tests the complete build pipeline from submission to artifact
+
+**Updating:**
+```bash
+# Make changes to the fixture
+cd test/fixtures/minimal-test-app
+
+# Test changes with E2E test
+cd ../../..
+./test-e2e-vm.sh
+
+# Commit changes
+git add test/fixtures/minimal-test-app
+git commit -m "Update minimal test app fixture"
+```
+
 ## Test Helpers
 
 Shared utilities for tests.
