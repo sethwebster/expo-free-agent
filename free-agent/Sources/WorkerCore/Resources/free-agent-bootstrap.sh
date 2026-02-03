@@ -399,17 +399,78 @@ secure_delete "$SOURCE_ZIP"
 cd "$WORKSPACE_DIR" || signal_build_error "Cannot cd to workspace"
 update_progress "building" 20 "Source extracted, starting build..."
 
-# 7.3. Run build
-log "Step 7.3: Running build..."
+# 7.3. Detect project type and prepare build
+log "Step 7.3: Preparing build environment..."
+
+# Check if this is an Expo project
+IS_EXPO=false
+if [[ -f "app.json" ]] && jq -e '.expo' app.json > /dev/null 2>&1; then
+    IS_EXPO=true
+    log "Detected Expo project"
+fi
+
+# Install dependencies
+if [[ -f "package.json" ]]; then
+    log "Installing dependencies..."
+    update_progress "building" 22 "Installing npm dependencies..."
+
+    npm ci >> "$BUILD_LOG" 2>&1 || {
+        log "npm ci failed, trying npm install..."
+        npm install >> "$BUILD_LOG" 2>&1 || {
+            upload_build_log
+            signal_build_error "npm install failed"
+        }
+    }
+
+    log "✓ Dependencies installed"
+fi
+
+# Run Expo prebuild if needed
+if [[ "$IS_EXPO" == "true" ]]; then
+    log "Running Expo prebuild for $PLATFORM..."
+    update_progress "building" 25 "Running Expo prebuild..."
+
+    npx expo prebuild --platform "$PLATFORM" --no-install >> "$BUILD_LOG" 2>&1 || {
+        upload_build_log
+        signal_build_error "Expo prebuild failed"
+    }
+
+    log "✓ Expo prebuild completed"
+fi
+
+# 7.4. Run build
+log "Step 7.4: Running build..."
 
 ARTIFACT_PATH=""
 if [[ "$PLATFORM" == "ios" ]]; then
     # iOS build
     update_progress "building" 30 "Running xcodebuild..."
 
-    # TODO: Determine actual xcodebuild params from project/config
-    # For now this is a placeholder that will need real build logic
-    xcodebuild -workspace *.xcworkspace -scheme Main \
+    # Find workspace or project file
+    WORKSPACE=$(find . -maxdepth 2 -name "*.xcworkspace" | head -1)
+    if [[ -z "$WORKSPACE" ]]; then
+        # Try xcodeproj if no workspace
+        WORKSPACE=$(find . -maxdepth 2 -name "*.xcodeproj" | head -1)
+        if [[ -z "$WORKSPACE" ]]; then
+            upload_build_log
+            signal_build_error "No Xcode workspace or project found"
+        fi
+    fi
+
+    log "Using workspace/project: $WORKSPACE"
+
+    # Determine scheme (usually project name)
+    if [[ "$WORKSPACE" == *.xcworkspace ]]; then
+        SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+        BUILD_FLAG="-workspace"
+    else
+        SCHEME=$(basename "$WORKSPACE" .xcodeproj)
+        BUILD_FLAG="-project"
+    fi
+
+    log "Using scheme: $SCHEME"
+
+    xcodebuild $BUILD_FLAG "$WORKSPACE" -scheme "$SCHEME" \
         -configuration Release -archivePath /tmp/app.xcarchive \
         archive >> "$BUILD_LOG" 2>&1 || {
         upload_build_log
@@ -441,12 +502,12 @@ elif [[ "$PLATFORM" == "android" ]]; then
     ARTIFACT_PATH="app/build/outputs/apk/release/app-release.apk"
 fi
 
-# 7.4. Upload logs
-log "Step 7.4: Uploading build logs..."
+# 7.5. Upload logs
+log "Step 7.5: Uploading build logs..."
 upload_build_log
 
-# 7.5. Upload artifact
-log "Step 7.5: Uploading artifact..."
+# 7.6. Upload artifact
+log "Step 7.6: Uploading artifact..."
 update_progress "uploading_artifacts" 80 "Uploading artifact..."
 
 [[ -f "$ARTIFACT_PATH" ]] || signal_build_error "Artifact not found: ${ARTIFACT_PATH}"
@@ -460,8 +521,8 @@ HTTP_CODE=$(curl -w "%{http_code}" -o /dev/null \
 
 [[ "$HTTP_CODE" == "200" ]] || signal_build_error "Artifact upload failed (HTTP ${HTTP_CODE})"
 
-# 7.6. Signal completion
-log "Step 7.6: Signaling completion..."
+# 7.7. Signal completion
+log "Step 7.7: Signaling completion..."
 signal_build_complete
 
 log "=========================================="
