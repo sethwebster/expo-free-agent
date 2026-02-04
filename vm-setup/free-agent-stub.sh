@@ -44,22 +44,29 @@ log "=========================================="
 
 log "Phase 1: Security lockdown..."
 
-# 1.1. Randomize admin password
-log "Randomizing admin password..."
-NEW_PASSWORD=$(openssl rand -base64 32)
-
-# Try without old password first (works if running as root)
-if dscl . -passwd /Users/admin "$NEW_PASSWORD" 2>/dev/null; then
-    log "✓ Admin password randomized (32 bytes)"
-    unset NEW_PASSWORD
+# Check for debug flag to skip password reset
+NO_PASSWORD_RESET_FLAG="${MOUNT_POINT}/no-password-reset"
+if [[ -f "$NO_PASSWORD_RESET_FLAG" ]]; then
+    log "⚠️  Found no-password-reset flag - SKIPPING password randomization for debugging"
+    log "⚠️  This VM is NOT SECURE and should only be used for testing"
 else
-    # Fallback: try with default password (VM template has 'admin' as default)
-    log "Retrying with default password..."
-    if dscl . -passwd /Users/admin admin "$NEW_PASSWORD" 2>/dev/null; then
+    # 1.1. Randomize admin password
+    log "Randomizing admin password..."
+    NEW_PASSWORD=$(openssl rand -base64 32)
+
+    # Try without old password first (works if running as root)
+    if dscl . -passwd /Users/admin "$NEW_PASSWORD" 2>/dev/null; then
         log "✓ Admin password randomized (32 bytes)"
         unset NEW_PASSWORD
     else
-        fail "Failed to randomize admin password"
+        # Fallback: try with default password (VM template has 'admin' as default)
+        log "Retrying with default password..."
+        if dscl . -passwd /Users/admin admin "$NEW_PASSWORD" 2>/dev/null; then
+            log "✓ Admin password randomized (32 bytes)"
+            unset NEW_PASSWORD
+        else
+            fail "Failed to randomize admin password"
+        fi
     fi
 fi
 
@@ -86,6 +93,8 @@ log "Timeout: ${MOUNT_TIMEOUT}s"
 for i in $(seq 1 $MOUNT_TIMEOUT); do
     if [[ -d "$MOUNT_POINT" ]]; then
         log "✓ Mount point available (waited ${i}s)"
+        # Write bootstrap-started flag
+        echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "${MOUNT_POINT}/bootstrap-started"
         break
     fi
 

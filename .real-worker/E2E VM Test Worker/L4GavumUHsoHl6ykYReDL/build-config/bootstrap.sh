@@ -18,15 +18,11 @@
 
 set -euo pipefail
 
-# Ensure Homebrew binaries are in PATH (Node.js/npm installed via brew)
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-
 # Configuration
 MOUNT_POINT="/Volumes/My Shared Files/build-config"
 CONFIG_FILE="${MOUNT_POINT}/build-config.json"
 READY_FILE="${MOUNT_POINT}/vm-ready"
-# Use /tmp for log file to avoid permission issues
-LOG_FILE="/tmp/free-agent-bootstrap.log"
+LOG_FILE="/var/log/free-agent-bootstrap.log"
 
 # Logging helper
 log() {
@@ -38,11 +34,13 @@ fail() {
     local error_msg="$1"
     log "ERROR: ${error_msg}"
 
-    # Write failure status to vm-ready (using jq to escape JSON properly)
-    jq -n \
-        --arg error "$error_msg" \
-        '{status: "failed", error: $error}' \
-        > "$READY_FILE"
+    # Write failure status to vm-ready
+    cat > "$READY_FILE" <<EOF
+{
+  "status": "failed",
+  "error": "${error_msg}"
+}
+EOF
 
     exit 1
 }
@@ -65,14 +63,15 @@ update_progress() {
     local percent="$2"
     local message="$3"
 
-    # Use jq to properly escape JSON strings
-    jq -n \
-        --arg phase "$phase" \
-        --arg message "$message" \
-        --argjson percent "$percent" \
-        --arg updated_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-        '{status: "running", phase: $phase, progress_percent: $percent, message: $message, updated_at: $updated_at}' \
-        > "${MOUNT_POINT}/progress.json"
+    cat > "${MOUNT_POINT}/progress.json" <<EOF
+{
+  "status": "running",
+  "phase": "${phase}",
+  "progress_percent": ${percent},
+  "message": "${message}",
+  "updated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+EOF
 }
 
 # Upload build log to controller (batched to avoid overwhelming controller)
@@ -121,11 +120,13 @@ upload_build_log() {
 signal_build_complete() {
     update_progress "completed" 100 "Build completed successfully"
 
-    # Use jq to properly escape JSON strings
-    jq -n \
-        --arg completed_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-        '{status: "success", completed_at: $completed_at, artifact_uploaded: true}' \
-        > "${MOUNT_POINT}/build-complete"
+    cat > "${MOUNT_POINT}/build-complete" <<EOF
+{
+  "status": "success",
+  "completed_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "artifact_uploaded": true
+}
+EOF
 }
 
 # Signal build error
@@ -135,12 +136,14 @@ signal_build_error() {
 
     update_progress "failed" 0 "Build failed: ${error_msg}"
 
-    # Use jq to properly escape JSON strings
-    jq -n \
-        --arg error "$error_msg" \
-        --arg completed_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-        '{status: "failed", completed_at: $completed_at, error: $error, artifact_uploaded: false}' \
-        > "${MOUNT_POINT}/build-error"
+    cat > "${MOUNT_POINT}/build-error" <<EOF
+{
+  "status": "failed",
+  "completed_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "error": "${error_msg}",
+  "artifact_uploaded": false
+}
+EOF
 
     # Upload logs before exiting
     upload_build_log
@@ -150,9 +153,6 @@ signal_build_error() {
 log "=========================================="
 log "Expo Free Agent - Bootstrap"
 log "=========================================="
-
-# Write bootstrap-in-progress flag
-echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "${MOUNT_POINT}/bootstrap-in-progress"
 
 # ========================================
 # Phase 1: Load Configuration
@@ -256,77 +256,69 @@ if [[ "$PLATFORM" == "ios" ]]; then
         --max-time 30 \
         "$CERT_URL" 2>&1 | tail -n 1 || echo "000")
 
-    if [[ "$HTTP_CODE" == "404" ]]; then
-        log "⚠ No certificates provided - build will not be signed"
-        secure_delete "$CERT_RESPONSE"
-
-        # Skip to Phase 5 - continue without certificates
-        # This is OK for testing or builds that don't require signing
-    elif [[ "$HTTP_CODE" != "200" ]]; then
+    if [[ "$HTTP_CODE" != "200" ]]; then
         ERROR_MSG=$(cat "$CERT_RESPONSE" 2>/dev/null || echo "No response")
         secure_delete "$CERT_RESPONSE"
         fail "Certificate fetch failed (HTTP ${HTTP_CODE}): ${ERROR_MSG}"
-    else
-        # HTTP 200 - certificates available, proceed with installation
-
-        # Validate JSON response
-        if ! jq empty "$CERT_RESPONSE" 2>/dev/null; then
-            secure_delete "$CERT_RESPONSE"
-            fail "Invalid JSON in certificate response"
-        fi
-
-        log "✓ Certificates fetched successfully"
-
-        # ========================================
-        # Phase 4: Install Certificates
-        # ========================================
-
-        log "Phase 4: Installing certificates..."
-
-        # Create temp directory for cert files
-        TEMP_DIR=$(mktemp -d)
-
-        # Extract and decode certificate data
-        jq -r '.p12' "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/cert.p12"
-        P12_PASSWORD=$(jq -r '.p12Password' "$CERT_RESPONSE")
-        KEYCHAIN_PASSWORD=$(jq -r '.keychainPassword' "$CERT_RESPONSE" | base64 -d)
-
-        # Extract provisioning profiles
-        PROFILE_COUNT=$(jq -r '.provisioningProfiles | length' "$CERT_RESPONSE")
-        log "Extracting ${PROFILE_COUNT} provisioning profiles..."
-
-        for i in $(seq 0 $((PROFILE_COUNT - 1))); do
-            jq -r ".provisioningProfiles[$i]" "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/profile${i}.mobileprovision"
-        done
-
-        # Clear cert response from disk
-        secure_delete "$CERT_RESPONSE"
-
-        # Call install-signing-certs helper
-        if [[ ! -x /usr/local/bin/install-signing-certs ]]; then
-            rm -rf "$TEMP_DIR"
-            fail "Certificate installer not found: /usr/local/bin/install-signing-certs"
-        fi
-
-        # Install certificates
-        if /usr/local/bin/install-signing-certs \
-            --p12 "${TEMP_DIR}/cert.p12" \
-            --p12-password "$P12_PASSWORD" \
-            --keychain-password "$KEYCHAIN_PASSWORD" \
-            --profiles "${TEMP_DIR}"/*.mobileprovision \
-            >> "$LOG_FILE" 2>&1; then
-            log "✓ Certificates installed successfully"
-        else
-            EXIT_CODE=$?
-            log "⚠️  Certificate installation failed (exit code: ${EXIT_CODE})"
-            log "⚠️  Continuing anyway for testing purposes..."
-        fi
-
-        # Securely delete temp files
-        secure_delete "${TEMP_DIR}/cert.p12"
-        rm -rf "$TEMP_DIR"
-        log "✓ Temporary certificate files deleted"
     fi
+
+    # Validate JSON response
+    if ! jq empty "$CERT_RESPONSE" 2>/dev/null; then
+        secure_delete "$CERT_RESPONSE"
+        fail "Invalid JSON in certificate response"
+    fi
+
+    log "✓ Certificates fetched successfully"
+
+    # ========================================
+    # Phase 4: Install Certificates
+    # ========================================
+
+    log "Phase 4: Installing certificates..."
+
+    # Create temp directory for cert files
+    TEMP_DIR=$(mktemp -d)
+
+    # Extract and decode certificate data
+    jq -r '.p12' "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/cert.p12"
+    P12_PASSWORD=$(jq -r '.p12Password' "$CERT_RESPONSE")
+    KEYCHAIN_PASSWORD=$(jq -r '.keychainPassword' "$CERT_RESPONSE" | base64 -d)
+
+    # Extract provisioning profiles
+    PROFILE_COUNT=$(jq -r '.provisioningProfiles | length' "$CERT_RESPONSE")
+    log "Extracting ${PROFILE_COUNT} provisioning profiles..."
+
+    for i in $(seq 0 $((PROFILE_COUNT - 1))); do
+        jq -r ".provisioningProfiles[$i]" "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/profile${i}.mobileprovision"
+    done
+
+    # Clear cert response from disk
+    secure_delete "$CERT_RESPONSE"
+
+    # Call install-signing-certs helper
+    if [[ ! -x /usr/local/bin/install-signing-certs ]]; then
+        rm -rf "$TEMP_DIR"
+        fail "Certificate installer not found: /usr/local/bin/install-signing-certs"
+    fi
+
+    # Install certificates
+    if /usr/local/bin/install-signing-certs \
+        --p12 "${TEMP_DIR}/cert.p12" \
+        --p12-password "$P12_PASSWORD" \
+        --keychain-password "$KEYCHAIN_PASSWORD" \
+        --profiles "${TEMP_DIR}"/*.mobileprovision \
+        >> "$LOG_FILE" 2>&1; then
+        log "✓ Certificates installed successfully"
+    else
+        EXIT_CODE=$?
+        log "⚠️  Certificate installation failed (exit code: ${EXIT_CODE})"
+        log "⚠️  Continuing anyway for testing purposes..."
+    fi
+
+    # Securely delete temp files
+    secure_delete "${TEMP_DIR}/cert.p12"
+    rm -rf "$TEMP_DIR"
+    log "✓ Temporary certificate files deleted"
 
 else
     log "Phase 3-4: Skipping certificate installation (platform: ${PLATFORM})"
@@ -349,11 +341,13 @@ log "✓ Verification token generated"
 
 log "Phase 6: Signaling ready to host..."
 
-# Write ready status with verification token (using jq for safe JSON)
-jq -n \
-    --arg vm_token "$VERIFICATION_TOKEN" \
-    '{status: "ready", vm_token: $vm_token}' \
-    > "$READY_FILE"
+# Write ready status with verification token
+cat > "$READY_FILE" <<EOF
+{
+  "status": "ready",
+  "vm_token": "${VERIFICATION_TOKEN}"
+}
+EOF
 
 log "✓ Ready signal written to ${READY_FILE}"
 
@@ -397,81 +391,17 @@ secure_delete "$SOURCE_ZIP"
 cd "$WORKSPACE_DIR" || signal_build_error "Cannot cd to workspace"
 update_progress "building" 20 "Source extracted, starting build..."
 
-# 7.3. Detect project type and prepare build
-log "Step 7.3: Preparing build environment..."
-
-# Check if this is an Expo project
-IS_EXPO=false
-if [[ -f "app.json" ]] && jq -e '.expo' app.json > /dev/null 2>&1; then
-    IS_EXPO=true
-    log "Detected Expo project"
-fi
-
-# Install dependencies
-if [[ -f "package.json" ]]; then
-    log "Installing dependencies..."
-    log "Node version: $(node --version 2>&1 || echo 'not found')"
-    log "npm version: $(npm --version 2>&1 || echo 'not found')"
-    log "PATH: $PATH"
-    update_progress "building" 22 "Installing npm dependencies..."
-
-    npm ci >> "$BUILD_LOG" 2>&1 || {
-        log "npm ci failed, trying npm install..."
-        npm install >> "$BUILD_LOG" 2>&1 || {
-            upload_build_log
-            signal_build_error "npm install failed"
-        }
-    }
-
-    log "✓ Dependencies installed"
-fi
-
-# Run Expo prebuild if needed
-if [[ "$IS_EXPO" == "true" ]]; then
-    log "Running Expo prebuild for $PLATFORM..."
-    update_progress "building" 25 "Running Expo prebuild..."
-
-    npx expo prebuild --platform "$PLATFORM" --no-install >> "$BUILD_LOG" 2>&1 || {
-        upload_build_log
-        signal_build_error "Expo prebuild failed"
-    }
-
-    log "✓ Expo prebuild completed"
-fi
-
-# 7.4. Run build
-log "Step 7.4: Running build..."
+# 7.3. Run build
+log "Step 7.3: Running build..."
 
 ARTIFACT_PATH=""
 if [[ "$PLATFORM" == "ios" ]]; then
     # iOS build
     update_progress "building" 30 "Running xcodebuild..."
 
-    # Find workspace or project file
-    WORKSPACE=$(find . -maxdepth 2 -name "*.xcworkspace" | head -1)
-    if [[ -z "$WORKSPACE" ]]; then
-        # Try xcodeproj if no workspace
-        WORKSPACE=$(find . -maxdepth 2 -name "*.xcodeproj" | head -1)
-        if [[ -z "$WORKSPACE" ]]; then
-            upload_build_log
-            signal_build_error "No Xcode workspace or project found"
-        fi
-    fi
-
-    log "Using workspace/project: $WORKSPACE"
-
-    # Determine scheme (usually project name)
-    if [[ "$WORKSPACE" == *.xcworkspace ]]; then
-        SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-        BUILD_FLAG="-workspace"
-    else
-        SCHEME=$(basename "$WORKSPACE" .xcodeproj)
-        BUILD_FLAG="-project"
-    fi
-
-    log "Using scheme: $SCHEME"
-
-    xcodebuild $BUILD_FLAG "$WORKSPACE" -scheme "$SCHEME" \
+    # TODO: Determine actual xcodebuild params from project/config
+    # For now this is a placeholder that will need real build logic
+    xcodebuild -workspace *.xcworkspace -scheme Main \
         -configuration Release -archivePath /tmp/app.xcarchive \
         archive >> "$BUILD_LOG" 2>&1 || {
         upload_build_log
@@ -503,12 +433,12 @@ elif [[ "$PLATFORM" == "android" ]]; then
     ARTIFACT_PATH="app/build/outputs/apk/release/app-release.apk"
 fi
 
-# 7.5. Upload logs
-log "Step 7.5: Uploading build logs..."
+# 7.4. Upload logs
+log "Step 7.4: Uploading build logs..."
 upload_build_log
 
-# 7.6. Upload artifact
-log "Step 7.6: Uploading artifact..."
+# 7.5. Upload artifact
+log "Step 7.5: Uploading artifact..."
 update_progress "uploading_artifacts" 80 "Uploading artifact..."
 
 [[ -f "$ARTIFACT_PATH" ]] || signal_build_error "Artifact not found: ${ARTIFACT_PATH}"
@@ -522,17 +452,9 @@ HTTP_CODE=$(curl -w "%{http_code}" -o /dev/null \
 
 [[ "$HTTP_CODE" == "200" ]] || signal_build_error "Artifact upload failed (HTTP ${HTTP_CODE})"
 
-# 7.7. Signal completion
-log "Step 7.7: Signaling completion..."
+# 7.6. Signal completion
+log "Step 7.6: Signaling completion..."
 signal_build_complete
-
-# Rename bootstrap-in-progress to bootstrap-complete with all logs
-if [[ -f "$LOG_FILE" ]]; then
-    cat "$LOG_FILE" > "${MOUNT_POINT}/bootstrap-complete"
-else
-    echo "No logs found" > "${MOUNT_POINT}/bootstrap-complete"
-fi
-rm -f "${MOUNT_POINT}/bootstrap-in-progress"
 
 log "=========================================="
 log "Build execution complete!"

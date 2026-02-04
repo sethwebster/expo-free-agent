@@ -65,7 +65,7 @@ P12_PASSWORD=$(openssl rand -base64 32)
 
 # Prompt for keychain password upfront
 echo "Exporting certificate: $IDENTITY_NAME" >&2
-echo "⚠️  Please enter your login keychain password" >&2
+echo "⚠️  Please enter your login keychain password (Never stored.)" >&2
 echo >&2
 
 # Read keychain password (disable echo for security)

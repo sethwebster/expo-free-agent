@@ -18,9 +18,9 @@
 
     <!-- Logging -->
     <key>StandardOutPath</key>
-    <string>/var/log/free-agent-stub.log</string>
+    <string>/tmp/free-agent-stub.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/free-agent-stub.log</string>
+    <string>/tmp/free-agent-stub.log</string>
 
     <!-- Environment Variables (populated by Tart --env) -->
     <!-- These are passed from the host via: tart run --env KEY=VALUE -->
@@ -48,7 +48,7 @@
     <key>ExitTimeOut</key>
     <integer>300</integer>
 
-    <!-- Run as root (required for password randomization and /var/log write access) -->
+    <!-- Run as root (required for password randomization) -->
 
     <!-- Disable throttling for immediate execution -->
     <key>ThrottleInterval</key>

@@ -330,16 +330,10 @@ log_info "Step 3.1: Finding iOS developer certificates..."
 echo ""
 
 CERTS_ZIP=""
-# Use auto cert finder for CI/non-interactive testing
 CERT_FINDER="$ORIGINAL_DIR/test/find-dev-certs-auto.sh"
 
-# Allow override to interactive version if needed
-if [ -n "$USE_INTERACTIVE_CERTS" ] && [ "$USE_INTERACTIVE_CERTS" = "true" ]; then
-  CERT_FINDER="$ORIGINAL_DIR/test/find-dev-certs.sh"
-fi
-
 if [ -x "$CERT_FINDER" ]; then
-  # Run cert finder (auto version for CI, interactive if specified)
+  # Run interactive cert finder (user selects cert and enters password)
   # Script writes prompts to stderr (terminal), final path to stdout
   CERTS_ZIP=$("$CERT_FINDER")
   EXIT_CODE=$?
@@ -426,7 +420,7 @@ echo ""
 WORKER_DIR="$ORIGINAL_DIR/$TEST_DIR/worker-dir"
 BUILD_CONFIG_DIR=""
 for i in {1..10}; do
-    BUILD_CONFIG_DIR=$(find "$WORKER_DIR" -type d -name "config" 2>/dev/null | head -1)
+    BUILD_CONFIG_DIR=$(find "$WORKER_DIR" -type d \( -name "build-config" -o -name "buildconfig" \) 2>/dev/null | head -1)
     if [ -n "$BUILD_CONFIG_DIR" ]; then
         log_info "Found build config dir: $BUILD_CONFIG_DIR"
         break

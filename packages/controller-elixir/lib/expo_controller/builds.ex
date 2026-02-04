@@ -319,9 +319,12 @@ defmodule ExpoController.Builds do
   def mark_stuck_builds_as_failed(timeout_seconds \\ 300) do
     cutoff = DateTime.utc_now() |> DateTime.add(-timeout_seconds, :second)
 
+    # For builds with no heartbeat yet, check if they were assigned more than timeout ago
+    # For builds with heartbeats, check if last heartbeat was more than timeout ago
     stuck_builds = from(b in Build,
       where: b.status in [:assigned, :building],
-      where: b.last_heartbeat_at < ^cutoff or is_nil(b.last_heartbeat_at)
+      where: (not is_nil(b.last_heartbeat_at) and b.last_heartbeat_at < ^cutoff) or
+             (is_nil(b.last_heartbeat_at) and b.updated_at < ^cutoff)
     )
     |> Repo.all()
 

@@ -1,0 +1,4 @@
+{
+  "status": "failed",
+  "error": "Certificate fetch failed (HTTP 500): {\"error\":\"Failed to process certs file\"}"
+}

@@ -21,7 +21,10 @@ if System.get_env("PHX_SERVER") do
 end
 
 config :expo_controller, ExpoControllerWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT") || "4444")]
+  http: [
+    ip: {0, 0, 0, 0},  # Bind to all interfaces for VM access
+    port: String.to_integer(System.get_env("PORT") || "4444")
+  ]
 
 # Configure API key (required, must be at least 32 characters)
 if api_key = System.get_env("CONTROLLER_API_KEY") do

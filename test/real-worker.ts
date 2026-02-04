@@ -27,6 +27,7 @@ interface RealWorkerConfig {
   pollIntervalMs?: number;
   baseVMImage: string;  // e.g., "sequoia-vanilla" or "ghcr.io/sethwebster/expo-free-agent-base:latest"
   buildTimeout?: number;  // Max time for build in seconds
+  vmControllerUrl?: string;  // Optional override URL for VM to access controller (e.g., ngrok URL)
 }
 
 interface BuildJob {
@@ -276,13 +277,19 @@ class RealWorker {
     mkdirSync(buildConfigDir, { recursive: true });
 
     // Get controller URL accessible from VM
-    // VMs can't use 'localhost' - need host's IP on bridge network
-    let vmAccessibleUrl = this.config.controllerUrl;
-    if (vmAccessibleUrl.includes('localhost') || vmAccessibleUrl.includes('127.0.0.1')) {
-      // For Tart VMs, the host is accessible at the bridge gateway (192.168.64.1 by default)
-      const hostIP = '192.168.64.1';
-      vmAccessibleUrl = vmAccessibleUrl.replace(/localhost|127\.0\.0\.1/, hostIP);
-      console.log(`[${this.config.workerName}] Controller URL for VM: ${vmAccessibleUrl} (host: ${hostIP})`);
+    // Use vmControllerUrl if provided (e.g., ngrok URL), otherwise try to make it accessible
+    let vmAccessibleUrl = this.config.vmControllerUrl || this.config.controllerUrl;
+
+    if (!this.config.vmControllerUrl) {
+      // No override URL provided - try to make localhost accessible
+      if (vmAccessibleUrl.includes('localhost') || vmAccessibleUrl.includes('127.0.0.1')) {
+        // For Tart VMs, the host is accessible at the bridge gateway (192.168.64.1 by default)
+        const hostIP = '192.168.64.1';
+        vmAccessibleUrl = vmAccessibleUrl.replace(/localhost|127\.0\.0\.1/, hostIP);
+        console.log(`[${this.config.workerName}] Controller URL for VM: ${vmAccessibleUrl} (host: ${hostIP})`);
+      }
+    } else {
+      console.log(`[${this.config.workerName}] Using provided VM controller URL: ${vmAccessibleUrl}`);
     }
 
     // Write build-config.json
@@ -450,6 +457,7 @@ Options:
   --base-image <name>      Tart base image (default: "ghcr.io/sethwebster/expo-free-agent-base:latest")
   --poll-interval <ms>     Poll interval (default: 5000)
   --build-timeout <sec>    Build timeout (default: 1800)
+  --vm-controller-url <url> Override URL for VM access (e.g., ngrok URL)
   --help, -h               Show this help
 
 Prerequisites:
@@ -481,6 +489,9 @@ Example:
       : undefined,
     buildTimeout: args.includes('--build-timeout')
       ? parseInt(args[args.indexOf('--build-timeout') + 1])
+      : undefined,
+    vmControllerUrl: args.includes('--vm-controller-url')
+      ? args[args.indexOf('--vm-controller-url') + 1]
       : undefined,
   };
 

@@ -60,6 +60,18 @@ fi
 log_success "CLI built successfully"
 cd ../..
 
+# Check mount paths are consistent (prevents VM bootstrap failures)
+log_info "Checking mount path consistency..."
+if [ -x ./test-mount-path.sh ]; then
+    if ! ./test-mount-path.sh > /dev/null 2>&1; then
+        log_error "Mount path inconsistency detected - run ./test-mount-path.sh for details"
+        exit 1
+    fi
+    log_success "Mount paths are consistent"
+else
+    log_info "Mount path test not found, skipping"
+fi
+
 # Build Free Agent (if on macOS)
 if [[ "$OSTYPE" == "darwin"* ]]; then
     log_info "Building Free Agent..."
