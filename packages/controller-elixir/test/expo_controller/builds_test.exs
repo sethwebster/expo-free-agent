@@ -71,5 +71,13 @@ defmodule ExpoController.BuildsTest do
       build = build_fixture()
       assert %Ecto.Changeset{} = Builds.change_build(build)
     end
+
+    test "record_heartbeat/1 transitions assigned to building" do
+      build = build_fixture(%{status: :assigned, last_heartbeat_at: nil})
+
+      assert {:ok, updated} = Builds.record_heartbeat(build.id)
+      assert updated.status == :building
+      refute is_nil(updated.last_heartbeat_at)
+    end
   end
 end

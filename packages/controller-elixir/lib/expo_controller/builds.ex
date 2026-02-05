@@ -159,9 +159,15 @@ defmodule ExpoController.Builds do
     case get_build(build_id) do
       nil -> {:error, :not_found}
       build ->
-        build
-        |> Build.heartbeat_changeset()
-        |> Repo.update()
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+        changeset =
+          if build.status == :assigned do
+            Ecto.Changeset.change(build, status: :building, last_heartbeat_at: now)
+          else
+            Build.heartbeat_changeset(build)
+          end
+
+        Repo.update(changeset)
     end
   end
 
@@ -490,5 +496,34 @@ defmodule ExpoController.Builds do
     query = if limit, do: limit(query, ^limit), else: query
 
     Repo.all(query)
+  end
+
+  @doc """
+  Marks a VM as ready for a build.
+  """
+  def mark_vm_ready(build_id) do
+    case get_build(build_id) do
+      nil -> {:error, :not_found}
+      build ->
+        build
+        |> Build.vm_ready_changeset()
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Checks if VM is ready for a build.
+  Returns {:ok, vm_token} if ready, {:error, :not_ready} if not.
+  """
+  def check_vm_ready(build_id) do
+    case get_build(build_id) do
+      nil -> {:error, :not_found}
+      build ->
+        if build.vm_ready_at do
+          {:ok, %{vm_token: build.vm_token, vm_ready_at: build.vm_ready_at}}
+        else
+          {:error, :not_ready}
+        end
+    end
   end
 end

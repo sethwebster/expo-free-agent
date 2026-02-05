@@ -410,6 +410,24 @@ public actor WorkerService {
 
             print("✓ Wrote bootstrap script to \(bootstrapDestination.path)")
 
+            // Write diagnostics script
+            guard let diagnosticsURL = Bundle.module.url(
+                forResource: "diagnostics",
+                withExtension: "sh"
+            ) else {
+                throw WorkerError.resourceNotFound("diagnostics.sh")
+            }
+
+            let diagnosticsDestination = buildPackagePath!.appendingPathComponent("diagnostics.sh")
+            try FileManager.default.copyItem(at: diagnosticsURL, to: diagnosticsDestination)
+
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: diagnosticsDestination.path
+            )
+
+            print("✓ Wrote diagnostics script to \(diagnosticsDestination.path)")
+
             // Step 4: Create and launch VM
             print("Step 4: Creating and launching VM...")
 
@@ -435,29 +453,37 @@ public actor WorkerService {
             }
             print("✓ VM cloned: \(vmName!)")
 
-            // Launch VM with graphics and build config mounted
-            print("Launching VM with graphics and build config mounted...")
+            // Launch VM headless with build config mounted
+            print("Launching VM headless with build config mounted...")
             runProcess = Process()
             runProcess!.executableURL = URL(fileURLWithPath: tartPath!)
             runProcess!.arguments = [
                 "run",
+                "--no-graphics",
                 vmName!,
                 "--dir", "build-config:\(buildPackagePath!.path)"
             ]
 
-            print("Executing: \(tartPath!) run \(vmName!) --dir build-config:\(buildPackagePath!.path)")
+            print("Executing: \(tartPath!) run --no-graphics \(vmName!) --dir build-config:\(buildPackagePath!.path)")
             try runProcess!.run()
-            print("✓ VM launched with graphics (PID: \(runProcess!.processIdentifier))")
-            print("✓ Build config mounted at /Volumes/My Shared Files/build-config")
+            print("✓ VM launched headless (PID: \(runProcess!.processIdentifier))")
+            print("✓ Build config will mount at /Volumes/My Shared Files/build-config")
 
-            // Wait for VM bootstrap to complete
-            let vmToken = try await waitForVMReady(buildDir: buildPackagePath!, timeout: 300)
+            // Wait for VM bootstrap to complete (polls controller API)
+            let vmToken = try await waitForVMReady(buildID: job.id, timeout: 300)
             print("✓ VM bootstrap complete (token: \(vmToken.prefix(8))...)")
 
             // Step 5: Monitor build progress
             print("Step 5: Monitoring build progress...")
 
+            guard let workerID = configuration.workerID, !workerID.isEmpty else {
+                throw WorkerError.buildFailed(reason: "Worker ID not configured")
+            }
+
             let buildStatus = try await monitorBuildProgress(
+                buildID: job.id,
+                workerID: workerID,
+                vmToken: vmToken,
                 buildDir: buildPackagePath!,
                 vmProcess: runProcess!,
                 timeout: TimeInterval(configuration.buildTimeoutMinutes * 60)
@@ -473,8 +499,17 @@ public actor WorkerService {
                 ))
             } else {
                 print("✗ Build failed, reporting to controller...")
+                let baseError = buildStatus.error ?? "Build failed"
+                let detailedError: String
+
+                if let logTail = buildStatus.logTail, !logTail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    detailedError = "\(baseError)\n\nVM build log tail:\n\(logTail)"
+                } else {
+                    detailedError = baseError
+                }
+
                 await reportJobFailure(job.id, error: WorkerError.buildFailed(
-                    reason: buildStatus.error ?? "Build failed"
+                    reason: detailedError
                 ))
             }
 
@@ -688,51 +723,84 @@ public actor WorkerService {
         }
     }
 
-    private func waitForVMReady(buildDir: URL, timeout: TimeInterval = 300) async throws -> String {
-        let readyFile = buildDir.appendingPathComponent("vm-ready")
+    private func waitForVMReady(buildID: String, timeout: TimeInterval = 300) async throws -> String {
         let deadline = Date().addingTimeInterval(timeout)
+        let statusURL = URL(string: "\(configuration.controllerURL)/api/builds/\(buildID)/vm-status")!
 
-        print("Waiting for VM ready signal at \(readyFile.path)")
+        print("Waiting for VM ready signal via controller API...")
 
         while Date() < deadline {
-            if FileManager.default.fileExists(atPath: readyFile.path) {
-                let data = try Data(contentsOf: readyFile)
-                let response = try JSONDecoder().decode(VMReadyResponse.self, from: data)
+            do {
+                var request = URLRequest(url: statusURL)
+                request.httpMethod = "GET"
+                request.timeoutInterval = 10
 
-                if response.status == "ready" {
-                    guard let token = response.vm_token, !token.isEmpty else {
-                        throw WorkerError.vmBootstrapFailed("VM token missing")
-                    }
-                    print("✓ VM ready (token: \(token.prefix(8))...)")
-                    return token
-                } else if response.status == "failed" {
-                    throw WorkerError.vmBootstrapFailed(response.error ?? "Unknown error")
-                } else {
-                    throw WorkerError.vmBootstrapFailed("Invalid status: \(response.status)")
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    try await Task.sleep(for: .seconds(2))
+                    continue
                 }
+
+                if httpResponse.statusCode == 200 {
+                    let vmStatus = try JSONDecoder().decode(VMStatusResponse.self, from: data)
+
+                    if vmStatus.vm_ready {
+                        guard let token = vmStatus.vm_token, !token.isEmpty else {
+                            throw WorkerError.vmBootstrapFailed("VM token missing from controller")
+                        }
+                        print("✓ VM ready (token: \(token.prefix(8))...)")
+                        return token
+                    }
+                } else if httpResponse.statusCode == 404 {
+                    throw WorkerError.vmBootstrapFailed("Build not found")
+                }
+            } catch let error as WorkerError {
+                throw error
+            } catch {
+                // Network error, continue polling
+                print("⚠️  VM status check failed: \(error), retrying...")
             }
 
-            try await Task.sleep(for: .seconds(1))
+            try await Task.sleep(for: .seconds(2))
         }
 
         throw WorkerError.timeout("VM did not signal ready within \(timeout)s")
     }
 
     private func monitorBuildProgress(
+        buildID: String,
+        workerID: String,
+        vmToken: String,
         buildDir: URL,
         vmProcess: Process,
         timeout: TimeInterval
     ) async throws -> BuildCompletionStatus {
         let completeFile = buildDir.appendingPathComponent("build-complete")
         let errorFile = buildDir.appendingPathComponent("build-error")
+        let progressFile = buildDir.appendingPathComponent("progress.json")
         let deadline = Date().addingTimeInterval(timeout)
+        let heartbeatInterval: TimeInterval = 20
+        var lastHeartbeat = Date.distantPast
 
         print("Monitoring build progress...")
 
         while Date() < deadline {
+            let now = Date()
             // Check if VM process is still running
             if !vmProcess.isRunning {
                 throw WorkerError.buildFailed(reason: "VM process terminated unexpectedly")
+            }
+
+            if now.timeIntervalSince(lastHeartbeat) >= heartbeatInterval {
+                let progress = try Self.decodeBuildProgress(at: progressFile)
+                try await sendBuildHeartbeat(
+                    buildID: buildID,
+                    workerID: workerID,
+                    vmToken: vmToken,
+                    progressPercent: progress?.progressPercent
+                )
+                lastHeartbeat = now
             }
 
             // Check for completion
@@ -740,7 +808,7 @@ public actor WorkerService {
                 let data = try Data(contentsOf: completeFile)
                 let _ = try JSONDecoder().decode(BuildCompletionSignal.self, from: data)
                 print("✓ Build completed successfully")
-                return BuildCompletionStatus(success: true, error: nil)
+                return BuildCompletionStatus(success: true, error: nil, logTail: nil)
             }
 
             // Check for error
@@ -748,7 +816,7 @@ public actor WorkerService {
                 let data = try Data(contentsOf: errorFile)
                 let signal = try JSONDecoder().decode(BuildCompletionSignal.self, from: data)
                 print("✗ Build failed: \(signal.error ?? "Unknown error")")
-                return BuildCompletionStatus(success: false, error: signal.error)
+                return BuildCompletionStatus(success: false, error: signal.error, logTail: signal.log_tail)
             }
 
             // Poll every 5 seconds
@@ -756,6 +824,38 @@ public actor WorkerService {
         }
 
         throw WorkerError.timeout("Build did not complete within \(timeout)s")
+    }
+
+    private func sendBuildHeartbeat(
+        buildID: String,
+        workerID: String,
+        vmToken: String,
+        progressPercent: Int?
+    ) async throws {
+        var urlComponents = URLComponents(string: "\(configuration.controllerURL)/api/builds/\(buildID)/heartbeat")
+        urlComponents?.queryItems = [URLQueryItem(name: "worker_id", value: workerID)]
+
+        guard let url = urlComponents?.url else {
+            throw WorkerError.invalidConfiguration("Invalid heartbeat URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(vmToken, forHTTPHeaderField: "X-VM-Token")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let progressPercent = progressPercent {
+            let payload: [String: Any] = ["progress": progressPercent]
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        } else {
+            request.httpBody = try JSONSerialization.data(withJSONObject: [:])
+        }
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            throw WorkerError.buildFailed(reason: "Heartbeat failed with status \(httpResponse.statusCode)")
+        }
     }
 
     private func stopVMProcess(_ process: Process) async {
@@ -801,22 +901,57 @@ public actor WorkerService {
     }
 }
 
+struct BuildProgress: Codable {
+    let status: String?
+    let phase: String?
+    let progressPercent: Int?
+    let message: String?
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case phase
+        case progressPercent = "progress_percent"
+        case message
+        case updatedAt = "updated_at"
+    }
+}
+
 struct VMReadyResponse: Codable {
     let status: String
     let vm_token: String?
     let error: String?
 }
 
+struct VMStatusResponse: Codable {
+    let vm_ready: Bool
+    let vm_token: String?
+    let vm_ready_at: String?
+}
+
+extension WorkerService {
+    static func decodeBuildProgress(at path: URL) throws -> BuildProgress? {
+        guard FileManager.default.fileExists(atPath: path.path) else {
+            return nil
+        }
+
+        let data = try Data(contentsOf: path)
+        return try JSONDecoder().decode(BuildProgress.self, from: data)
+    }
+}
+
 struct BuildCompletionSignal: Codable {
     let status: String
     let completed_at: String
     let error: String?
+    let log_tail: String?
     let artifact_uploaded: Bool
 }
 
 struct BuildCompletionStatus {
     let success: Bool
     let error: String?
+    let logTail: String?
 }
 
 // MARK: - Models
@@ -853,6 +988,7 @@ enum WorkerError: Error {
     case resourceNotFound(String)
     case vmBootstrapFailed(String)
     case timeout(String)
+    case invalidConfiguration(String)
 }
 
 // MARK: - Data Extension

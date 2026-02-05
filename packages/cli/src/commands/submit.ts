@@ -1,12 +1,13 @@
 import { Command } from 'commander';
 import archiver from 'archiver';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import readline from 'readline';
 import { apiClient, APIClient } from '../api-client.js';
 import { saveBuildToken } from '../build-tokens.js';
-import { discoverAndExportCertificate } from '../certificates.js';
+import { discoverAndExportCertificateForBundle, ensureCertificateBundle } from '../certificates.js';
 import chalk from 'chalk';
 import ora from 'ora';
 import { isTTY } from '../types.js';
@@ -17,8 +18,9 @@ export function createSubmitCommand(): Command {
   command
     .description('Submit an Expo project for building')
     .argument('<project-path>', 'Path to Expo project directory')
-    .option('--cert <path>', 'Path to signing certificate (.p12)')
+    .option('--cert <path>', 'Path to signing certificate bundle (.zip) or .p12')
     .option('--profile <path>', 'Path to provisioning profile (.mobileprovision)')
+    .option('--bundle-id <id>', 'Override iOS bundle identifier for signing')
     .option('--apple-id <email>', 'Apple ID email')
     .option('--api-key <key>', 'API key for authentication')
     .option('--controller-url <url>', 'Controller URL')
@@ -76,9 +78,13 @@ export function createSubmitCommand(): Command {
           const certPath = path.resolve(options.cert);
           try {
             await fs.promises.access(certPath);
-            certsPath = certPath;
-          } catch {
-            console.error(chalk.red(`Certificate not found: ${certPath}`));
+            const result = await ensureCertificateBundle(certPath);
+            certsPath = result.certsPath;
+            if (result.tempDir) {
+              certsTempDir = result.tempDir;
+            }
+          } catch (error) {
+            console.error(chalk.red(error instanceof Error ? error.message : String(error)));
             process.exit(1);
           }
         } else if (options.certs !== false) {
@@ -89,7 +95,8 @@ export function createSubmitCommand(): Command {
           console.log(chalk.dim('Discovering signing certificates from keychain...'));
 
           try {
-            const result = await discoverAndExportCertificate(resolvedPath, true);
+            const bundleId = await resolveBundleIdentifier(resolvedPath, options.bundleId);
+            const result = await discoverAndExportCertificateForBundle(resolvedPath, bundleId);
             certsPath = result.certsPath;
             certsTempDir = result.tempDir;
 
@@ -184,6 +191,52 @@ export function createSubmitCommand(): Command {
     });
 
   return command;
+}
+
+async function resolveBundleIdentifier(projectPath: string, override?: string): Promise<string> {
+  if (override) {
+    return override;
+  }
+
+  const appJsonPath = path.join(projectPath, 'app.json');
+  try {
+    const raw = await fs.promises.readFile(appJsonPath, 'utf-8');
+    const parsed = JSON.parse(raw) as { expo?: { ios?: { bundleIdentifier?: string } } };
+    const bundleId = parsed?.expo?.ios?.bundleIdentifier;
+    if (bundleId) {
+      return bundleId;
+    }
+  } catch {
+    // Fall through to expo config.
+  }
+
+  const expoBin = path.join(projectPath, 'node_modules', '.bin', 'expo');
+  const commands = [
+    fs.existsSync(expoBin) ? `"${expoBin}" config --json` : null,
+    process.env.BUN_VERSION ? 'bunx --yes expo config --json' : null,
+    'npx --yes expo config --json',
+  ].filter(Boolean) as string[];
+
+  for (const command of commands) {
+    try {
+      const output = execSync(command, {
+        cwd: projectPath,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const parsed = JSON.parse(output) as { expo?: { ios?: { bundleIdentifier?: string } } };
+      const bundleId = parsed?.expo?.ios?.bundleIdentifier;
+      if (bundleId) {
+        return bundleId;
+      }
+    } catch {
+      // Try next command
+    }
+  }
+
+  throw new Error(
+    'Bundle identifier required for iOS signing. Add ios.bundleIdentifier to app.json/app.config.ts or pass --bundle-id.'
+  );
 }
 
 async function zipDirectory(

@@ -45,6 +45,25 @@ interface VMStatus {
   error?: string;
 }
 
+export function copyBuildScripts(buildConfigDir: string): void {
+  const scripts = [
+    {
+      source: join(process.cwd(), 'free-agent/Sources/WorkerCore/Resources/free-agent-bootstrap.sh'),
+      destName: 'bootstrap.sh',
+    },
+    {
+      source: join(process.cwd(), 'free-agent/Sources/WorkerCore/Resources/diagnostics.sh'),
+      destName: 'diagnostics.sh',
+    },
+  ];
+
+  for (const script of scripts) {
+    const destination = join(buildConfigDir, script.destName);
+    const content = readFileSync(script.source, 'utf-8');
+    writeFileSync(destination, content, { mode: 0o755 });
+  }
+}
+
 class RealWorker {
   private config: RealWorkerConfig;
   private workerId: string | null = null;
@@ -53,6 +72,7 @@ class RealWorker {
   private running = false;
   private currentBuild: string | null = null;
   private currentVM: string | null = null;
+  private readonly cleanUpVMs: boolean;
 
   constructor(config: RealWorkerConfig) {
     this.config = {
@@ -61,6 +81,7 @@ class RealWorker {
       ...config,
     };
     this.workDir = join(process.cwd(), 'worker', this.config.workerName);
+    this.cleanUpVMs = process.env.CLEAN_UP_VMS !== '0';
   }
 
   async start() {
@@ -88,7 +109,7 @@ class RealWorker {
     this.running = false;
 
     // Cleanup any running VMs
-    if (this.currentVM) {
+    if (this.currentVM && this.cleanUpVMs) {
       await this.cleanupVM(this.currentVM);
     }
 
@@ -218,8 +239,8 @@ class RealWorker {
     console.log(`[${this.config.workerName}] Received job: ${job.id}`);
     this.currentBuild = job.id;
 
-    // Use job ID directly - Tart doesn't allow hyphens in VM names
-    const vmName = job.id;
+    // Prefix VM name for E2E visibility and sanitize unsupported characters
+    const vmName = `fa-e2e-${job.id}`.replace(/[^a-zA-Z0-9-]/g, '_');
     this.currentVM = vmName;
 
     try {
@@ -259,8 +280,12 @@ class RealWorker {
     } finally {
       // Step 6: Cleanup VM
       if (this.currentVM) {
-        console.log(`[${this.config.workerName}] Cleaning up VM...`);
-        await this.cleanupVM(this.currentVM);
+        if (!this.cleanUpVMs) {
+          console.log(`[${this.config.workerName}] Skipping VM cleanup (CLEAN_UP_VMS=0)`);
+        } else {
+          console.log(`[${this.config.workerName}] Cleaning up VM...`);
+          await this.cleanupVM(this.currentVM);
+        }
         this.currentVM = null;
       }
       this.currentBuild = null;
@@ -305,15 +330,7 @@ class RealWorker {
       JSON.stringify(config, null, 2)
     );
 
-    // Copy bootstrap script
-    const bootstrapSource = join(
-      process.cwd(),
-      'free-agent/Sources/WorkerCore/Resources/free-agent-bootstrap.sh'
-    );
-    const bootstrapDest = join(buildConfigDir, 'bootstrap.sh');
-
-    const bootstrapContent = readFileSync(bootstrapSource, 'utf-8');
-    writeFileSync(bootstrapDest, bootstrapContent, { mode: 0o755 });
+    copyBuildScripts(buildConfigDir);
 
     return buildConfigDir;
   }
@@ -382,7 +399,16 @@ class RealWorker {
       // Check for errors
       if (existsSync(errorFile)) {
         const error = JSON.parse(readFileSync(errorFile, 'utf-8'));
-        throw new Error(`Build failed: ${error.error}`);
+        let detailedMessage = error.error;
+
+        if (error.log_tail && typeof error.log_tail === 'string' && error.log_tail.trim().length > 0) {
+          console.error(`[${this.config.workerName}] === VM build log tail (from build-error) ===`);
+          console.error(error.log_tail.trimEnd());
+          console.error(`[${this.config.workerName}] === end VM build log tail ===`);
+          detailedMessage = `${error.error}\n\nVM build log tail:\n${error.log_tail.trimEnd()}`;
+        }
+        await this.printVmBuildLogTail();
+        throw new Error(`Build failed: ${detailedMessage}`);
       }
 
       // Check progress
@@ -396,6 +422,23 @@ class RealWorker {
     }
 
     throw new Error(`Build timeout after ${this.config.buildTimeout}s`);
+  }
+
+  private async printVmBuildLogTail(): Promise<void> {
+    if (!this.currentVM) {
+      return;
+    }
+
+    try {
+      const tail = await $`/opt/homebrew/bin/tart exec ${this.currentVM} tail -n 200 /var/log/build.log`.text();
+      if (tail.trim().length > 0) {
+        console.error(`[${this.config.workerName}] === xcodebuild log tail (last 200 lines) ===`);
+        console.error(tail.trimEnd());
+        console.error(`[${this.config.workerName}] === end xcodebuild log tail ===`);
+      }
+    } catch (error) {
+      console.error(`[${this.config.workerName}] Failed to fetch build log tail:`, error);
+    }
   }
 
   private async cleanupVM(vmName: string) {
@@ -513,4 +556,6 @@ Example:
   }
 }
 
-main();
+if (import.meta.main) {
+  main();
+}

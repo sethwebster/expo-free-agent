@@ -31,7 +31,8 @@ let package = Package(
             dependencies: ["BuildVM"],
             path: "Sources/WorkerCore",
             resources: [
-                .copy("Resources/free-agent-bootstrap.sh")
+                .copy("Resources/free-agent-bootstrap.sh"),
+                .copy("Resources/diagnostics.sh")
             ]
         ),
         .target(

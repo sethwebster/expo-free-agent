@@ -22,6 +22,10 @@ This directory contains **active** planning documents, code reviews, and work-in
   - Shows exact code changes for each fix
   - Useful for understanding what changed and why
 
+### Implementation Plans
+- **plan-2026-02-05-mesh-build-flow.md** - Mesh build submission flow for iOS Simulator + TestFlight (Feb 5, 2026)
+  - Status: Draft - defines achievable flow, diffs from current, and tests
+
 ### Testing & Verification
 - **e2e-elixir-verification.md** - E2E test verification report for Elixir controller (Jan 28, 2026)
   - Status: Blocked - waiting for test suite fixes

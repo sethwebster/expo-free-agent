@@ -22,6 +22,7 @@ defmodule ExpoController.Builds.Build do
     field :otp_expires_at, :utc_datetime
     field :vm_token, :string
     field :vm_token_expires_at, :utc_datetime
+    field :vm_ready_at, :utc_datetime
 
     belongs_to :worker, ExpoController.Workers.Worker, type: :string, foreign_key: :worker_id
     has_many :logs, ExpoController.Builds.BuildLog
@@ -46,7 +47,8 @@ defmodule ExpoController.Builds.Build do
       :otp,
       :otp_expires_at,
       :vm_token,
-      :vm_token_expires_at
+      :vm_token_expires_at,
+      :vm_ready_at
     ])
     |> validate_required([:id, :platform])
     |> validate_inclusion(:platform, [:ios, :android])
@@ -152,5 +154,12 @@ defmodule ExpoController.Builds.Build do
     build
     |> change(status: :failed, error_message: error_message)
     |> validate_required([:error_message])
+  end
+
+  @doc """
+  Changeset for marking VM as ready.
+  """
+  def vm_ready_changeset(build) do
+    change(build, vm_ready_at: DateTime.utc_now() |> DateTime.truncate(:second))
   end
 end

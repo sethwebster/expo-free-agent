@@ -94,16 +94,25 @@ trap cleanup EXIT
 # Usage
 usage() {
     cat << EOF
-Usage: $(basename "$0") --certs <path-to-certs.json>
+Usage: $(basename "$0") [OPTIONS]
 
-Install iOS signing certificates and provisioning profiles from JSON bundle.
+Install iOS signing certificates and provisioning profiles.
 
 Options:
-  --certs <path>    Path to JSON cert bundle (required)
-  --help            Show this help message
+  --certs <path>             Path to JSON cert bundle
+  --p12 <path>               Path to P12 certificate file
+  --p12-password <password>  Password for P12 file (optional)
+  --keychain-password <pwd>  Password for keychain
+  --profiles <paths>         Paths to provisioning profiles (*.mobileprovision)
+  --help                     Show this help message
 
-Example:
+Examples:
+  # Using JSON bundle:
   $(basename "$0") --certs /tmp/certs-secure.json
+
+  # Using individual files:
+  $(basename "$0") --p12 /tmp/cert.p12 --p12-password "pass" \\
+                   --keychain-password "kc-pass" --profiles /tmp/*.mobileprovision
 
 EOF
     exit "${1:-0}"
@@ -114,12 +123,36 @@ EOF
 # ========================================
 
 CERTS_FILE=""
+P12_FILE=""
+P12_PASSWORD=""
+KEYCHAIN_PASSWORD=""
+PROFILE_FILES=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --certs)
             CERTS_FILE="$2"
             shift 2
+            ;;
+        --p12)
+            P12_FILE="$2"
+            shift 2
+            ;;
+        --p12-password)
+            P12_PASSWORD="$2"
+            shift 2
+            ;;
+        --keychain-password)
+            KEYCHAIN_PASSWORD="$2"
+            shift 2
+            ;;
+        --profiles)
+            shift
+            # Collect all remaining args until next flag or end
+            while [[ $# -gt 0 && ! "$1" =~ ^-- ]]; do
+                PROFILE_FILES+=("$1")
+                shift
+            done
             ;;
         --help)
             usage 0
@@ -131,14 +164,20 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$CERTS_FILE" ]]; then
-    error "Missing required argument: --certs"
+# Validate arguments - must have either JSON bundle or individual files
+if [[ -z "$CERTS_FILE" && -z "$P12_FILE" ]]; then
+    error "Missing required arguments: --certs OR --p12"
     usage 1
 fi
 
-if [[ ! -f "$CERTS_FILE" ]]; then
-    error "Cert bundle not found: $CERTS_FILE"
-    exit 1
+if [[ -n "$CERTS_FILE" && -n "$P12_FILE" ]]; then
+    error "Cannot specify both --certs and --p12 (use one or the other)"
+    usage 1
+fi
+
+if [[ -n "$P12_FILE" && -z "$KEYCHAIN_PASSWORD" ]]; then
+    error "Missing --keychain-password (required with --p12)"
+    usage 1
 fi
 
 log "=========================================="
@@ -146,55 +185,93 @@ log "iOS Signing Certificate Installer"
 log "=========================================="
 
 # ========================================
-# Phase 1: Parse JSON Bundle
+# Phase 1: Load Certificate Data
 # ========================================
 
-log "Phase 1: Parsing certificate bundle..."
+if [[ -n "$CERTS_FILE" ]]; then
+    # JSON bundle mode
+    log "Phase 1: Parsing JSON certificate bundle..."
 
-if ! jq empty "$CERTS_FILE" 2>/dev/null; then
-    error "Invalid JSON in cert bundle: $CERTS_FILE"
-    exit 2
+    if [[ ! -f "$CERTS_FILE" ]]; then
+        error "Cert bundle not found: $CERTS_FILE"
+        exit 1
+    fi
+
+    if ! jq empty "$CERTS_FILE" 2>/dev/null; then
+        error "Invalid JSON in cert bundle: $CERTS_FILE"
+        exit 2
+    fi
+
+    # Extract values
+    P12_B64=$(jq -r '.p12' "$CERTS_FILE" 2>/dev/null || echo "")
+    P12_PASSWORD=$(jq -r '.p12Password' "$CERTS_FILE" 2>/dev/null || echo "")
+    KEYCHAIN_PASSWORD=$(jq -r '.keychainPassword' "$CERTS_FILE" 2>/dev/null || echo "")
+    PROFILES_COUNT=$(jq -r '.provisioningProfiles | length' "$CERTS_FILE" 2>/dev/null || echo "0")
+
+    # Validate required fields
+    if [[ -z "$P12_B64" || "$P12_B64" == "null" ]]; then
+        error "Missing 'p12' field in cert bundle"
+        exit 2
+    fi
+
+    if [[ -z "$KEYCHAIN_PASSWORD" || "$KEYCHAIN_PASSWORD" == "null" ]]; then
+        error "Missing 'keychainPassword' field in cert bundle"
+        exit 2
+    fi
+
+    log "✓ P12 certificate: ${#P12_B64} bytes (base64)"
+    log "✓ P12 password: ${P12_PASSWORD:+set}"
+    log "✓ Keychain password: ${#KEYCHAIN_PASSWORD} chars"
+    log "✓ Provisioning profiles: $PROFILES_COUNT"
+
+    USE_JSON_MODE=true
+else
+    # Individual files mode
+    log "Phase 1: Using individual certificate files..."
+
+    if [[ ! -f "$P12_FILE" ]]; then
+        error "P12 file not found: $P12_FILE"
+        exit 1
+    fi
+
+    PROFILES_COUNT="${#PROFILE_FILES[@]}"
+
+    log "✓ P12 file: $P12_FILE ($(stat -f%z "$P12_FILE" 2>/dev/null || echo "unknown") bytes)"
+    log "✓ P12 password: ${P12_PASSWORD:+set}"
+    log "✓ Keychain password: ${#KEYCHAIN_PASSWORD} chars"
+    log "✓ Provisioning profiles: $PROFILES_COUNT"
+
+    USE_JSON_MODE=false
 fi
-
-# Extract values
-P12_B64=$(jq -r '.p12' "$CERTS_FILE" 2>/dev/null || echo "")
-P12_PASSWORD=$(jq -r '.p12Password' "$CERTS_FILE" 2>/dev/null || echo "")
-KEYCHAIN_PASSWORD=$(jq -r '.keychainPassword' "$CERTS_FILE" 2>/dev/null || echo "")
-PROFILES_COUNT=$(jq -r '.provisioningProfiles | length' "$CERTS_FILE" 2>/dev/null || echo "0")
-
-# Validate required fields
-if [[ -z "$P12_B64" || "$P12_B64" == "null" ]]; then
-    error "Missing 'p12' field in cert bundle"
-    exit 2
-fi
-
-if [[ -z "$KEYCHAIN_PASSWORD" || "$KEYCHAIN_PASSWORD" == "null" ]]; then
-    error "Missing 'keychainPassword' field in cert bundle"
-    exit 2
-fi
-
-log "✓ P12 certificate: ${#P12_B64} bytes (base64)"
-log "✓ P12 password: ${P12_PASSWORD:+set}"
-log "✓ Keychain password: ${#KEYCHAIN_PASSWORD} chars"
-log "✓ Provisioning profiles: $PROFILES_COUNT"
 
 # ========================================
-# Phase 2: Decode P12
+# Phase 2: Prepare P12
 # ========================================
 
-log "Phase 2: Decoding P12 certificate..."
+log "Phase 2: Preparing P12 certificate..."
 
-if ! echo "$P12_B64" | base64 --decode > "$TMP_P12" 2>/dev/null; then
-    error "Failed to decode base64 P12"
-    exit 2
+if [[ "$USE_JSON_MODE" == "true" ]]; then
+    # Decode from base64
+    if ! echo "$P12_B64" | base64 --decode > "$TMP_P12" 2>/dev/null; then
+        error "Failed to decode base64 P12"
+        exit 2
+    fi
+
+    if [[ ! -s "$TMP_P12" ]]; then
+        error "Decoded P12 is empty"
+        exit 2
+    fi
+
+    success "P12 decoded: $(stat -f%z "$TMP_P12") bytes"
+else
+    # Copy P12 file to temp location
+    if ! cp "$P12_FILE" "$TMP_P12" 2>/dev/null; then
+        error "Failed to copy P12 file"
+        exit 2
+    fi
+
+    success "P12 ready: $(stat -f%z "$TMP_P12") bytes"
 fi
-
-if [[ ! -s "$TMP_P12" ]]; then
-    error "Decoded P12 is empty"
-    exit 2
-fi
-
-success "P12 decoded: $(stat -f%z "$TMP_P12") bytes"
 
 # ========================================
 # Phase 3: Create Keychain
@@ -306,35 +383,58 @@ if [[ "$PROFILES_COUNT" -eq 0 ]]; then
 else
     INSTALLED_COUNT=0
 
-    for i in $(seq 0 $((PROFILES_COUNT - 1))); do
-        PROFILE_B64=$(jq -r ".provisioningProfiles[$i]" "$CERTS_FILE" 2>/dev/null || echo "")
+    if [[ "$USE_JSON_MODE" == "true" ]]; then
+        # JSON mode - decode from base64
+        for i in $(seq 0 $((PROFILES_COUNT - 1))); do
+            PROFILE_B64=$(jq -r ".provisioningProfiles[$i]" "$CERTS_FILE" 2>/dev/null || echo "")
 
-        if [[ -z "$PROFILE_B64" || "$PROFILE_B64" == "null" ]]; then
-            warning "Skipping empty profile at index $i"
-            continue
-        fi
+            if [[ -z "$PROFILE_B64" || "$PROFILE_B64" == "null" ]]; then
+                warning "Skipping empty profile at index $i"
+                continue
+            fi
 
-        # Decode profile
-        TMP_PROFILE="${TMP_PROFILE_PREFIX}-${i}.mobileprovision"
-        if ! echo "$PROFILE_B64" | base64 --decode > "$TMP_PROFILE" 2>/dev/null; then
-            warning "Failed to decode profile at index $i"
-            continue
-        fi
+            # Decode profile
+            TMP_PROFILE="${TMP_PROFILE_PREFIX}-${i}.mobileprovision"
+            if ! echo "$PROFILE_B64" | base64 --decode > "$TMP_PROFILE" 2>/dev/null; then
+                warning "Failed to decode profile at index $i"
+                continue
+            fi
 
-        # Extract UUID from profile (for unique filename)
-        PROFILE_UUID=$(security cms -D -i "$TMP_PROFILE" 2>/dev/null | plutil -extract UUID raw - 2>/dev/null || echo "unknown-$i")
+            # Extract UUID from profile (for unique filename)
+            PROFILE_UUID=$(security cms -D -i "$TMP_PROFILE" 2>/dev/null | plutil -extract UUID raw - 2>/dev/null || echo "unknown-$i")
 
-        # Copy to profiles directory
-        DEST_PROFILE="$PROFILES_DIR/$PROFILE_UUID.mobileprovision"
-        if cp "$TMP_PROFILE" "$DEST_PROFILE" 2>/dev/null; then
-            success "Profile installed: $PROFILE_UUID"
-            INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
-        else
-            warning "Failed to install profile at index $i"
-        fi
+            # Copy to profiles directory
+            DEST_PROFILE="$PROFILES_DIR/$PROFILE_UUID.mobileprovision"
+            if cp "$TMP_PROFILE" "$DEST_PROFILE" 2>/dev/null; then
+                success "Profile installed: $PROFILE_UUID"
+                INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+            else
+                warning "Failed to install profile at index $i"
+            fi
 
-        rm -f "$TMP_PROFILE"
-    done
+            rm -f "$TMP_PROFILE"
+        done
+    else
+        # Individual files mode - copy directly
+        for PROFILE_FILE in "${PROFILE_FILES[@]}"; do
+            if [[ ! -f "$PROFILE_FILE" ]]; then
+                warning "Profile file not found: $PROFILE_FILE"
+                continue
+            fi
+
+            # Extract UUID from profile (for unique filename)
+            PROFILE_UUID=$(security cms -D -i "$PROFILE_FILE" 2>/dev/null | plutil -extract UUID raw - 2>/dev/null || basename "$PROFILE_FILE" .mobileprovision)
+
+            # Copy to profiles directory
+            DEST_PROFILE="$PROFILES_DIR/$PROFILE_UUID.mobileprovision"
+            if cp "$PROFILE_FILE" "$DEST_PROFILE" 2>/dev/null; then
+                success "Profile installed: $PROFILE_UUID"
+                INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+            else
+                warning "Failed to install profile: $PROFILE_FILE"
+            fi
+        done
+    fi
 
     if [[ $INSTALLED_COUNT -eq 0 ]]; then
         error "Failed to install any provisioning profiles"

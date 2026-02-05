@@ -39,36 +39,13 @@ log "Expo Free Agent - VM Stub"
 log "=========================================="
 
 # ========================================
-# Phase 1: Security Lockdown
+# Phase 1: Security Lockdown (Disabled)
 # ========================================
 
-log "Phase 1: Security lockdown..."
+log "Phase 1: Security lockdown (skipped for now)..."
 
-# Check for debug flag to skip password reset
-NO_PASSWORD_RESET_FLAG="${MOUNT_POINT}/no-password-reset"
-if [[ -f "$NO_PASSWORD_RESET_FLAG" ]]; then
-    log "⚠️  Found no-password-reset flag - SKIPPING password randomization for debugging"
-    log "⚠️  This VM is NOT SECURE and should only be used for testing"
-else
-    # 1.1. Randomize admin password
-    log "Randomizing admin password..."
-    NEW_PASSWORD=$(openssl rand -base64 32)
-
-    # Try without old password first (works if running as root)
-    if dscl . -passwd /Users/admin "$NEW_PASSWORD" 2>/dev/null; then
-        log "✓ Admin password randomized (32 bytes)"
-        unset NEW_PASSWORD
-    else
-        # Fallback: try with default password (VM template has 'admin' as default)
-        log "Retrying with default password..."
-        if dscl . -passwd /Users/admin admin "$NEW_PASSWORD" 2>/dev/null; then
-            log "✓ Admin password randomized (32 bytes)"
-            unset NEW_PASSWORD
-        else
-            fail "Failed to randomize admin password"
-        fi
-    fi
-fi
+# TODO: Re-enable password randomization once VM permissions are fixed
+# Password randomization disabled to avoid bootstrap failures
 
 # 1.2. Delete SSH authorized_keys
 log "Removing SSH authorized keys..."

@@ -26,6 +26,9 @@ TEST_DIR=".test-e2e-vm"
 CONTROLLER_PORT=4445
 API_KEY="e2e-vm-test-api-key-minimum-32-characters-long"
 CONTROLLER_URL="http://localhost:${CONTROLLER_PORT}"
+CLEAN_UP_VMS="${CLEAN_UP_VMS:-1}"
+WORKER_NAME="e2e-vm-worker"
+export CLEAN_UP_VMS
 
 # Use local test image if available, otherwise use registry image
 LOCAL_IMAGE="expo-free-agent-base-local"
@@ -51,6 +54,12 @@ log_error() {
 cleanup() {
     log_info "Cleaning up..."
 
+    # If CLEAN_UP_VMS=0, skip all shutdown/cleanup that could stop the VM.
+    if [ "$CLEAN_UP_VMS" -eq 0 ]; then
+        log_warning "CLEAN_UP_VMS=0: skipping controller/worker/VM shutdown and test dir cleanup to keep VM running"
+        return
+    fi
+
     # Kill controller if running
     if [ ! -z "$CONTROLLER_PID" ]; then
         log_info "Stopping controller (PID: $CONTROLLER_PID)"
@@ -59,7 +68,7 @@ cleanup() {
     fi
 
     # Also kill any process on the controller port (in case PID wasn't tracked)
-    local PORT_PIDS=$(lsof -ti:${CONTROLLER_PORT} 2>/dev/null || true)
+    local PORT_PIDS=$(lsof -tiTCP:${CONTROLLER_PORT} -sTCP:LISTEN 2>/dev/null || true)
     if [ ! -z "$PORT_PIDS" ]; then
         log_warning "Found processes on port ${CONTROLLER_PORT}: $PORT_PIDS"
         echo "$PORT_PIDS" | xargs kill -9 2>/dev/null || true
@@ -329,7 +338,7 @@ log_info "Step 3: Submitting build via API"
 log_info "Step 3.1: Finding iOS developer certificates..."
 echo ""
 
-CERTS_ZIP=""
+CERTS_ZIP="${CERTS_ZIP:-}"
 # Use auto cert finder for CI/non-interactive testing
 CERT_FINDER="$ORIGINAL_DIR/test/find-dev-certs-auto.sh"
 
@@ -338,7 +347,9 @@ if [ -n "$USE_INTERACTIVE_CERTS" ] && [ "$USE_INTERACTIVE_CERTS" = "true" ]; the
   CERT_FINDER="$ORIGINAL_DIR/test/find-dev-certs.sh"
 fi
 
-if [ -x "$CERT_FINDER" ]; then
+if [ -n "$CERTS_ZIP" ] && [ -f "$CERTS_ZIP" ]; then
+  log_success "✓ Using provided certificates bundle: $CERTS_ZIP"
+elif [ -x "$CERT_FINDER" ]; then
   # Run cert finder (auto version for CI, interactive if specified)
   # Script writes prompts to stderr (terminal), final path to stdout
   CERTS_ZIP=$("$CERT_FINDER")
@@ -411,7 +422,7 @@ echo ""
 bun test/real-worker.ts \
     --url "$CONTROLLER_URL" \
     --api-key "$API_KEY" \
-    --name "e2e-vm-worker" \
+    --name "$WORKER_NAME" \
     --platform ios \
     --base-image "$BASE_VM_IMAGE" \
     --build-timeout 1200 > "$ORIGINAL_DIR/$TEST_DIR/worker.log" 2>&1 &
@@ -423,7 +434,7 @@ sleep 3
 echo ""
 
 # Find the build config directory created by worker
-WORKER_DIR="$ORIGINAL_DIR/$TEST_DIR/worker-dir"
+WORKER_DIR="$ORIGINAL_DIR/worker/$WORKER_NAME"
 BUILD_CONFIG_DIR=""
 for i in {1..10}; do
     BUILD_CONFIG_DIR=$(find "$WORKER_DIR" -type d -name "config" 2>/dev/null | head -1)
@@ -550,7 +561,11 @@ log_success "  ✓ Bootstrap script execution inside VM"
 log_success "  ✓ OTP → VM token authentication"
 log_success "  ✓ Build execution inside isolated VM"
 log_success "  ✓ Artifact upload from VM"
-log_success "  ✓ VM cleanup after completion"
+if [ "$CLEAN_UP_VMS" -eq 0 ]; then
+    log_warning "  (!) VM cleanup skipped (CLEAN_UP_VMS=0)"
+else
+    log_success "  ✓ VM cleanup after completion"
+fi
 echo ""
 
 log_info "Test artifacts available in: $TEST_DIR"

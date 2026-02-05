@@ -13,6 +13,7 @@ import { createLoginCommand } from './commands/login.js';
 import { createLogsCommand } from './commands/logs.js';
 import { createRetryCommand } from './commands/retry.js';
 import { createCertificatesCommand } from './commands/certificates.js';
+import { createCredentialsCommand } from './commands/credentials.js';
 
 const program = new Command();
 
@@ -32,7 +33,8 @@ program.addCommand(createListCommand());
 program.addCommand(createCancelCommand());
 program.addCommand(createRetryCommand());
 program.addCommand(createConfigCommand());
-program.addCommand(createCertificatesCommand());
+  program.addCommand(createCertificatesCommand());
+  program.addCommand(createCredentialsCommand());
 program.addCommand(createDoctorCommand());
 
 program.parse();

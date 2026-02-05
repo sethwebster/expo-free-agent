@@ -79,6 +79,8 @@ defmodule ExpoControllerWeb.Router do
       post "/artifact", BuildController, :upload_artifact
       post "/heartbeat", BuildController, :heartbeat
       post "/telemetry", BuildController, :telemetry
+      post "/vm-ready", BuildController, :vm_ready  # VM signals ready (requires VM token)
+      get "/vm-status", BuildController, :vm_status  # Worker polls VM ready status (no auth)
       get "/source", BuildController, :download_source
       get "/certs", BuildController, :download_certs_worker
       get "/certs-secure", BuildController, :download_certs_secure

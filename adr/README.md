@@ -15,6 +15,7 @@ An Architecture Decision Record (ADR) documents important architectural choices,
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
 | [001](./adr-001-monorepo-structure.md) | Monorepo Structure - Swift App at Root | Accepted | 2026-01-30 |
+| [002](./adr-002-local-signing-manual-xcodebuild.md) | Local Signing With Manual Xcodebuild for iOS Builds | Proposed | 2026-02-05 |
 
 ## When to Create an ADR
 

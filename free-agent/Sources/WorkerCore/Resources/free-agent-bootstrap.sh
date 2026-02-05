@@ -20,11 +20,12 @@ set -euo pipefail
 
 # Ensure Homebrew binaries are in PATH (Node.js/npm installed via brew)
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# Ensure HOME is set for non-interactive shells
+export HOME="${HOME:-/Users/admin}"
 
 # Configuration
 MOUNT_POINT="/Volumes/My Shared Files/build-config"
 CONFIG_FILE="${MOUNT_POINT}/build-config.json"
-READY_FILE="${MOUNT_POINT}/vm-ready"
 # Use /tmp for log file to avoid permission issues
 LOG_FILE="/tmp/free-agent-bootstrap.log"
 
@@ -33,16 +34,46 @@ log() {
     echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" | tee -a "$LOG_FILE"
 }
 
-# Error handler - writes failure to vm-ready
+# jq is required for JSON handling; fail fast with a minimal error if missing.
+if ! command -v jq >/dev/null 2>&1; then
+    echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] ERROR: jq not found in PATH" | tee -a "$LOG_FILE" || true
+    printf '{"status":"failed","error":"jq not found in PATH"}\n' > "${MOUNT_POINT}/progress.json" 2>/dev/null || true
+    exit 1
+fi
+
+# Fail fast with context if any command errors out
+on_error() {
+    local line="$1"
+    local cmd="$2"
+    log "✗ Bootstrap error at line ${line}: ${cmd}"
+    upload_build_log || true
+    signal_build_error "Bootstrap failed at line ${line}: ${cmd}"
+}
+
+trap 'on_error $LINENO "$BASH_COMMAND"' ERR
+
+# Error handler - reports failure via API if authenticated, otherwise logs only
 fail() {
     local error_msg="$1"
     log "ERROR: ${error_msg}"
 
-    # Write failure status to vm-ready (using jq to escape JSON properly)
+    # If we have VM_TOKEN (post-auth), report failure via API
+    if [[ -n "${VM_TOKEN:-}" ]]; then
+        log "Reporting failure to controller..."
+        curl -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-VM-Token: ${VM_TOKEN}" \
+            -d "$(jq -n --arg msg "$error_msg" '{level: "error", message: $msg}')" \
+            --silent --max-time 10 \
+            "${CONTROLLER_URL}/api/builds/${BUILD_ID}/logs" || true
+    fi
+
+    # Write failure to progress file for worker monitoring
     jq -n \
         --arg error "$error_msg" \
-        '{status: "failed", error: $error}' \
-        > "$READY_FILE"
+        --arg updated_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        '{status: "failed", error: $error, updated_at: $updated_at}' \
+        > "${MOUNT_POINT}/progress.json" 2>/dev/null || true
 
     exit 1
 }
@@ -135,11 +166,17 @@ signal_build_error() {
 
     update_progress "failed" 0 "Build failed: ${error_msg}"
 
+    local log_tail=""
+    if [[ -f "$BUILD_LOG" ]]; then
+        log_tail="$(tail -n 200 "$BUILD_LOG" 2>/dev/null || true)"
+    fi
+
     # Use jq to properly escape JSON strings
     jq -n \
         --arg error "$error_msg" \
+        --arg log_tail "$log_tail" \
         --arg completed_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-        '{status: "failed", completed_at: $completed_at, error: $error, artifact_uploaded: false}' \
+        '{status: "failed", completed_at: $completed_at, error: $error, log_tail: $log_tail, artifact_uploaded: false}' \
         > "${MOUNT_POINT}/build-error"
 
     # Upload logs before exiting
@@ -201,6 +238,20 @@ log "✓ Build ID: ${BUILD_ID}"
 log "✓ Platform: ${PLATFORM}"
 log "✓ Controller: ${CONTROLLER_URL}"
 
+log "Checking required tools..."
+if ! command -v curl >/dev/null 2>&1; then
+    fail "curl not found in PATH"
+fi
+if ! command -v security >/dev/null 2>&1; then
+    fail "security tool not found in PATH"
+fi
+if ! command -v plutil >/dev/null 2>&1; then
+    fail "plutil not found in PATH"
+fi
+if [[ "$PLATFORM" == "ios" ]] && ! command -v xcodebuild >/dev/null 2>&1; then
+    fail "xcodebuild not found in PATH"
+fi
+
 # ========================================
 # Phase 2: Authenticate with Controller
 # ========================================
@@ -257,11 +308,9 @@ if [[ "$PLATFORM" == "ios" ]]; then
         "$CERT_URL" 2>&1 | tail -n 1 || echo "000")
 
     if [[ "$HTTP_CODE" == "404" ]]; then
-        log "⚠ No certificates provided - build will not be signed"
+        log "❌ No certificates provided - signing is required for iOS builds"
         secure_delete "$CERT_RESPONSE"
-
-        # Skip to Phase 5 - continue without certificates
-        # This is OK for testing or builds that don't require signing
+        fail "No signing certificates provided for iOS build"
     elif [[ "$HTTP_CODE" != "200" ]]; then
         ERROR_MSG=$(cat "$CERT_RESPONSE" 2>/dev/null || echo "No response")
         secure_delete "$CERT_RESPONSE"
@@ -289,14 +338,29 @@ if [[ "$PLATFORM" == "ios" ]]; then
         # Extract and decode certificate data
         jq -r '.p12' "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/cert.p12"
         P12_PASSWORD=$(jq -r '.p12Password' "$CERT_RESPONSE")
-        KEYCHAIN_PASSWORD=$(jq -r '.keychainPassword' "$CERT_RESPONSE" | base64 -d)
+        KEYCHAIN_PASSWORD=$(jq -r '.keychainPassword' "$CERT_RESPONSE")
 
         # Extract provisioning profiles
         PROFILE_COUNT=$(jq -r '.provisioningProfiles | length' "$CERT_RESPONSE")
         log "Extracting ${PROFILE_COUNT} provisioning profiles..."
 
+        if ((PROFILE_COUNT <= 0)); then
+            secure_delete "$CERT_RESPONSE"
+            rm -rf "$TEMP_DIR"
+            fail "No provisioning profiles provided for iOS build"
+        fi
+
         for i in $(seq 0 $((PROFILE_COUNT - 1))); do
             jq -r ".provisioningProfiles[$i]" "$CERT_RESPONSE" | base64 -d > "${TEMP_DIR}/profile${i}.mobileprovision"
+        done
+
+        # Validate extracted profiles are non-empty
+        for profile in "${TEMP_DIR}"/*.mobileprovision; do
+            if [[ ! -s "$profile" ]]; then
+                secure_delete "$CERT_RESPONSE"
+                rm -rf "$TEMP_DIR"
+                fail "Provisioning profile extracted as empty file: $(basename "$profile")"
+            fi
         done
 
         # Clear cert response from disk
@@ -333,29 +397,27 @@ else
 fi
 
 # ========================================
-# Phase 5: Generate Verification Token
+# Phase 5: Signal Ready to Controller
 # ========================================
 
-log "Phase 5: Generating verification token..."
+log "Phase 5: Signaling ready to controller..."
 
-# Generate random token for host verification
-VERIFICATION_TOKEN=$(openssl rand -base64 32)
+# Signal VM ready via controller API (replaces file-based signaling)
+VM_READY_URL="${CONTROLLER_URL}/api/builds/${BUILD_ID}/vm-ready"
 
-log "✓ Verification token generated"
+HTTP_CODE=$(curl -w "%{http_code}" -o /dev/null \
+    -X POST \
+    -H "X-VM-Token: ${VM_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --silent \
+    --max-time 30 \
+    "$VM_READY_URL" 2>&1 | tail -n 1 || echo "000")
 
-# ========================================
-# Phase 6: Signal Ready
-# ========================================
+if [[ "$HTTP_CODE" != "200" ]]; then
+    fail "Failed to signal VM ready (HTTP ${HTTP_CODE})"
+fi
 
-log "Phase 6: Signaling ready to host..."
-
-# Write ready status with verification token (using jq for safe JSON)
-jq -n \
-    --arg vm_token "$VERIFICATION_TOKEN" \
-    '{status: "ready", vm_token: $vm_token}' \
-    > "$READY_FILE"
-
-log "✓ Ready signal written to ${READY_FILE}"
+log "✓ VM ready signal sent to controller"
 
 # Write completion marker for verification
 cat > "${MOUNT_POINT}/bootstrap-complete" <<EOF
@@ -471,22 +533,150 @@ if [[ "$PLATFORM" == "ios" ]]; then
 
     log "Using scheme: $SCHEME"
 
+    # Resolve bundle identifier (Expo-only for MVP)
+    if [[ -f "app.json" ]]; then
+        BUNDLE_ID=$(jq -r '.expo.ios.bundleIdentifier // empty' app.json)
+    fi
+    if [[ -z "$BUNDLE_ID" ]]; then
+        upload_build_log
+        signal_build_error "Missing ios.bundleIdentifier in app.json"
+    fi
+
+    # Resolve installed provisioning profile (single profile expected)
+    PROFILE_FILE=$(ls "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision 2>/dev/null | head -1)
+    if [[ -z "$PROFILE_FILE" ]]; then
+        upload_build_log
+        signal_build_error "No provisioning profile installed in VM"
+    fi
+
+    log "Parsing provisioning profile: $PROFILE_FILE"
+    log "Provisioning profiles directory contents:"
+    ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" 2>&1 | tee -a "$BUILD_LOG" || true
+    log "Provisioning profile file details:"
+    stat "$PROFILE_FILE" 2>&1 | tee -a "$BUILD_LOG" || true
+
+    PROFILE_PLIST=$(mktemp /tmp/profile.XXXX.plist)
+    PROFILE_JSON_FILE=$(mktemp /tmp/profile.XXXX.json)
+    CMS_ERR_FILE=$(mktemp /tmp/profile_cms.XXXX.err)
+    PLUTIL_ERR_FILE=$(mktemp /tmp/profile_plutil.XXXX.err)
+
+    set +e
+    security cms -D -i "$PROFILE_FILE" > "$PROFILE_PLIST" 2> "$CMS_ERR_FILE"
+    CMS_STATUS=$?
+    set -e
+    if ((CMS_STATUS != 0)); then
+        log "✗ security cms failed (exit ${CMS_STATUS}):"
+        cat "$CMS_ERR_FILE" 2>/dev/null | tee -a "$BUILD_LOG" || true
+        upload_build_log
+        signal_build_error "Failed to decode provisioning profile (security cms exit ${CMS_STATUS})"
+    fi
+
+    set +e
+    plutil -convert json -o "$PROFILE_JSON_FILE" "$PROFILE_PLIST" 2> "$PLUTIL_ERR_FILE"
+    PLUTIL_STATUS=$?
+    set -e
+    if ((PLUTIL_STATUS != 0)); then
+        log "✗ plutil conversion failed (exit ${PLUTIL_STATUS}):"
+        cat "$PLUTIL_ERR_FILE" 2>/dev/null | tee -a "$BUILD_LOG" || true
+        upload_build_log
+        signal_build_error "Failed to parse provisioning profile (plutil exit ${PLUTIL_STATUS})"
+    fi
+
+    PROFILE_JSON=$(cat "$PROFILE_JSON_FILE")
+    secure_delete "$PROFILE_PLIST"
+    secure_delete "$PROFILE_JSON_FILE"
+    secure_delete "$CMS_ERR_FILE"
+    secure_delete "$PLUTIL_ERR_FILE"
+
+    PROFILE_NAME=$(echo "$PROFILE_JSON" | jq -r '.Name // empty')
+    TEAM_ID=$(echo "$PROFILE_JSON" | jq -r '.TeamIdentifier[0] // empty')
+    CERT_B64=$(echo "$PROFILE_JSON" | jq -r '.DeveloperCertificates[0] // empty')
+    GET_TASK_ALLOW=$(echo "$PROFILE_JSON" | jq -r '.Entitlements["get-task-allow"] // false')
+    HAS_DEVICES=$(echo "$PROFILE_JSON" | jq -r '.ProvisionedDevices // empty | length' 2>/dev/null || echo "0")
+    PROV_ALL_DEVICES=$(echo "$PROFILE_JSON" | jq -r '.ProvisionsAllDevices // false')
+
+    if [[ -z "$PROFILE_NAME" || -z "$TEAM_ID" || -z "$CERT_B64" ]]; then
+        upload_build_log
+        signal_build_error "Provisioning profile missing required fields"
+    fi
+
+    CERT_SHA=$(echo "$CERT_B64" | base64 -d | openssl sha1 | sed 's/.*= //')
+    IDENTITY_LINE=$(security find-identity -v -p codesigning | grep "$CERT_SHA" | head -1 || true)
+    IDENTITY_NAME=$(echo "$IDENTITY_LINE" | sed -n 's/.*\"\\(.*\\)\".*/\\1/p')
+
+    if [[ -z "$IDENTITY_NAME" ]]; then
+        upload_build_log
+        signal_build_error "No matching signing identity found for provisioning profile"
+    fi
+
+    EXPORT_METHOD="app-store"
+    if [[ "$GET_TASK_ALLOW" == "true" || "$HAS_DEVICES" != "0" || "$PROV_ALL_DEVICES" == "true" ]]; then
+        EXPORT_METHOD="development"
+    fi
+
+    log "Using bundle ID: $BUNDLE_ID"
+    log "Using provisioning profile: $PROFILE_NAME"
+    log "Using signing identity: $IDENTITY_NAME"
+    log "Using export method: $EXPORT_METHOD"
+
+    # Create exportOptions.plist for manual App Store signing
+    cat > exportOptions.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>${EXPORT_METHOD}</string>
+    <key>uploadSymbols</key>
+    <true/>
+    <key>compileBitcode</key>
+    <false/>
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>teamID</key>
+    <string>${TEAM_ID}</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>${BUNDLE_ID}</key>
+        <string>${PROFILE_NAME}</string>
+    </dict>
+</dict>
+</plist>
+EOF
+
+    log "✓ Created exportOptions.plist for manual App Store signing"
+
+    log "Running xcodebuild archive..."
+    set +e
     xcodebuild $BUILD_FLAG "$WORKSPACE" -scheme "$SCHEME" \
         -configuration Release -archivePath /tmp/app.xcarchive \
-        archive >> "$BUILD_LOG" 2>&1 || {
+        CODE_SIGN_STYLE=Manual \
+        DEVELOPMENT_TEAM="$TEAM_ID" \
+        PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+        CODE_SIGN_IDENTITY="$IDENTITY_NAME" \
+        archive 2>&1 | tee -a "$BUILD_LOG"
+    ARCHIVE_STATUS=${PIPESTATUS[0]}
+    set -e
+    if ((ARCHIVE_STATUS != 0)); then
         upload_build_log
-        signal_build_error "xcodebuild archive failed"
-    }
+        signal_build_error "xcodebuild archive failed (exit ${ARCHIVE_STATUS})"
+    fi
 
     update_progress "building" 70 "Exporting IPA..."
+    log "Running xcodebuild exportArchive..."
+    set +e
     xcodebuild -exportArchive -archivePath /tmp/app.xcarchive \
         -exportPath /tmp -exportOptionsPlist exportOptions.plist \
-        >> "$BUILD_LOG" 2>&1 || {
+        2>&1 | tee -a "$BUILD_LOG"
+    EXPORT_STATUS=${PIPESTATUS[0]}
+    set -e
+    if ((EXPORT_STATUS != 0)); then
         upload_build_log
-        signal_build_error "IPA export failed"
-    }
+        signal_build_error "IPA export failed (exit ${EXPORT_STATUS})"
+    fi
 
-    ARTIFACT_PATH="/tmp/App.ipa"
+    ARTIFACT_PATH=$(ls /tmp/*.ipa 2>/dev/null | head -1)
+    [[ -n "$ARTIFACT_PATH" ]] || signal_build_error "IPA export produced no .ipa file"
 
 elif [[ "$PLATFORM" == "android" ]]; then
     update_progress "building" 30 "Running Gradle..."

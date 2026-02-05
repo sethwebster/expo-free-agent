@@ -12,7 +12,7 @@ defmodule ExpoControllerWeb.BuildController do
   plug ExpoControllerWeb.Plugs.WorkerOrVMAuth when action in [:download_source]
 
   # VM token required for VM-only operations (VM access after OTP auth)
-  plug ExpoControllerWeb.Plugs.VMAuth when action in [:download_certs_worker, :download_certs_secure, :stream_logs, :upload_artifact, :heartbeat, :telemetry]
+  plug ExpoControllerWeb.Plugs.VMAuth when action in [:download_certs_worker, :download_certs_secure, :stream_logs, :upload_artifact, :heartbeat, :telemetry, :vm_ready]
 
   @doc """
   POST /api/builds
@@ -492,6 +492,59 @@ defmodule ExpoControllerWeb.BuildController do
   end
 
   @doc """
+  POST /api/builds/:id/vm-ready
+  VM signals it is ready (bootstrap complete, certs installed).
+  Requires X-VM-Token header.
+  """
+  def vm_ready(conn, %{"id" => build_id}) do
+    case Builds.mark_vm_ready(build_id) do
+      {:ok, build} ->
+        IO.puts("✓ VM ready signal received for build #{build_id}")
+        Builds.add_log(build_id, :info, "VM signaled ready")
+
+        json(conn, %{
+          success: true,
+          vm_ready_at: DateTime.to_iso8601(build.vm_ready_at)
+        })
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Build not found"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{error: "Failed to mark VM ready: #{inspect(reason)}"})
+    end
+  end
+
+  @doc """
+  GET /api/builds/:id/vm-status
+  Check if VM is ready for a build.
+  No auth required (worker polls this before VM has authenticated).
+  Returns vm_ready: true/false and vm_token if ready.
+  """
+  def vm_status(conn, %{"id" => build_id}) do
+    case Builds.check_vm_ready(build_id) do
+      {:ok, %{vm_token: vm_token, vm_ready_at: vm_ready_at}} ->
+        json(conn, %{
+          vm_ready: true,
+          vm_token: vm_token,
+          vm_ready_at: DateTime.to_iso8601(vm_ready_at)
+        })
+
+      {:error, :not_ready} ->
+        json(conn, %{vm_ready: false})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Build not found"})
+    end
+  end
+
+  @doc """
   GET /api/builds/:id/source
   Download build source (for workers/VMs).
   Requires VM token in X-VM-Token header.
@@ -592,20 +645,34 @@ defmodule ExpoControllerWeb.BuildController do
       |> json(%{error: "Certs not found"})
     else
       try do
-        # Generate random keychain password (24 bytes = 32 chars base64)
-        keychain_password = :crypto.strong_rand_bytes(24) |> Base.encode64()
+        case read_and_unzip_certs(build.certs_path) do
+          {:ok, certs_data} ->
+            # Generate random keychain password (24 bytes = 32 chars base64)
+            keychain_password = :crypto.strong_rand_bytes(24) |> Base.encode64()
 
-        # Read and unzip certs
-        certs_data = read_and_unzip_certs(build.certs_path)
+            IO.puts("✓ Secure certs sent for build #{build_id} (#{length(certs_data.profiles)} profiles)")
 
-        IO.puts("✓ Secure certs sent for build #{build_id} (#{length(certs_data.profiles)} profiles)")
+            json(conn, %{
+              p12: Base.encode64(certs_data.p12),
+              p12Password: certs_data.password,
+              keychainPassword: keychain_password,
+              provisioningProfiles: Enum.map(certs_data.profiles, &Base.encode64/1)
+            })
 
-        json(conn, %{
-          p12: Base.encode64(certs_data.p12),
-          p12Password: certs_data.password,
-          keychainPassword: keychain_password,
-          provisioningProfiles: Enum.map(certs_data.profiles, &Base.encode64/1)
-        })
+          {:error, :too_large} ->
+            conn
+            |> put_status(:request_entity_too_large)
+            |> json(%{error: "Certs bundle too large"})
+
+          {:error, reason} ->
+            require Logger
+            Logger.error("Failed to process certs: #{inspect(reason)}")
+            IO.puts("❌ Failed to process certs for build #{build_id}: #{inspect(reason)}")
+
+            conn
+            |> put_status(:internal_server_error)
+            |> json(%{error: "Failed to process certs file"})
+        end
       rescue
         error ->
           require Logger
@@ -714,39 +781,61 @@ defmodule ExpoControllerWeb.BuildController do
 
   # Private helpers for worker endpoints
 
+  @default_max_certs_zip_bytes 50 * 1024 * 1024
+
   defp read_and_unzip_certs(certs_path) do
     # Read zip file (join with storage root)
     storage_root = Application.get_env(:expo_controller, :storage_root, "./storage")
     full_path = Path.join(storage_root, certs_path)
-    {:ok, zip_data} = File.read(full_path)
+    max_bytes = Application.get_env(:expo_controller, :max_certs_zip_bytes, @default_max_certs_zip_bytes)
 
-    # Unzip and extract
-    {:ok, file_list} = :zip.unzip(zip_data, [:memory])
+    with {:ok, %File.Stat{size: size}} <- File.stat(full_path),
+         :ok <- validate_certs_size(size, max_bytes),
+         {:ok, file_list} <- unzip_zip(full_path) do
+      p12 = find_file(file_list, fn {name, _} ->
+        String.ends_with?(to_string(name), ".p12")
+      end)
 
-    # Extract components
-    p12 = find_file(file_list, fn {name, _} ->
-      String.ends_with?(to_string(name), ".p12")
-    end)
+      password = find_file(file_list, fn {name, _} ->
+        to_string(name) == "password.txt"
+      end)
 
-    password = find_file(file_list, fn {name, _} ->
-      to_string(name) == "password.txt"
-    end)
+      profiles = file_list
+      |> Enum.filter(fn {name, _} ->
+        String.ends_with?(to_string(name), ".mobileprovision")
+      end)
+      |> Enum.map(fn {_, data} -> data end)
 
-    profiles = file_list
-    |> Enum.filter(fn {name, _} ->
-      String.ends_with?(to_string(name), ".mobileprovision")
-    end)
-    |> Enum.map(fn {_, data} -> data end)
+      if is_nil(p12) do
+        {:error, :missing_p12}
+      else
+        password_str = if password, do: String.trim(to_string(password)), else: ""
 
-    unless p12, do: raise("No P12 certificate found in bundle")
+        {:ok, %{
+          p12: p12,
+          password: password_str,
+          profiles: profiles
+        }}
+      end
+    else
+      {:error, :too_large} -> {:error, :too_large}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-    password_str = if password, do: String.trim(to_string(password)), else: ""
+  defp validate_certs_size(size, max_bytes) do
+    if size > max_bytes do
+      {:error, :too_large}
+    else
+      :ok
+    end
+  end
 
-    %{
-      p12: p12,
-      password: password_str,
-      profiles: profiles
-    }
+  defp unzip_zip(full_path) do
+    case :zip.unzip(to_charlist(full_path), [:memory]) do
+      {:ok, file_list} -> {:ok, file_list}
+      {:error, reason} -> {:error, {:unzip_failed, reason}}
+    end
   end
 
   defp find_file(file_list, predicate) do
